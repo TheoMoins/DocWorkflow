@@ -1,0 +1,15 @@
+{
+    "name": "catmus_ms_line",
+    "data_path": "../data/medieval-segmentation/src/altos/test",
+    "model_path": "models/line/baseline_ms_medieval.mlmodel",
+    "corpus_path": false,
+    "data": "catmus_lines",
+    "training_mode": "restricted",
+    "batch_size": 16,
+    "epochs": 100,
+    "img_size": 1024,
+    "text_direction": "horizontal-lr",
+    "iou_threshold": 0.5,
+    "buffer_size": 5,
+    "use_wandb": true
+}

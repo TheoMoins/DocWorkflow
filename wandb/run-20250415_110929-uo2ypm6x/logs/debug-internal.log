@@ -1,0 +1,8 @@
+{"time":"2025-04-15T11:09:29.171810202+02:00","level":"INFO","msg":"using version","core version":"0.19.1"}
+{"time":"2025-04-15T11:09:29.171832085+02:00","level":"INFO","msg":"created symlink","path":"/home/tmoins/Documents/WPC1/docworkflow/wandb/run-20250415_110929-uo2ypm6x/logs/debug-core.log"}
+{"time":"2025-04-15T11:09:29.277273073+02:00","level":"INFO","msg":"created new stream","id":"uo2ypm6x"}
+{"time":"2025-04-15T11:09:29.277341355+02:00","level":"INFO","msg":"stream: started","id":"uo2ypm6x"}
+{"time":"2025-04-15T11:09:29.277397437+02:00","level":"INFO","msg":"writer: Do: started","stream_id":"uo2ypm6x"}
+{"time":"2025-04-15T11:09:29.277398164+02:00","level":"INFO","msg":"sender: started","stream_id":"uo2ypm6x"}
+{"time":"2025-04-15T11:09:29.277489118+02:00","level":"INFO","msg":"handler: started","stream_id":"uo2ypm6x"}
+{"time":"2025-04-15T11:09:29.65442629+02:00","level":"INFO","msg":"Starting system monitor"}
