@@ -1,2 +1,7 @@
-/models
 /runs
+/layout/models/
+/line/models/
+/wandb/
+*.pyc
+/line/__pycache__/
+/layout/__pycache__/
