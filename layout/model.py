@@ -1,7 +1,6 @@
 from core.base_model import BaseModel
 import torch
 import os
-import wandb
 from ultralytics import YOLO, settings
 from datetime import datetime
 
@@ -19,19 +18,39 @@ class LayoutModel(BaseModel):
             models_dir: Directory containing model weights
         """
         super().__init__(config)
-        settings.update({"wandb": True})
+        settings.update({"wandb": config.get('use_wandb', True)})
 
         self.wandb_project = "LA-comparison"
-    
-    def load(self):
+        self.model_loaded = None
+
+    def load(self, mode="trained"):
         """
         Load the model from a weights file.
+        
+        Args:
+            mode: "trained" or "pretrained", indicate if a trained model (for prediction/evaluation)
+            or pretrained weigths (for training) are given
         """
+
+        if mode == "pretrained":
+            if not os.path.exists(self.config["pretrained_w"]):
+                raise FileNotFoundError(f"Pretrained weights file not found: {self.config['pretrained_w']}")
+            else:
+                model = self.config["pretrained_w"]
+                self.model_loaded = "pretrained"
+
+        elif mode == "trained":
+            if not os.path.exists(self.config["model_path"]):
+                raise FileNotFoundError(f"Trained weights file not found: {self.config['model_path']}")
+            else:
+                model = self.config["model_path"]
+                self.model_loaded = "trained"
+
         if "docyolo" in self.config['name']:
             from doclayout_yolo import YOLOv10
-            self.model = YOLOv10(self.config["model_path"])
+            self.model = YOLOv10(model)
         else:
-            self.model = YOLO(self.config["model_path"])
+            self.model = YOLO(model)
         
         self.to_device()
     
@@ -44,15 +63,15 @@ class LayoutModel(BaseModel):
             **kwargs: Additional training arguments
         """
 
-        if not self.model:
-            self.load()
+        if self.model_loaded != "pretrained":
+            self.load("pretrained")
 
         training_data = data_path
         if not data_path:
-            if not self.data_path:
+            if not self.config["data_path"]:
                 raise ValueError("No training data is provided in the config file or in the argument of the train function.")
             else:
-                training_data = self.data_path
+                training_data = self.config["data_path"]
 
         # Train the model
         self.model.train(
@@ -75,14 +94,11 @@ class LayoutModel(BaseModel):
         Returns:
             Dictionary of evaluation metrics
         """
-        if not self.model:
-            self.load()
+        if self.model_loaded != "trained":
+           self.load("trained")
         
         # Evaluate on the test set
         metrics_set = self.model.val(data=path, split='test')
-        val_dirs = [d for d in os.listdir('runs/detect') if d.startswith('val')]
-        last_val_dir = sorted(val_dirs)[-1]  # Take the last val directory
-        test_run_path = os.path.join('runs/detect', last_val_dir)
         
         if is_corpus:
             metrics = {
@@ -120,7 +136,9 @@ class LayoutModel(BaseModel):
         Returns:
             Prediction results
         """
-        if not self.model:
-            self.load()
+        if self.model_loaded != "trained":
+           self.load("trained")
+
+        # TODO : changer pour que l'on puisse donner un dossier en entrée à la place d'une simple image
             
         return self.model(image_path)

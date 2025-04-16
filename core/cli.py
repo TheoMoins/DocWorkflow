@@ -90,6 +90,14 @@ class CLI:
         Returns:
             dict: Updated configuration
         """
+        # Override data_path if provided in CLI
+        if args.data_path:
+            config['data_path'] = args.data_path
+        
+        # Override corpus_path if provided in CLI
+        if args.corpus_path:
+            config['corpus_path'] = args.corpus_path
+
         return config
 
     def run(self, args=None):
@@ -130,7 +138,7 @@ class CLI:
             for model in models:
                 print(f"\nEvaluating model: {model.name}")
                 
-                results = model.evaluate(corpus_path=parsed_args.corpus_path)
+                results = model.evaluate(corpus_path=model.config.get("corpus_path"))
                 all_results[model.name] = results
                 
         elif parsed_args.function == 'train':
@@ -138,7 +146,7 @@ class CLI:
                 print(f"\nTraining and evaluating model: {model.name}")
 
                 model.train()                
-                results = model.evaluate(corpus_path=parsed_args.corpus_path)
+                results = model.evaluate(corpus_path=model.config.get("corpus_path"))
                 all_results[model.name] = results
                 
         # Convert results to DataFrame for multiple models

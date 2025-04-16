@@ -7,7 +7,7 @@
     "training_mode": "restricted",
     "batch_size": 16,
     "epochs": 10,
-    "pretrained_w": "yolo11s",
+    "pretrained_w": "layout/models/yolo11s.pt",
     "img_size": 640,
     "use_wandb": false
 }
