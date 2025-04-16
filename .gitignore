@@ -5,3 +5,5 @@
 *.pyc
 /line/__pycache__/
 /layout/__pycache__/
+/layout/LA-training/
+/line/LS-training/
