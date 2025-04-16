@@ -17,7 +17,7 @@ class ConfigManager:
         self.config_dir = config_dir
         self.configs = {}
         
-    def load_config(self, config_path):
+    def load_configs(self, config_path):
         """
         Load a single or multiple configuration files.
         

@@ -1,0 +1,13 @@
+{
+    "name": "catmus_seg_s_16_10",
+    "model_path": "layout/LA-training/catmus_seg_s_16_10/weights/best.pt",
+    "data_path": "../data_yolo/medieval-segmentation-yolo/config.yaml",
+    "corpus_path": false,
+    "data": "catmus_seg",
+    "training_mode": "restricted",
+    "batch_size": 16,
+    "epochs": 10,
+    "pretrained_w": "yolo11s",
+    "img_size": 640,
+    "use_wandb": false
+}

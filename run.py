@@ -1,15 +1,13 @@
 #!/usr/bin/env python
-"""
-Main entry point for the document analysis tool.
-Provides access to layout segmentation and line segmentation.
-"""
+
 import sys
 import argparse
-from layout.cli import LayoutCLI
-from line.cli import LineCLI
+from core.cli import CLI
 
 def main():
-    """Main entry point for the document analysis tool."""
+    """
+    Main entry point for the document analysis tool.
+    """
     parser = argparse.ArgumentParser(
         description="Document analysis tool for layout and line segmentation"
     )
@@ -20,13 +18,8 @@ def main():
     # Parse only the first argument to determine which module to use
     args, remaining = parser.parse_known_args()
     
-    if args.module == 'layout':
-        # Run the layout segmentation CLI interface
-        cli = LayoutCLI()
-        cli.run(remaining)
-    elif args.module == 'line':
-        # Run the line segmentation CLI interface
-        cli = LineCLI()
+    if args.module in ['layout', 'line']:
+        cli = CLI(args.module)
         cli.run(remaining)
     else:
         parser.print_help()
