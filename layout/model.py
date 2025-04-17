@@ -1,8 +1,15 @@
 from core.base_model import BaseModel
 import torch
 import os
+import glob
 from ultralytics import YOLO, settings
 from datetime import datetime
+from pathlib import Path
+
+from core.yolalto import (
+    parse_yolo_results, remove_duplicates, 
+    create_alto_xml, save_alto_xml, bbox_baseline
+)
 
 class LayoutModel(BaseModel):
     """
@@ -126,19 +133,61 @@ class LayoutModel(BaseModel):
                     
         return metrics
     
-    def predict(self, image_path):
+
+    def predict(self, output_dir):
         """
-        Perform prediction on an image.
+        Perform prediction on one image or on all images in corpus_path.
         
         Args:
-            image_path: Path to the image
-            
+            image_path: Optional path to a single image. If None, use corpus_path from config.
+                
         Returns:
-            Prediction results
+            Prediction results for single image or a dictionary of results for multiple images
         """
         if self.model_loaded != "trained":
            self.load("trained")
 
-        # TODO : changer pour que l'on puisse donner un dossier en entrée à la place d'une simple image
+        # Otherwise, predict on all images in corpus_path
+        corpus_path = self.config.get("corpus_path")
+        if not corpus_path:
+            raise ValueError("No corpus_path specified in config and no image_path provided")
+        
+        # Find all images in the corpus directory
+        image_extensions = ['*.jpg', '*.jpeg', '*.png']
+        image_paths = []
+        for ext in image_extensions:
+            image_paths.extend(glob.glob(os.path.join(corpus_path, ext)))
+        
+        if not image_paths:
+            raise ValueError(f"No images found in {corpus_path}")
+        # Process images in batches
+        batch_size = 4  # Default batch size
+        num_batches = len(image_paths) // batch_size + (1 if len(image_paths) % batch_size else 0)
+        
+        print(f"Processing {len(image_paths)} images in {num_batches} batches...")
+        
+        for batch_idx in range(num_batches):
+            batch = image_paths[batch_idx * batch_size : (batch_idx + 1) * batch_size]
             
-        return self.model(image_path)
+            try:
+                # Run model on batch
+                results = self.model(batch)
+                
+                # Parse results
+                batch_detections = parse_yolo_results(results)
+                # Process each image result
+                for image_path, (detections, wh) in zip(batch, batch_detections):
+                    output_path = os.path.join(output_dir, Path(image_path).with_suffix('.xml').name)
+                    # Remove duplicate detections
+                    detections = remove_duplicates(detections)
+                    
+                    # Create ALTO XML and save it
+                    alto = create_alto_xml(detections, image_path, wh)
+                    save_alto_xml(alto, output_path)
+                                
+            except Exception as e:
+                print(f"Error processing batch: {e}")
+                import traceback
+                traceback.print_exc()
+
+        return results

@@ -40,7 +40,7 @@ class CLI:
         self.parser.add_argument('--configs', help='Path to JSON configuration file(s)', nargs='*',
                            required=False)
         self.parser.add_argument('--output', default=None,
-                           help="Optional path to save evaluation results as CSV")
+                           help="Optional path to save evaluation results (required for predict function)")
 
     def _get_model_class(self):
         """
@@ -148,6 +148,19 @@ class CLI:
                 model.train()                
                 results = model.evaluate(corpus_path=model.config.get("corpus_path"))
                 all_results[model.name] = results
+        
+        elif parsed_args.function == 'predict':
+            if not parsed_args.output:
+                self.parser.error("--output is required when function is 'predict'")
+            
+            for model in models:
+                print(f"\nGenerating predictions with model: {model.name}")
+
+                if not model.config.get("corpus_path"):
+                    print(f"Error: No corpus path specified for prediction.")
+                    continue
+
+                model.predict(output_dir=parsed_args.output)
                 
         # Convert results to DataFrame for multiple models
         if len(all_results) > 1:
