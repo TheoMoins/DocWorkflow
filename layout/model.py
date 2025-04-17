@@ -136,13 +136,12 @@ class LayoutModel(BaseModel):
 
     def predict(self, output_dir):
         """
-        Perform prediction on one image or on all images in corpus_path.
+        Predict on all images in a directory and save results as ALTO XML files.
+        Based on code by Thibault Clérice (https://github.com/ponteineptique/yolalto).
         
         Args:
-            image_path: Optional path to a single image. If None, use corpus_path from config.
-                
-        Returns:
-            Prediction results for single image or a dictionary of results for multiple images
+            image_dir: Directory containing images to process
+            output_dir: Directory to save ALTO XML files
         """
         if self.model_loaded != "trained":
            self.load("trained")

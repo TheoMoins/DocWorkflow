@@ -29,7 +29,7 @@ class CLI:
         """
         Add common command line arguments.
         """
-        self.parser.add_argument('--function', choices=['eval', 'train', 'predict'], required=True,
+        self.parser.add_argument('--function', choices=['eval', 'train', 'predict', 'print'], required=True,
                            help="Function to run: 'eval' for evaluation, 'train' for training")
         self.parser.add_argument('--data_path', default=None,
                            help="Path to training/validation/test data config file (overrides config file)")
@@ -37,6 +37,8 @@ class CLI:
                            help="Optional path to corpus data for additional testing (overrides config file")
         self.parser.add_argument('--pred_path', default=None,
                            help="Path to prediction files (only for prediction)")
+        self.parser.add_argument('--xml_path', default=None,
+                   help="Path to ALTO XML files if different from the one for images (used with 'print' function TODO : for eval function too)")
         self.parser.add_argument('--configs', help='Path to JSON configuration file(s)', nargs='*',
                            required=False)
         self.parser.add_argument('--output', default=None,
@@ -161,6 +163,17 @@ class CLI:
                     continue
 
                 model.predict(output_dir=parsed_args.output)
+        
+        elif parsed_args.function == 'print':
+            if not parsed_args.corpus_path:
+                self.parser.error("--corpus_path is required when function is 'print'")
+            
+            for model in models:
+                print(f"\nVisualizing with model: {model.name}")
+                model.visualize(corpus_path=parsed_args.corpus_path, 
+                                xml_path=parsed_args.xml_path, 
+                                output_dir=parsed_args.output)
+
                 
         # Convert results to DataFrame for multiple models
         if len(all_results) > 1:

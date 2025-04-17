@@ -6,6 +6,8 @@ from datetime import datetime
 import pandas as pd
 import tabulate
 
+from core.visualisation import visualize_folder
+
 class BaseModel(ABC):
     """
     Abstract base class for all document analysis models.
@@ -211,4 +213,27 @@ class BaseModel(ABC):
         
         return df_results
     
-
+    def visualize(self, corpus_path, xml_path=None, output_dir=None):
+        """
+        Visualisation tool from xml object.
+        
+        Args:
+            corpus_path: Path to images
+            xml_path: path to xml files (if different from corpus_path)
+            output_dir: Path where to save visualisations
+            
+        Returns:
+            Nombre de visualisations réussies
+        """
+        print(f"Visualizing results in {corpus_path}...")
+        
+        # Déterminer le type de visualisation en fonction du type de modèle
+        visualization_type = 'layout' if self.__class__.__name__ == 'LayoutModel' else 'line'
+        
+        # Utiliser l'utilitaire de visualisation
+        return visualize_folder(
+            img_dir=corpus_path,
+            xml_dir=xml_path,
+            output_dir=output_dir,
+            visualization_type=visualization_type
+        )
