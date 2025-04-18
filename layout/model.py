@@ -29,6 +29,7 @@ class LayoutModel(BaseModel):
 
         self.wandb_project = "LA-comparison"
         self.model_loaded = None
+        self.model = None
 
     def load(self, mode="trained"):
         """
@@ -134,7 +135,7 @@ class LayoutModel(BaseModel):
         return metrics
     
 
-    def predict(self, output_dir):
+    def predict(self, output_dir, save=False):
         """
         Predict on all images in a directory and save results as ALTO XML files.
         Based on code by Thibault Clérice (https://github.com/ponteineptique/yolalto).
@@ -170,7 +171,7 @@ class LayoutModel(BaseModel):
             
             try:
                 # Run model on batch
-                results = self.model(batch)
+                results = self.model.predict(batch, save=save, verbose=False)
                 
                 # Parse results
                 batch_detections = parse_yolo_results(results)

@@ -130,12 +130,13 @@ class BaseModel(ABC):
     
 
     @abstractmethod
-    def predict(self, image_path):
+    def predict(self, image_path, save=False):
         """
         Perform prediction on an image.
         
         Args:
             image_path: Path to the image
+            save: boolean whether to save the image with the prediction or not
             
         Returns:
             Prediction results
@@ -179,39 +180,6 @@ class BaseModel(ABC):
         self._finish_wandb(run)
         
         return metrics
-    
-
-    def train_and_evaluate(self, corpus_path=None, **kwargs):
-        """
-        Train and evaluate multiple models.
-        
-        Args:
-            models: List of models to train and evaluate
-            corpus_path: Optional path to additional corpus data
-            **kwargs: Additional arguments for training
-            
-        Returns:
-            DataFrame with evaluation results
-        """
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-                
-        print(f"\nTraining and evaluating model: {self.name}")
-        
-        # Train the model
-        self.train(self.data_path, **kwargs)
-        
-        # Evaluate the model
-        metrics = self.evaluate(self.data_path, corpus_path)
-        
-        # Add model name to results
-        model_result = {"name": self.name}
-        model_result.update(metrics)
-        
-        # Create comparative DataFrame
-        df_results = pd.DataFrame(model_result)
-        
-        return df_results
     
     def visualize(self, corpus_path, xml_path=None, output_dir=None):
         """

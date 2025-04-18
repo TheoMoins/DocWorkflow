@@ -38,7 +38,7 @@ class CLI:
         self.parser.add_argument('--pred_path', default=None,
                            help="Path to prediction files (only for prediction)")
         self.parser.add_argument('--xml_path', default=None,
-                   help="Path to ALTO XML files if different from the one for images (used with 'print' function TODO : for eval function too)")
+                           help="Path to ALTO XML files if different from the one for images")
         self.parser.add_argument('--configs', help='Path to JSON configuration file(s)', nargs='*',
                            required=False)
         self.parser.add_argument('--output', default=None,

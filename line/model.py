@@ -219,12 +219,9 @@ class LineModel(BaseModel):
             layout_model_path = self.config["layout_model_path"]
             # TODO : Change this part !
             if "docyolo" in layout_model_path:
-                try:
-                    from doclayout_yolo import YOLOv10
-                    layout_model = YOLOv10(layout_model_path)
-                except ImportError:
-                    from ultralytics import YOLO
-                    layout_model = YOLO(layout_model_path)
+                from doclayout_yolo import YOLOv10
+                layout_model = YOLOv10(layout_model_path)
+
             else:
                 from ultralytics import YOLO
                 layout_model = YOLO(layout_model_path)
