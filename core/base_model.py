@@ -1,9 +1,7 @@
 from abc import ABC, abstractmethod
 import torch
-import os
 import wandb
 from datetime import datetime
-import pandas as pd
 import tabulate
 
 from core.visualisation import visualize_folder
@@ -153,7 +151,6 @@ class BaseModel(ABC):
         """
         pass
     
-    @abstractmethod
     def score(self, pred_path, gt_path):
         """
         Calculate scores between prediction ALTO files and ground truth ALTO files.
@@ -165,7 +162,7 @@ class BaseModel(ABC):
         Returns:
             Dictionary of evaluation metrics
         """
-        pass
+        return {}
 
     def evaluate(self, corpus_path=None):
         """
@@ -188,7 +185,6 @@ class BaseModel(ABC):
             metrics = {**metrics, **corpus_metrics}
         
         # Display metrics in a formatted way
-        self._display_metrics(metrics)
         
         self._log_to_wandb(metrics, run)
         self._finish_wandb(run)

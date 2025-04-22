@@ -8,6 +8,8 @@ import numpy as np
 from mean_average_precision import MetricBuilder
 from pathlib import Path
 import gc
+import shutil
+import tempfile
 
 import threading
 
@@ -118,33 +120,46 @@ class LineModel(BaseModel):
         # Retourner le résultat (vide en cas d'erreur)
         return result[0] if result[0] is not None else []
 
-    def _compute_metrics(self, test_path, corpus_path=None):
+
+    def score(self, pred_path, gt_path):
         """
-        Compute metrics for the line segmentation model.
+        Calculate scores between prediction ALTO files and ground truth ALTO files.
         
         Args:
-            test_path: Path to test data
-            corpus_path: Optional path to corpus data
+            pred_path: Path to directory containing prediction ALTO files
+            gt_path: Path to directory containing ground truth ALTO files
             
         Returns:
             Dictionary of evaluation metrics
         """
-        if not self.model:
-            self.load()
-        
         # Initialize metrics builder
         builder = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
         
         # Process ground truth data
-        gt_files = sorted(glob.glob(os.path.join(test_path, "*.xml")))
+        gt_files = sorted(glob.glob(os.path.join(gt_path, "*.xml")))
         if not gt_files:
-            raise ValueError(f"No ground truth ALTO files found in {test_path}")
+            raise ValueError(f"No ground truth ALTO files found in {gt_path}")
         
         # Process files
-        for gt_file in tqdm(gt_files, desc="Processing pages", unit="page"):
+        for gt_file in tqdm(gt_files, desc="Scoring pages", unit="page"):
+            # Extract base name for matching prediction file
+            base_name = os.path.basename(gt_file)
+            pred_file = os.path.join(pred_path, base_name)
+            
+            if not os.path.exists(pred_file):
+                print(f"Warning: No prediction file found for {base_name}")
+                continue
+            
+            # Extract ground truth lines and image path
             image_path, gt_lines, _ = extract_lines_from_alto(gt_file)
             if not gt_lines:
                 print(f"Warning: No lines found in {gt_file}")
+                continue
+            
+            # Extract predicted lines
+            _, pred_lines, _ = extract_lines_from_alto(pred_file)
+            if not pred_lines:
+                print(f"Warning: No predicted lines found in {pred_file}")
                 continue
             
             try:
@@ -154,46 +169,87 @@ class LineModel(BaseModel):
                 print(f"Error opening image {image_path}: {e}")
                 continue
             
-            pred_lines = self._predict_page(image, gt_file)
+            # Convert ground truth and predictions to the format expected by MAP
+            gt_boxes = convert_lines_to_boxes(gt_lines, image_size, is_gt=True)
+            pred_boxes = convert_lines_to_boxes(pred_lines, image_size, is_gt=False)
             
-            if pred_lines:
-                # Convert ground truth and predictions to the format expected by MAP
-                gt_boxes = convert_lines_to_boxes(gt_lines, image_size, is_gt=True)
-                pred_boxes = convert_lines_to_boxes(pred_lines, image_size, is_gt=False)
+            if gt_boxes.shape[0] > 0 and pred_boxes.shape[0] > 0:
+                builder.add(pred_boxes, gt_boxes)
                 
-                if gt_boxes.shape[0] > 0 and pred_boxes.shape[0] > 0:
-                    builder.add(pred_boxes, gt_boxes)
-                    
             if image:
-                    image.close()
-                    del image
-                
+                image.close()
+                del image
+            
             gc.collect()
         
         # Calculate metrics
         metrics = builder.value(iou_thresholds=[round(x, 2) for x in np.arange(0.5, 1.0, 0.05)])
+        
         # Extract metrics
         # TODO : ADD mAP/precision/recall for MainZone
-        test_metrics = {
+        metrics_dict = {
             "dataset_test/map50-95": metrics["mAP"],
             "dataset_test/map50": metrics[0.5][0]["ap"],
             "dataset_test/map75": metrics[0.75][0]["ap"],
             "dataset_test/precision": metrics[0.75][0]["precision"].mean(),
             "dataset_test/recall": metrics[0.75][0]["recall"].mean()
         }
-        
-        # TODO : Process corpus data if provided (similar logic to test data)
-        if corpus_path:
-            corpus_metrics = {
-                # Similar to test metrics, but for corpus data
-                # Implementation would be similar to the test metrics logic
-            }
-            combined_metrics = {**test_metrics, **corpus_metrics}
-        else:
-            combined_metrics = test_metrics
-    
-        return combined_metrics
 
+        self._display_metrics(metrics_dict)
+
+        return metrics_dict
+
+    def _compute_metrics(self, test_path, is_corpus=False):
+        """
+        Compute metrics for the line segmentation model by generating predictions and scoring them.
+        
+        Args:
+            test_path: Path to test data
+            is_corpus: Whether this is evaluation on corpus data
+            
+        Returns:
+            Dictionary of evaluation metrics
+        """
+        if not self.model:
+            self.load()
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Process ground truth data
+            gt_files = sorted(glob.glob(os.path.join(test_path, "*.xml")))
+            if not gt_files:
+                raise ValueError(f"No ground truth ALTO files found in {test_path}")
+            
+            # Generate predictions for each file
+            for gt_file in tqdm(gt_files, desc="Generating predictions", unit="page"):
+                try:
+                    image_path, gt_lines, _ = extract_lines_from_alto(gt_file)
+                    if not os.path.exists(image_path):
+                        print(f"Warning: Image {image_path} not found for {gt_file}")
+                        continue
+                        
+                    image = Image.open(image_path)
+                    pred_lines = self._predict_page(image, gt_file)
+                    
+                    # Save predictions to temporary directory
+                    output_path = os.path.join(temp_dir, os.path.basename(gt_file))
+                    add_lines_to_alto(pred_lines, output_path, gt_file)
+                    
+                    image.close()
+                    del image
+                    gc.collect()
+                    
+                except Exception as e:
+                    print(f"Error processing {gt_file}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Score the generated predictions
+            metrics = self.score(temp_dir, test_path)
+        
+        # TODO : Add prefix to metrics based on whether this is corpus evaluation
+        # prefix = "dataset_corpus" if is_corpus else "dataset_test"
+        # return {f"{prefix}/{k}": v for k, v in metrics.items()}
+        return metrics
     
     def predict(self, output_dir):
         """
@@ -208,17 +264,17 @@ class LineModel(BaseModel):
             self.load()
         
         # Get corpus path from config
-        corpus_path = self.config.get("corpus_path")
-        if not corpus_path:
+        pred_path = self.config.get("pred_path")
+        if not pred_path:
             raise ValueError("No corpus_path specified in config")
 
         image_extensions = ['*.jpg', '*.jpeg', '*.png']
         image_paths = []
         for ext in image_extensions:
-            image_paths.extend(glob.glob(os.path.join(corpus_path, ext)))
+            image_paths.extend(glob.glob(os.path.join(pred_path, ext)))
         
         if not image_paths:
-            raise ValueError(f"No images found in {corpus_path}")
+            raise ValueError(f"No images found in {pred_path}")
         
         print(f"Processing {len(image_paths)} images...")
 
@@ -226,7 +282,7 @@ class LineModel(BaseModel):
         for image_path in tqdm(image_paths, desc="Predicting lines", unit="image"):
             try:
                 # Check for corresponding ALTO XML file with layout regions
-                alto_path = os.path.join(corpus_path, Path(image_path).with_suffix('.xml').name)
+                alto_path = os.path.join(pred_path, Path(image_path).with_suffix('.xml').name)
                 
                 # Check if ALTO file exists and contains layout regions
                 has_layout = False
@@ -256,8 +312,11 @@ class LineModel(BaseModel):
                 
                 # Generate output ALTO XML file path
                 output_path = os.path.join(output_dir, Path(image_path).with_suffix('.xml').name)
-                
-                add_lines_to_alto(alto_path, predicted_lines, output_path)
+
+                if not os.path.exists(output_path) and os.path.exists(alto_path):
+                    shutil.copy2(alto_path, output_path) 
+
+                add_lines_to_alto(predicted_lines, output_path, alto_path)
                 
                 results.append(predicted_lines)
                 

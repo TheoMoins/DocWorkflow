@@ -3,7 +3,6 @@ import torch
 import os
 import glob
 from ultralytics import YOLO, settings
-from datetime import datetime
 from pathlib import Path
 
 from core.yolalto import (
@@ -131,7 +130,8 @@ class LayoutModel(BaseModel):
                 "MainZone_corpus/precision_MainZone": metrics_set.box.p[1],    
                 "MainZone_corpus/recall_MainZone": metrics_set.box.r[1]   
             }
-                    
+        
+        self._display_metrics(metrics)
         return metrics
     
 

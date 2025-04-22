@@ -29,20 +29,21 @@ class CLI:
         """
         Add common command line arguments.
         """
-        self.parser.add_argument('--function', choices=['eval', 'train', 'predict', 'print'], required=True,
-                           help="Function to run: 'eval' for evaluation, 'train' for training")
+        self.parser.add_argument('--function', choices=['eval', 'train', 'predict', 'print', 'score'], required=True,
+                       help="Function to run: 'eval' for evaluation, 'train' for training, " \
+                       "'print' for visualisation, 'score' for scoring predictions")        
         self.parser.add_argument('--data_path', default=None,
                            help="Path to training/validation/test data config file (overrides config file)")
         self.parser.add_argument('--corpus_path', default=None,
-                           help="Optional path to corpus data for additional testing (overrides config file")
+                           help="Optional path to corpus data for additional testing (overrides config file)")
         self.parser.add_argument('--pred_path', default=None,
-                           help="Path to prediction files (only for prediction)")
+                           help="Path to prediction files (only for prediction and score)")
         self.parser.add_argument('--xml_path', default=None,
                            help="Path to ALTO XML files if different from the one for images")
         self.parser.add_argument('--configs', help='Path to JSON configuration file(s)', nargs='*',
                            required=False)
         self.parser.add_argument('--output', default=None,
-                           help="Optional path to save evaluation results (required for predict function)")
+                           help="Path to save evaluation results (required for predict function)")
 
     def _get_model_class(self):
         """
@@ -92,13 +93,18 @@ class CLI:
         Returns:
             dict: Updated configuration
         """
-        # Override data_path if provided in CLI
+        # Override args if provided in CLI
         if args.data_path:
             config['data_path'] = args.data_path
         
-        # Override corpus_path if provided in CLI
         if args.corpus_path:
             config['corpus_path'] = args.corpus_path
+        
+        if args.pred_path:
+            config['pred_path'] = args.pred_path
+        
+        if args.xml_path:
+            config['xml_path'] = args.xml_path
 
         return config
 
@@ -154,14 +160,11 @@ class CLI:
         elif parsed_args.function == 'predict':
             if not parsed_args.output:
                 self.parser.error("--output is required when function is 'predict'")
+            if not parsed_args.pred_path:
+                self.parser.error("--pred_path is required when function is 'predict'")
             
             for model in models:
                 print(f"\nGenerating predictions with model: {model.name}")
-
-                if not model.config.get("corpus_path"):
-                    print(f"Error: No corpus path specified for prediction.")
-                    continue
-
                 model.predict(output_dir=parsed_args.output)
         
         elif parsed_args.function == 'print':
@@ -173,6 +176,19 @@ class CLI:
                 model.visualize(corpus_path=parsed_args.corpus_path, 
                                 xml_path=parsed_args.xml_path, 
                                 output_dir=parsed_args.output)
+        
+        elif parsed_args.function == 'score':
+            if not parsed_args.pred_path:
+                self.parser.error("--pred_path is required when function is 'score'")
+            if not parsed_args.data_path:
+                self.parser.error("--data_path is required when function is 'score'")
+                
+            gt_path = parsed_args.data_path
+            
+            for model in models:
+                print(f"\nScoring predictions for model: {model.name}")
+                results = model.score(pred_path=parsed_args.pred_path, gt_path=gt_path)
+                all_results[model.name] = results
 
                 
         # Convert results to DataFrame for multiple models
