@@ -153,6 +153,20 @@ class BaseModel(ABC):
         """
         pass
     
+    @abstractmethod
+    def score(self, pred_path, gt_path):
+        """
+        Calculate scores between prediction ALTO files and ground truth ALTO files.
+        
+        Args:
+            pred_path: Path to directory containing prediction ALTO files
+            gt_path: Path to directory containing ground truth ALTO files
+            
+        Returns:
+            Dictionary of evaluation metrics
+        """
+        pass
+
     def evaluate(self, corpus_path=None):
         """
         Evaluate model and handle logging and result presentation.

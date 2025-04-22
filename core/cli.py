@@ -203,5 +203,9 @@ class CLI:
             results: DataFrame with evaluation results
             output_path: Path to save the CSV file
         """
-        results.to_csv(output_path, index=False)
+        if not isinstance(results, pd.DataFrame):
+            results_df = pd.DataFrame([results])
+        else:
+            results_df = results
+        results_df.to_csv(output_path, index=False)
         print(f"Results saved to {output_path}")

@@ -141,7 +141,6 @@ class LayoutModel(BaseModel):
         Based on code by Thibault Clérice (https://github.com/ponteineptique/yolalto).
         
         Args:
-            image_dir: Directory containing images to process
             output_dir: Directory to save ALTO XML files
         """
         if self.model_loaded != "trained":

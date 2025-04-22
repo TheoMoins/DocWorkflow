@@ -141,7 +141,6 @@ class LineModel(BaseModel):
             raise ValueError(f"No ground truth ALTO files found in {test_path}")
         
         # Process files
-        metrics_by_image = []
         for gt_file in tqdm(gt_files, desc="Processing pages", unit="page"):
             image_path, gt_lines, _ = extract_lines_from_alto(gt_file)
             if not gt_lines:
