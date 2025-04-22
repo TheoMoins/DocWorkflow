@@ -135,21 +135,21 @@ class LayoutModel(BaseModel):
         return metrics
     
 
-    def predict(self, output_dir, save=False):
+    def predict(self, output_dir, save_image=False):
         """
         Predict on all images in a directory and save results as ALTO XML files.
         Based on code by Thibault Clérice (https://github.com/ponteineptique/yolalto).
         
         Args:
             output_dir: Directory to save ALTO XML files
+            save_image: option to save the image along with the output or not
         """
         if self.model_loaded != "trained":
            self.load("trained")
 
-        # Otherwise, predict on all images in corpus_path
         corpus_path = self.config.get("corpus_path")
         if not corpus_path:
-            raise ValueError("No corpus_path specified in config and no image_path provided")
+            raise ValueError("No corpus_path specified in config")
         
         # Find all images in the corpus directory
         image_extensions = ['*.jpg', '*.jpeg', '*.png']
@@ -170,7 +170,7 @@ class LayoutModel(BaseModel):
             
             try:
                 # Run model on batch
-                results = self.model.predict(batch, save=save, verbose=False)
+                results = self.model.predict(batch, save=save_image, verbose=False)
                 
                 # Parse results
                 batch_detections = parse_yolo_results(results)

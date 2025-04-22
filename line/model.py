@@ -6,7 +6,7 @@ from PIL import Image
 import glob
 import numpy as np
 from mean_average_precision import MetricBuilder
-from datetime import datetime
+from pathlib import Path
 import gc
 
 import threading
@@ -16,7 +16,7 @@ from kraken.kraken import SEGMENTATION_DEFAULT_MODEL
 from kraken.lib.xml import XMLPage
 from yaltai.models.krakn import segment as line_segment
 
-from core.utils import extract_lines_from_alto, convert_lines_to_boxes
+from core.utils import extract_lines_from_alto, convert_lines_to_boxes, add_lines_to_alto
 
 class LineModel(BaseModel):
     """
@@ -195,48 +195,78 @@ class LineModel(BaseModel):
         return combined_metrics
 
     
-    def predict(self, image_path):
+    def predict(self, output_dir):
         """
         Perform prediction on an image.
         
         Args:
-            image_path: Path to the image
-            
+            output_dir: Directory to save ALTO XML files            
         Returns:
             Prediction results
         """
         if not self.model:
             self.load()
-            
-        # Load the image
-        image = Image.open(image_path)
-                
-        # Get regions if a layout model is specified
-        regions = None
-        if "layout_model_path" in self.config and self.config["layout_model_path"]:
-            # Get regions from the layout model
-            layout_model_path = self.config["layout_model_path"]
-            # TODO : Change this part !
-            if "docyolo" in layout_model_path:
-                from doclayout_yolo import YOLOv10
-                layout_model = YOLOv10(layout_model_path)
+        
+        # Get corpus path from config
+        corpus_path = self.config.get("corpus_path")
+        if not corpus_path:
+            raise ValueError("No corpus_path specified in config")
 
-            else:
-                from ultralytics import YOLO
-                layout_model = YOLO(layout_model_path)
-            
-            layout_model.to(self.device)
-            from yaltai.models.yolo import segment as zone_segment
-            regions = zone_segment(layout_model, image_path)
+        image_extensions = ['*.jpg', '*.jpeg', '*.png']
+        image_paths = []
+        for ext in image_extensions:
+            image_paths.extend(glob.glob(os.path.join(corpus_path, ext)))
         
-        # Perform line segmentation
-        segmentation_result = line_segment(
-            image,
-            text_direction=self.config.get("text_direction", "horizontal-lr"),
-            model=self.model,
-            device=self.device, 
-            regions=regions,
-            ignore_lignes=False
-        )
+        if not image_paths:
+            raise ValueError(f"No images found in {corpus_path}")
         
-        return segmentation_result
+        print(f"Processing {len(image_paths)} images...")
+
+        results = []
+        for image_path in tqdm(image_paths, desc="Predicting lines", unit="image"):
+            try:
+                # Check for corresponding ALTO XML file with layout regions
+                alto_path = os.path.join(corpus_path, Path(image_path).with_suffix('.xml').name)
+                
+                # Check if ALTO file exists and contains layout regions
+                has_layout = False
+                if os.path.exists(alto_path):
+                    _, _, regions = extract_lines_from_alto(alto_path)
+                    has_layout = bool(regions)
+                
+                if not has_layout:
+                    print(f"Warning: No layout regions found for {image_path}. Results may be suboptimal.")
+                
+                image = Image.open(image_path)
+                
+                # Predict lines
+                if has_layout:
+                    predicted_lines = self._predict_page(image, alto_path)
+                else:
+                    segmentation_result = line_segment(
+                        image,
+                        text_direction=self.config.get("text_direction", "horizontal-lr"),
+                        model=self.model,
+                        device=self.device,
+                        regions=None,
+                        ignore_lignes=False
+                    )
+                    predicted_lines = [{'baseline': line.baseline, 'boundary': line.boundary, 'id': line.id}
+                                    for line in segmentation_result.lines]
+                
+                # Generate output ALTO XML file path
+                output_path = os.path.join(output_dir, Path(image_path).with_suffix('.xml').name)
+                
+                add_lines_to_alto(alto_path, predicted_lines, output_path)
+                
+                results.append(predicted_lines)
+                
+                # Close the image
+                image.close()
+                
+            except Exception as e:
+                print(f"Error processing {image_path}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        return results

@@ -130,12 +130,12 @@ class BaseModel(ABC):
     
 
     @abstractmethod
-    def predict(self, image_path, save=False):
+    def predict(self, output_dir, save=False):
         """
-        Perform prediction on an image.
+        Perform prediction on the corpus path.
         
         Args:
-            image_path: Path to the image
+            output_dir: Directory to save predictions
             save: boolean whether to save the image with the prediction or not
             
         Returns:

@@ -6,6 +6,9 @@ import torch
 import wandb
 from kraken.lib.xml import XMLPage
 
+from lxml import etree as ET
+
+
 
 def setup_wandb(key=None):
     """
@@ -207,3 +210,132 @@ def convert_lines_to_boxes(lines, image_size, is_gt=True):
             boxes.append([x1, y1, x2, y2, class_id, confidence])
     
     return np.array(boxes) if boxes else np.zeros((0, 7 if is_gt else 6))
+
+
+def _add_line_to_element(parent_element, line, line_id=None, tag_id="LT1"):
+    """
+    Ajoute une ligne TextLine à un élément parent dans un document ALTO XML.
+    
+    Args:
+        parent_element: Élément XML parent (TextBlock)
+        line: Dictionnaire contenant les informations de la ligne (boundary, baseline)
+        line_id: ID à attribuer à la ligne (généré automatiquement si None)
+        tag_id: ID de la balise à référencer (TAGREFS)
+        
+    Returns:
+        L'élément TextLine créé
+    """
+    # Créer l'élément TextLine
+    ns = 'http://www.loc.gov/standards/alto/ns-v4#'
+    line_element = ET.SubElement(parent_element, f"{{{ns}}}TextLine")
+    
+    # Ajouter l'ID
+    if line_id is None and 'id' in line:
+        line_id = line['id']
+    elif line_id is None:
+        line_id = f"line_{id(line)}"
+    
+    line_element.set('ID', line_id)
+    line_element.set('TAGREFS', tag_id)
+    
+    # Ajouter les informations de boundary si disponibles
+    if 'boundary' in line and line['boundary']:
+        boundary = np.array(line['boundary'])
+        min_x, min_y = boundary.min(axis=0)
+        max_x, max_y = boundary.max(axis=0)
+        
+        line_element.set('HPOS', str(int(min_x)))
+        line_element.set('VPOS', str(int(min_y)))
+        line_element.set('WIDTH', str(int(max_x - min_x)))
+        line_element.set('HEIGHT', str(int(max_y - min_y)))
+        
+        # Ajouter Shape avec Polygon
+        shape = ET.SubElement(line_element, f"{{{ns}}}Shape")
+        polygon = ET.SubElement(shape, f"{{{ns}}}Polygon")
+        points = " ".join([f"{int(p[0])},{int(p[1])}" for p in boundary])
+        polygon.set('POINTS', points)
+    
+    # Ajouter la baseline si disponible
+    if 'baseline' in line and line['baseline']:
+        baseline = line['baseline']
+        baseline_str = " ".join([f"{int(p[0])},{int(p[1])}" for p in baseline])
+        line_element.set('BASELINE', baseline_str)
+    
+    return line_element
+
+
+def add_lines_to_alto(lines, output_path, alto_path):
+    """
+    Ajoute des lignes à un fichier ALTO XML existant ou crée un nouveau fichier avec ces lignes.
+    
+    Args:
+        lines: Liste de dictionnaires contenant les informations des lignes (boundary, baseline)
+        output_path: Chemin où sauvegarder le fichier ALTO modifié/créé
+        alto_path: Chemin vers un fichier ALTO existant        
+    Returns:
+        True si l'opération a réussi, False sinon
+    """
+
+    try:
+        # Extraire les informations du fichier ALTO existant
+        image_file, _, regions = extract_lines_from_alto(alto_path)
+        
+        # Parser le fichier XML
+        tree = ET.parse(alto_path)
+        root = tree.getroot()
+        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+        
+        # Vérifier qu'il y a au moins un bloc de texte
+        text_blocks = root.findall('.//alto:TextBlock', ns)
+        if not text_blocks:
+            print(f"Warning: No TextBlocks found in {alto_path}")
+        
+        # Préparer les blocs avec leurs boîtes délimitantes
+        block_boxes = []
+        for block in text_blocks:
+            x = int(block.get('HPOS', 0))
+            y = int(block.get('VPOS', 0))
+            w = int(block.get('WIDTH', 0))
+            h = int(block.get('HEIGHT', 0))
+            block_boxes.append({
+                'block': block,
+                'bbox': [x, y, x+w, y+h]
+            })
+        
+        # Associer chaque ligne au bloc le plus approprié en utilisant IoU
+        for line in lines:
+            if 'boundary' in line and line['boundary']:
+                # Convertir boundary en bbox pour le calcul IoU
+                boundary = np.array(line['boundary'])
+                min_x, min_y = boundary.min(axis=0)
+                max_x, max_y = boundary.max(axis=0)
+                line_bbox = [min_x, min_y, max_x, max_y]
+                
+                # Trouver le bloc avec le meilleur IoU
+                best_iou = 0
+                best_block = None
+                
+                for block_info in block_boxes:
+                    iou = calculate_iou(line_bbox, block_info['bbox'])
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_block = block_info['block']
+                
+                # Si aucun bloc approprié n'est trouvé, utiliser le premier bloc
+                if best_block is None and block_boxes:
+                    best_block = block_boxes[0]['block']
+                
+                # Ajouter la ligne au bloc trouvé
+                if best_block is not None:
+                    _add_line_to_element(best_block, line)
+        
+        # Sauvegarder le fichier XML modifié
+        tree.write(output_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+        return True
+        
+    except Exception as e:
+        print(f"Error modifying ALTO file: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
