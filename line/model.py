@@ -102,6 +102,7 @@ class LineModel(BaseModel):
                 if not is_timeout[0]:
                     result[0] = []
         
+        # TODO : Mauvaise gestion du timeout dans la partie eval (ou dans score, en tout cas les deux gestions sont différentes)
         # Créer et démarrer le thread de traitement
         thread = threading.Thread(target=process_image)
         thread.daemon = True
@@ -251,12 +252,14 @@ class LineModel(BaseModel):
         # return {f"{prefix}/{k}": v for k, v in metrics.items()}
         return metrics
     
-    def predict(self, output_dir):
+    def predict(self, output_dir, save_image=True):
         """
         Perform prediction on an image.
         
         Args:
-            output_dir: Directory to save ALTO XML files            
+            output_dir: Directory to save ALTO XML files       
+            save_image: if True: copy the image in the output_dir
+            # TODO : change the CLI to account for this option !
         Returns:
             Prediction results
         """
@@ -266,7 +269,7 @@ class LineModel(BaseModel):
         # Get corpus path from config
         pred_path = self.config.get("pred_path")
         if not pred_path:
-            raise ValueError("No corpus_path specified in config")
+            raise ValueError("No pred_path specified in config")
 
         image_extensions = ['*.jpg', '*.jpeg', '*.png']
         image_paths = []
@@ -320,6 +323,11 @@ class LineModel(BaseModel):
                 
                 results.append(predicted_lines)
                 
+                if save_image:
+                    image_filename = os.path.basename(image_path)
+                    image_output_path = os.path.join(output_dir, image_filename)
+                    shutil.copy2(image_path, image_output_path)
+
                 # Close the image
                 image.close()
                 

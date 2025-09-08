@@ -4,6 +4,8 @@ import os
 import glob
 from ultralytics import YOLO, settings
 from pathlib import Path
+import shutil
+
 
 from core.yolalto import (
     parse_yolo_results, remove_duplicates, 
@@ -135,7 +137,7 @@ class LayoutModel(BaseModel):
         return metrics
     
 
-    def predict(self, output_dir, save_image=False):
+    def predict(self, output_dir, save_image=True):
         """
         Predict on all images in a directory and save results as ALTO XML files.
         Based on code by Thibault Clérice (https://github.com/ponteineptique/yolalto).
@@ -147,18 +149,18 @@ class LayoutModel(BaseModel):
         if self.model_loaded != "trained":
            self.load("trained")
 
-        corpus_path = self.config.get("corpus_path")
-        if not corpus_path:
-            raise ValueError("No corpus_path specified in config")
+        pred_path = self.config.get("pred_path")
+        if not pred_path:
+            raise ValueError("No pred_path specified in config")
         
         # Find all images in the corpus directory
         image_extensions = ['*.jpg', '*.jpeg', '*.png']
         image_paths = []
         for ext in image_extensions:
-            image_paths.extend(glob.glob(os.path.join(corpus_path, ext)))
+            image_paths.extend(glob.glob(os.path.join(pred_path, ext)))
         
         if not image_paths:
-            raise ValueError(f"No images found in {corpus_path}")
+            raise ValueError(f"No images found in {pred_path}")
         # Process images in batches
         batch_size = 4  # Default batch size
         num_batches = len(image_paths) // batch_size + (1 if len(image_paths) % batch_size else 0)
@@ -170,7 +172,7 @@ class LayoutModel(BaseModel):
             
             try:
                 # Run model on batch
-                results = self.model.predict(batch, save=save_image, verbose=False)
+                results = self.model.predict(batch, save=False, verbose=False)
                 
                 # Parse results
                 batch_detections = parse_yolo_results(results)
@@ -183,7 +185,12 @@ class LayoutModel(BaseModel):
                     # Create ALTO XML and save it
                     alto = create_alto_xml(detections, image_path, wh)
                     save_alto_xml(alto, output_path)
-                                
+                
+                    if save_image:
+                        image_filename = os.path.basename(image_path)
+                        image_output_path = os.path.join(output_dir, image_filename)
+                        shutil.copy2(image_path, image_output_path)
+
             except Exception as e:
                 print(f"Error processing batch: {e}")
                 import traceback

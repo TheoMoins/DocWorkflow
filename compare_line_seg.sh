@@ -7,28 +7,29 @@ OUTPUT_DIR="runs/results/compare_$(date +%Y%m%d)"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR/layout_pred"
+mkdir -p "$OUTPUT_DIR/line_pred"
 
 echo "Line segmentation comparison - GT vs layout predictions"
 echo "Test data: $TEST_DATA_PATH"
 echo "Results in: $OUTPUT_DIR"
 
-# 1. Generate layout predictions
-echo "1. Generating layout predictions..."
-python run.py layout --function predict --configs "$LAYOUT_CONFIG" --corpus_path "$TEST_DATA_PATH" --output "$OUTPUT_DIR/layout_pred"
-
-# 2. Evaluate line segmentation with GT zones
-echo "2. Evaluating lines with ground truth zones..."
+# Evaluate line segmentation with GT zones
+echo "1. Evaluating lines with ground truth zones..."
 python run.py line --function eval --configs "$LINE_CONFIG" --data_path "$TEST_DATA_PATH" --output "$OUTPUT_DIR/metrics_gt.csv"
 
-# 3. Evaluate line segmentation with predicted zones
-echo "3. Evaluating lines with predicted zones..."
-python run.py line --function eval --configs "$LINE_CONFIG" --data_path "$OUTPUT_DIR/layout_pred" --output "$OUTPUT_DIR/metrics_pred.csv"
+# Generate layout predictions
+echo "2. Generating layout predictions..."
+python run.py layout --function predict --configs "$LAYOUT_CONFIG" --pred_path "$TEST_DATA_PATH" --output "$OUTPUT_DIR/layout_pred"
 
-# 4. Clean up - remove copied images to save space
-echo "4. Cleaning up temporary image files..."
-find "$OUTPUT_DIR/layout_pred" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \) -delete
+# Predict line segmentation with predicted zones
+echo "3. Predicting lines with predicted zones..."
+python run.py line --function predict --configs "$LINE_CONFIG" --pred_path "$OUTPUT_DIR/layout_pred" --output "$OUTPUT_DIR/line_pred"
 
-# 5. Display results
+# Evaluate line segmentation with predicted zones
+echo "4. Scoring lines with predicted zones..."
+python run.py line --function score --pred_path "$OUTPUT_DIR/line_pred" --data_path "$TEST_DATA_PATH" --output "$OUTPUT_DIR/metrics_pred.csv"
+
+# Display results
 echo -e "\n=== RESULTS ==="
 echo "GT metrics:"
 cat "$OUTPUT_DIR/metrics_gt.csv"
