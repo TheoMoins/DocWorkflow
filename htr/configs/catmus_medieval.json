@@ -1,0 +1,7 @@
+{
+    "name": "catmus_medieval",
+    "model_path": "htr/models/catmus-medieval-1.6.0.mlmodel",
+    "corpus_path": false,
+    "training_mode": "restricted",
+    "use_wandb": false
+}

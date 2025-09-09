@@ -301,7 +301,11 @@ def add_lines_to_alto(lines, output_path, alto_path):
                 'block': block,
                 'bbox': [x, y, x+w, y+h]
             })
-        
+
+            # Remove existing lines ?
+            for line in block.findall('.//alto:TextLine', ns):
+                block.remove(line)
+
         # Associer chaque ligne au bloc le plus approprié en utilisant IoU
         for line in lines:
             if 'boundary' in line and line['boundary']:

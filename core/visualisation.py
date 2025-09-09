@@ -303,7 +303,7 @@ class DocumentVisualizer:
             
             rect = patches.Rectangle(
                 (x, y), w, h,
-                linewidth=1,
+                linewidth=2,
                 edgecolor=color,
                 facecolor='none',
                 alpha=0.7

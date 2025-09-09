@@ -80,6 +80,13 @@ class ConfigManager:
                 'iou_threshold': 0.5,
                 'buffer_size': 5,
                 "use_wandb": False
+            },
+            'htr': {
+                "name": "catmus_medieval",
+                "model_path": "htr/models/catmus-medieval-1.6.0.mlmodel",
+                "corpus_path": False,
+                "training_mode": "restricted",
+                "use_wandb": False
             }
         }
         

@@ -7,6 +7,7 @@ from core.config_manager import ConfigManager
 
 from layout.model import LayoutModel
 from line.model import LineModel
+from htr.model import HTRModel
 
 class CLI:
     """
@@ -56,6 +57,8 @@ class CLI:
             return LineModel
         elif self.module == 'layout':
             return LayoutModel
+        elif self.module == 'htr':
+            return HTRModel
         else: 
             raise ValueError('Unknown module pass to the run function.')
 

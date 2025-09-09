@@ -1,6 +1,5 @@
 {
     "name": "default_line_model",
-    "data_path": "../data/minitest",
     "corpus_path": false,
     "data": "catmus_lines",
     "training_mode": "restricted",
