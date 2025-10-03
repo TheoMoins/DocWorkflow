@@ -4,9 +4,9 @@ import wandb
 from datetime import datetime
 import tabulate
 
-from core.visualisation import visualize_folder
+from src.utils.visualisation import visualize_folder
 
-class BaseModel(ABC):
+class BaseTask(ABC):
     """
     Abstract base class for all document analysis models.
     """
@@ -20,7 +20,7 @@ class BaseModel(ABC):
             models_dir: Directory containing model weights
         """
         self.config = config
-        self.name = config.get('name', 'unknown_model')
+        self.name = "unknown"
         self.model = None
         self.device = config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
         self.use_wandb = config.get('use_wandb', True)
@@ -91,16 +91,6 @@ class BaseModel(ABC):
         """
         pass
     
-    @abstractmethod
-    def _compute_metrics(self, data_path):
-        """
-        Compute raw evaluation metrics for the model.
-
-        Returns:
-            Dictionary of raw evaluation metrics
-        """
-        pass
-    
     def _display_metrics(self, metrics):
         """
         Display evaluation metrics in a formatted way.
@@ -128,13 +118,14 @@ class BaseModel(ABC):
     
 
     @abstractmethod
-    def predict(self, output_dir, save=False):
+    def predict(self, data_path, output_dir, save_image=False):
         """
         Perform prediction on the corpus path.
         
         Args:
+            data_path: Path to folder with the elements that we want to predict on
             output_dir: Directory to save predictions
-            save: boolean whether to save the image with the prediction or not
+            save_image: boolean whether to save the image with the prediction or not
             
         Returns:
             Prediction results
@@ -151,6 +142,7 @@ class BaseModel(ABC):
         """
         pass
     
+    @abstractmethod
     def score(self, pred_path, gt_path):
         """
         Calculate scores between prediction ALTO files and ground truth ALTO files.
@@ -162,36 +154,34 @@ class BaseModel(ABC):
         Returns:
             Dictionary of evaluation metrics
         """
-        return {}
+        pass
 
-    def evaluate(self, corpus_path=None):
-        """
-        Evaluate model and handle logging and result presentation.
+    # def evaluate(self, corpus_path=None):
+    #     """
+    #     Evaluate model and handle logging and result presentation.
         
-        Args:
-            corpus_path: Optional path to additional corpus data
-            log_to_wandb: Whether to log results to Weights & Biases
+    #     Args:
+    #         corpus_path: Optional path to additional corpus data
+    #         log_to_wandb: Whether to log results to Weights & Biases
             
-        Returns:
-            Dictionary of evaluation metrics
-        """
-        # Initialize wandb if needed
-        run = self._init_wandb()
+    #     Returns:
+    #         Dictionary of evaluation metrics
+    #     """
+    #     # Initialize wandb if needed
+    #     run = self._init_wandb()
         
-        # Compute metrics using model-specific implementation
-        metrics = self._compute_metrics(self.config["data_path"])
-        if corpus_path:
-            corpus_metrics = self._compute_metrics(self.config["corpus_path"], is_corpus=True)
-            metrics = {**metrics, **corpus_metrics}
+    #     # Compute metrics using model-specific implementation
+    #     metrics = self._compute_metrics(self.config["data_path"])
+    #     if corpus_path:
+    #         corpus_metrics = self._compute_metrics(self.config["corpus_path"], is_corpus=True)
+    #         metrics = {**metrics, **corpus_metrics}
+                
+    #     self._log_to_wandb(metrics, run)
+    #     self._finish_wandb(run)
         
-        # Display metrics in a formatted way
-        
-        self._log_to_wandb(metrics, run)
-        self._finish_wandb(run)
-        
-        return metrics
+    #     return metrics
     
-    def visualize(self, corpus_path, xml_path=None, output_dir=None):
+    def visualize(self, task_name, data_path, xml_path=None, output_dir=None):
         """
         Visualisation tool from xml object.
         
@@ -203,15 +193,13 @@ class BaseModel(ABC):
         Returns:
             Nombre de visualisations réussies
         """
-        print(f"Visualizing results in {corpus_path}...")
+        print(f"Visualizing results in {data_path}...")
         
-        # Déterminer le type de visualisation en fonction du type de modèle
-        visualization_type = 'layout' if self.__class__.__name__ == 'LayoutModel' else 'line'
         
         # Utiliser l'utilitaire de visualisation
         return visualize_folder(
-            img_dir=corpus_path,
+            img_dir=data_path,
             xml_dir=xml_path,
             output_dir=output_dir,
-            visualization_type=visualization_type
+            visualization_type=task_name
         )

@@ -6,6 +6,7 @@ Adapted for the Document Analysis Framework.
 """
 
 from lxml import etree
+from src.alto.alto_lines import calculate_iou
 import itertools
 import os
 import hashlib
@@ -89,7 +90,6 @@ def remove_duplicates(detections):
     Returns:
         Filtered list of detections
     """
-    from core.utils import calculate_iou  # Utiliser la fonction existante
     
     bboxes = {idx: det['bbox'] for idx, det in enumerate(detections)}
     to_delete = set()

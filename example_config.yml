@@ -1,0 +1,37 @@
+# Global parameters
+run_name: "experiment_01"
+output_dir: "results"
+device: "cpu"
+use_wandb: false
+# wandbproject: 
+
+data:
+  train: "../data/data_yolo/medieval-segmentation-yolo/config.yaml"
+  test: "../data/minitest/"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      # Option 1 : Run a model
+      model_path: "src/tasks/layout/LA-training/catmus_seg_s_16_10/weights/best.pt" # For score or predict
+      pretrained_w: "src/tasks/layout/models/yolo11s.pt" # For train
+      batch_size: 16
+      img_size: 640
+      epochs: 1
+      # Option 2 : Use an already existing layout segmentation
+      # input_file: "../data/minitest/predictions/layout/"
+
+  line:
+    type: KrakenLine
+    config:
+      # Option 1 : Run a model
+      model_path: "src/tasks/line/models/baseline_ms_medieval.mlmodel"
+      text_direction: "horizontal-lr"
+      # Option 2 : Use an already existing layout segmentation
+      # input_file: "./data/precomputed/{image_name}_layout.xml"
+
+  htr:
+    type: KrakenHTR
+    config:
+      model_path: "src/tasks/htr/models/catmus-medieval-1.6.0.mlmodel"

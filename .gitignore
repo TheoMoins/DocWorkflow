@@ -1,16 +1,22 @@
 /runs
+/old
+/results
 
 /wandb/
 *.pyc
 
-/layout/models/
-/layout/__pycache__/
-/layout/LA-training/
+src/tasks/layout/models/
+src/tasks/layout/__pycache__/
+src/tasks/layout/LA-training/
 
-/line/models/
-/line/__pycache__/
-/line/LS-training/
+src/tasks/line/models/
+src/tasks/line/__pycache__/
+src/tasks/line/LS-training/
 
-/htr/models/
-/htr/__pycache__/
-/htr/HTR-training/
+src/tasks/htr/models/
+src/tasks/htr/__pycache__/
+src/tasks/htr/HTR-training/
+
+src/tasks/__pycache__/
+src/utils/__pycache__/
+src/__pycache__/

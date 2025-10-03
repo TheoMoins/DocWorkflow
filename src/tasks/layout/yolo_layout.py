@@ -1,18 +1,27 @@
-from core.base_model import BaseModel
-import torch
 import os
 import glob
+import gc
+import shutil
+import warnings
+import numpy as np
+
 from ultralytics import YOLO, settings
 from pathlib import Path
-import shutil
+
+from mean_average_precision import MetricBuilder
+from PIL import Image
+from tqdm import tqdm
+
+from src.alto.alto_zones import extract_zones_from_alto, convert_zones_to_boxes
+from src.tasks.base_tasks import BaseTask
 
 
-from core.yolalto import (
+from src.alto.yolalto import (
     parse_yolo_results, remove_duplicates, 
-    create_alto_xml, save_alto_xml, bbox_baseline
+    create_alto_xml, save_alto_xml
 )
 
-class LayoutModel(BaseModel):
+class YoloLayoutTask(BaseTask):
     """
     Class for layout segmentation models.
     """
@@ -27,6 +36,8 @@ class LayoutModel(BaseModel):
         """
         super().__init__(config)
         settings.update({"wandb": config.get('use_wandb', True)})
+
+        self.name = "Layout Segmentation (YOLO)"
 
         self.wandb_project = "LA-comparison"
         self.model_loaded = None
@@ -49,13 +60,13 @@ class LayoutModel(BaseModel):
                 self.model_loaded = "pretrained"
 
         elif mode == "trained":
-            if not os.path.exists(self.config["model_path"]):
+            if not self.config.get("model_path"):
                 raise FileNotFoundError(f"Trained weights file not found: {self.config['model_path']}")
             else:
                 model = self.config["model_path"]
                 self.model_loaded = "trained"
 
-        if "docyolo" in self.config['name']:
+        if "DocYOLO" in self.name:
             from doclayout_yolo import YOLOv10
             self.model = YOLOv10(model)
         else:
@@ -63,7 +74,7 @@ class LayoutModel(BaseModel):
         
         self.to_device()
     
-    def train(self, data_path=None):
+    def train(self, data_path=None, seed=42):
         """
         Train the layout model.
         
@@ -82,6 +93,9 @@ class LayoutModel(BaseModel):
             else:
                 training_data = self.config["data_path"]
 
+        save_name = self.name + "_" + str(self.config["img_size"]) + "px_" + \
+                    str(self.config["batch_size"]) + "bs_" + str(self.config["epochs"]) + "e"
+
         # Train the model
         self.model.train(
             data=training_data, 
@@ -89,55 +103,98 @@ class LayoutModel(BaseModel):
             imgsz=self.config["img_size"],
             batch=self.config["batch_size"],
             epochs=self.config["epochs"], 
-            name=self.config["name"]
+            name=save_name,
+            device = self.config["device"],
+            seed = seed
         )
-    
-    def _compute_metrics(self, path, is_corpus=False):
+
+    def score(self, pred_path, gt_path):
         """
         Compute metrics for the layout model.
         
         Args:
-            path: Path to test data
-            is_corpus: Indicate if it's corresponding to an additional test or not
+            pred_path: Path to directory containing prediction 
+            gt_path: Path to directory containing ground truth 
             
         Returns:
             Dictionary of evaluation metrics
         """
+
+        warnings.filterwarnings('ignore', category=FutureWarning, module='mean_average_precision')
+
         if self.model_loaded != "trained":
-           self.load("trained")
+           if not self.config.get("input_file"):
+               self.load("trained")
         
-        # Evaluate on the test set
-        metrics_set = self.model.val(data=path, split='test')
+
+        # Initialize metrics builder
+        builder = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
+
+        # Process ground truth data
+        gt_files = sorted(glob.glob(os.path.join(gt_path, "*.xml")))
+        if not gt_files:
+            raise ValueError(f"No ground truth ALTO files found in {gt_path}")
+
+        # Process files
+        for gt_file in tqdm(gt_files, desc="Scoring pages", unit="page"):
+            # Extract base name for matching prediction file
+            base_name = os.path.basename(gt_file)
+            pred_file = os.path.join(pred_path, base_name)
+            
+            if not os.path.exists(pred_file):
+                print(f"Warning: No prediction file found for {base_name}")
+                continue
+            
+            # Extract ground truth zones and image path
+            image_path, gt_zones = extract_zones_from_alto(gt_file)
+            if not gt_zones:
+                print(f"Warning: No zones found in {gt_file}")
+                continue
+            
+            # Extract predicted zones
+            _, pred_zones = extract_zones_from_alto(pred_file)
+            if not pred_zones:
+                print(f"Warning: No predicted zones found in {pred_file}")
+                continue
+            
+            try:
+                image = Image.open(image_path)
+                image_size = image.size
+            except Exception as e:
+                print(f"Error opening image {image_path}: {e}")
+                continue
+            
+            # Convert ground truth and predictions to the format expected by MAP
+            gt_boxes = convert_zones_to_boxes(gt_zones, image_size, is_gt=True)
+            pred_boxes = convert_zones_to_boxes(pred_zones, image_size, is_gt=False)
+            
+            if gt_boxes.shape[0] > 0 and pred_boxes.shape[0] > 0:
+                builder.add(pred_boxes, gt_boxes)
+                
+            if image:
+                image.close()
+                del image
+            
+            gc.collect()
         
-        if is_corpus:
-            metrics = {
-                "dataset_test/map50-95": metrics_set.box.map,
-                "dataset_test/map50": metrics_set.box.map50,
-                "dataset_test/map75": metrics_set.box.map75,
-                "dataset_test/precision": metrics_set.box.mp,
-                "dataset_test/recall": metrics_set.box.mr,
-                "MainZone_test_set/map50-95_MainZone": metrics_set.box.maps[1], 
-                "MainZone_test_set/precision_MainZone": metrics_set.box.p[1],    
-                "MainZone_test_set/recall_MainZone": metrics_set.box.r[1]   
-            }
+        # Calculate metrics
+        metrics = builder.value(iou_thresholds=[round(x, 2) for x in np.arange(0.5, 1.0, 0.05)])
         
-        else:
-            metrics = {
-                "dataset_corpus/map50-95": metrics_set.box.map,
-                "dataset_corpus/map50": metrics_set.box.map50,
-                "dataset_corpus/map75": metrics_set.box.map75,
-                "dataset_corpus/precision": metrics_set.box.mp,
-                "dataset_corpus/recall": metrics_set.box.mr,
-                "MainZone_corpus/map50-95_MainZone": metrics_set.box.maps[1], 
-                "MainZone_corpus/precision_MainZone": metrics_set.box.p[1],    
-                "MainZone_corpus/recall_MainZone": metrics_set.box.r[1]   
-            }
-        
-        self._display_metrics(metrics)
-        return metrics
+
+        # Extract metrics
+        metrics_dict = {
+            "dataset_test/map50-95": metrics["mAP"],
+            "dataset_test/map50": metrics[0.5][0]["ap"],
+            "dataset_test/map75": metrics[0.75][0]["ap"],
+            "dataset_test/precision": metrics[0.75][0]["precision"].mean(),
+            "dataset_test/recall": metrics[0.75][0]["recall"].mean()
+        }
+
+        self._display_metrics(metrics_dict)
+        return metrics_dict
     
 
-    def predict(self, output_dir, save_image=True):
+    def predict(self, data_path, output_dir, save_image=True):
         """
         Predict on all images in a directory and save results as ALTO XML files.
         Based on code by Thibault Clérice (https://github.com/ponteineptique/yolalto).
@@ -148,19 +205,15 @@ class LayoutModel(BaseModel):
         """
         if self.model_loaded != "trained":
            self.load("trained")
-
-        pred_path = self.config.get("pred_path")
-        if not pred_path:
-            raise ValueError("No pred_path specified in config")
         
         # Find all images in the corpus directory
         image_extensions = ['*.jpg', '*.jpeg', '*.png']
         image_paths = []
         for ext in image_extensions:
-            image_paths.extend(glob.glob(os.path.join(pred_path, ext)))
+            image_paths.extend(glob.glob(os.path.join(data_path, ext)))
         
         if not image_paths:
-            raise ValueError(f"No images found in {pred_path}")
+            raise ValueError(f"No images found in {data_path}")
         # Process images in batches
         batch_size = 4  # Default batch size
         num_batches = len(image_paths) // batch_size + (1 if len(image_paths) % batch_size else 0)

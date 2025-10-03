@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "DocWorkflow"
+description = "Document analysis framework"
+version = "0.0.1"
+
+[tool.hatch.build.targets.wheel]
+      packages = ["src"]
+
+[project.scripts]
+docworkflow = "src.__main__:cli"
+
+[tool.isort]
+profile = "black"
+line_length = 79
+src_paths = ["src", "tests"]
