@@ -1,5 +1,4 @@
 from src.tasks.base_tasks import BaseTask
-import torch
 import os
 import glob
 from tqdm import tqdm
@@ -7,6 +6,9 @@ from PIL import Image
 from pathlib import Path
 import shutil
 from lxml import etree as ET
+
+import jiwer
+from jiwer import cer, wer, mer, wil, wip
 
 from kraken import rpred
 from kraken.lib.models import load_any
@@ -72,7 +74,6 @@ class KrakenHTRTask(BaseTask):
         
         results = []
         
-        # try:
         # Parser le fichier ALTO pour extraire les lignes
         tree = ET.parse(alto_path)
         root = tree.getroot()
@@ -177,18 +178,6 @@ class KrakenHTRTask(BaseTask):
             })
         
         image.close()
-            
-        # except Exception as e:
-        #     print(f"  Erreur HTR: {e}")
-        #     # Retourner des résultats vides pour chaque ligne
-        #     try:
-        #         tree = ET.parse(alto_path)
-        #         root = tree.getroot()
-        #         ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-        #         results = [{'text': '', 'confidence': 0.0} for _ in range(num_lines)]
-        #         num_lines = len(root.findall('.//alto:TextLine', ns))
-        #     except:
-        #         results = []
         
         return results
         
@@ -223,21 +212,165 @@ class KrakenHTRTask(BaseTask):
         # Save modified ALTO
         tree.write(output_path, pretty_print=True, 
                   xml_declaration=True, encoding="UTF-8")
-    
-    def score(self, pred_path, gt_path):
+        
+
+    def _extract_text_from_alto(self, alto_path):
         """
-        Compute metrics for the HTR model.
+        Extract transcribed text from ALTO XML file.
         
         Args:
-            test_path: Path to test data
-            is_corpus: Whether this is evaluation on corpus data
+            alto_path: Path to ALTO XML file
+            
+        Returns:
+            List of dictionaries with line_id and text content
+        """
+        tree = ET.parse(alto_path)
+        root = tree.getroot()
+        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+        
+        lines_text = []
+        
+        for textline in root.findall('.//alto:TextLine', ns):
+            line_id = textline.get('ID', '')
+            
+            # Extract text from String elements
+            strings = textline.findall('.//alto:String', ns)
+            if strings:
+                # Concatenate all strings in the line with spaces
+                text = ' '.join([s.get('CONTENT', '') for s in strings if s.get('CONTENT')])
+            else:
+                text = ''
+            
+            lines_text.append({
+                'id': line_id,
+                'text': text
+            })
+        
+        return lines_text
+
+
+    def score(self, pred_path, gt_path):
+        """
+        Compute metrics for the HTR model using jiwer library.
+        
+        Args:
+            pred_path: Path to directory containing prediction ALTO files
+            gt_path: Path to directory containing ground truth ALTO files
             
         Returns:
             Dictionary of evaluation metrics
         """
-        # TODO: Implement CER/WER metrics calculation
-        print("HTR metrics computation not yet implemented")
-        return 
+        
+        # Find all ground truth files
+        gt_files = sorted(glob.glob(os.path.join(gt_path, "*.xml")))
+        if not gt_files:
+            raise ValueError(f"No ground truth ALTO files found in {gt_path}")
+        
+        # Collect all ground truth and prediction texts
+        all_gt_texts = []
+        all_pred_texts = []
+        
+        total_lines = 0
+        perfect_lines = 0
+        files_processed = 0
+        
+        # Process each file
+        for gt_file in tqdm(gt_files, desc="Scoring HTR", unit="page"):
+            base_name = os.path.basename(gt_file)
+            pred_file = os.path.join(pred_path, base_name)
+            
+            if not os.path.exists(pred_file):
+                print(f"Warning: No prediction file found for {base_name}")
+                continue
+            
+            try:
+                # Extract text from both files
+                gt_lines = self._extract_text_from_alto(gt_file)
+                pred_lines = self._extract_text_from_alto(pred_file)
+                
+                # Match lines by ID
+                gt_dict = {line['id']: line['text'] for line in gt_lines}
+                pred_dict = {line['id']: line['text'] for line in pred_lines}
+                
+                # Process matched lines
+                for line_id in gt_dict:
+                    gt_text = gt_dict[line_id]
+                    pred_text = pred_dict.get(line_id, '')
+                    
+                    # Skip empty ground truth lines
+                    if not gt_text.strip():
+                        continue
+                    
+                    total_lines += 1
+                    all_gt_texts.append(gt_text)
+                    all_pred_texts.append(pred_text)
+                    
+                    # Count perfect matches
+                    if pred_text == gt_text:
+                        perfect_lines += 1
+                
+                files_processed += 1
+                
+            except Exception as e:
+                print(f"Error processing {gt_file}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        if not all_gt_texts:
+            print("Warning: No valid text found for evaluation")
+            return {}
+        
+        # Calculate metrics using jiwer
+        try:
+            cer_score = cer(all_gt_texts, all_pred_texts)
+            wer_score = wer(all_gt_texts, all_pred_texts)
+            mer_score = mer(all_gt_texts, all_pred_texts)
+            wil_score = wil(all_gt_texts, all_pred_texts)
+            wip_score = wip(all_gt_texts, all_pred_texts)
+            
+            # Calculate additional metrics
+            char_accuracy = 1.0 - cer_score
+            word_accuracy = 1.0 - wer_score
+            line_accuracy = perfect_lines / total_lines if total_lines > 0 else 0.0
+            
+            # Get detailed error counts for CER
+            cer_output = jiwer.process_characters(all_gt_texts, all_pred_texts)
+            
+            # Get detailed error counts for WER
+            wer_output = jiwer.process_words(all_gt_texts, all_pred_texts)
+            
+            metrics_dict = {
+                "dataset_test/cer": cer_score,
+                "dataset_test/wer": wer_score,
+                "dataset_test/mer": mer_score,
+                "dataset_test/wil": wil_score,
+                "dataset_test/wip": wip_score,
+                "dataset_test/char_accuracy": char_accuracy,
+                "dataset_test/word_accuracy": word_accuracy,
+                "dataset_test/line_accuracy": line_accuracy,
+                "dataset_test/total_chars": sum(len(text) for text in all_gt_texts),
+                "dataset_test/total_words": sum(len(text.split()) for text in all_gt_texts),
+                "dataset_test/total_lines": total_lines,
+                "dataset_test/perfect_lines": perfect_lines,
+                "dataset_test/files_processed": files_processed,
+                "dataset_test/char_insertions": cer_output.insertions,
+                "dataset_test/char_deletions": cer_output.deletions,
+                "dataset_test/char_substitutions": cer_output.substitutions,
+                "dataset_test/word_insertions": wer_output.insertions,
+                "dataset_test/word_deletions": wer_output.deletions,
+                "dataset_test/word_substitutions": wer_output.substitutions,
+            }
+            
+            self._display_metrics(metrics_dict)
+            
+            return metrics_dict
+            
+        except Exception as e:
+            print(f"Error calculating metrics: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
     
     def predict(self, data_path, output_dir, save_image=True):
         """
