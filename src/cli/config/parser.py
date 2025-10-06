@@ -116,7 +116,7 @@ class Config(object):
     def import_class(cls, name: str) -> object:
         try:
             module_name, _class = ModelImports[name.upper()].value
-        except ValueError:
+        except KeyError:
             raise InvalidConfigValue(name)
         module = import_module(module_name)
         return getattr(module, _class)

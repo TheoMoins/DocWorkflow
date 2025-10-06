@@ -4,16 +4,154 @@ build-backend = "hatchling.build"
 
 [project]
 name = "DocWorkflow"
-description = "Document analysis framework"
-version = "0.0.1"
+version = "0.1.0"
+description = "Document analysis framework for layout segmentation, line detection, and HTR"
+readme = "README.md"
+requires-python = ">=3.9,<3.12"
+authors = [
+    {name = "Théo Moins", email = "theo.moins@chartes.psl.eu"}
+]
+keywords = [
+    "document-analysis",
+    "htr",
+    "layout-analysis",
+    "alto-xml"
+]
 
-[tool.hatch.build.targets.wheel]
-      packages = ["src"]
+# Dépendances minimales requises
+dependencies = [
+    # Deep Learning & Computer Vision
+    "torch>=2.0.0,<2.3.0",
+    "torchvision>=0.15.0,<0.17.0",
+    "ultralytics>=8.0.0",
+    
+    # Kraken ecosystem
+    "kraken>=4.3.0",
+    "yaltai>=2.0.0",
+    
+    # Image processing
+    "Pillow>=10.0.0",
+    "opencv-python>=4.8.0",
+    
+    # Scientific computing
+    "numpy>=1.23.0,<2.0.0",
+    "scipy>=1.10.0",
+    
+    # XML processing
+    "lxml>=5.0.0",
+    
+    # CLI
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    
+    # Configuration & Data
+    "PyYAML>=6.0.0",
+    "pandas>=2.0.0",
+    "tabulate>=0.8.10,<1.0.0",
+    
+    # Metrics
+    "mean-average-precision>=2021.4.26.0",
+    "jiwer>=3.0.0",
+    
+    # Visualization
+    "matplotlib>=3.7.0",
+
+    # Weights and Biases
+    "wandb>=0.16.0"
+]
+
+[project.optional-dependencies]
+# Dépendances pour le développement
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "flake8>=7.0.0",
+]
+
+# Dépendances pour GPU (CUDA)
+gpu = [
+    "nvidia-cublas-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cudnn-cu12",
+]
+
+# Toutes les dépendances optionnelles
+all = [
+    "docworkflow[dev,gpu]",
+]
 
 [project.scripts]
 docworkflow = "src.__main__:cli"
 
+[project.urls]
+Homepage = "https://github.com/yourusername/docworkflow"
+Documentation = "https://github.com/yourusername/docworkflow/blob/main/README.md"
+Repository = "https://github.com/yourusername/docworkflow"
+Issues = "https://github.com/yourusername/docworkflow/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "requires_gpu: marks tests that require GPU",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
 [tool.isort]
 profile = "black"
-line_length = 79
+line_length = 100
 src_paths = ["src", "tests"]
+skip_gitignore = true
