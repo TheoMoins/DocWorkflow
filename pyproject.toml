@@ -26,15 +26,15 @@ dependencies = [
     "ultralytics>=8.3.0",
     
     # Kraken ecosystem
-    "kraken>=5.2.9,<6.0.0",
-    "yaltai>=2.0.0",
+    "kraken>=5.3.0,<6.0.0",
+    "yaltai>=2.0.5",
     
     # Image processing
     "Pillow>=10.0.0",
     "opencv-python>=4.8.0",
     
     # Scientific computing
-    "numpy>=1.23.0,<2.0.0",
+    "numpy>=1.23.0,<3.0.0",
     "scipy>=1.13.0",
     
     # XML processing
@@ -46,7 +46,7 @@ dependencies = [
     
     # Configuration & Data
     "PyYAML>=6.0.0",
-    "pandas>=2.0.0,<2.2.0",
+    "pandas>=2.0.0,<2.3.0",
     "tabulate>=0.8.10,<1.0.0",
     
     # Metrics
