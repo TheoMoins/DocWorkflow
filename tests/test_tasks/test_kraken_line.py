@@ -22,7 +22,6 @@ def test_kraken_line_initialization(kraken_line_config):
     
     assert task.name == "Line Segmentation (Kraken)"
     assert task.config == kraken_line_config
-    assert task.wandb_project == "LS-comparison"
 
 
 @patch('src.tasks.line.kraken_line.TorchVGSLModel.load_model')

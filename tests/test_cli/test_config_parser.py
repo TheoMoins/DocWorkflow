@@ -88,7 +88,7 @@ def test_config_add_global_params(sample_config_file):
     
     assert "device" in updated
     assert "use_wandb" in updated
-    assert "wandbproject" in updated
+    assert "wandb_project" in updated
     assert "model_path" in updated
 
 

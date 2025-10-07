@@ -54,7 +54,6 @@ def test_kraken_htr_initialization(kraken_htr_config):
     
     assert task.name == "HTR (Kraken)"
     assert task.config == kraken_htr_config
-    assert task.wandb_project == "HTR-comparison"
 
 
 @patch('src.tasks.htr.kraken_htr.load_any')
@@ -93,7 +92,7 @@ def test_kraken_htr_extract_text_from_alto(kraken_htr_config, sample_alto_with_t
     """Teste l'extraction de texte depuis ALTO."""
     task = KrakenHTRTask(kraken_htr_config)
     
-    lines_text = task._extract_text_from_alto(str(sample_alto_with_text))
+    lines_text = task._extract_lines_text_from_alto(str(sample_alto_with_text))
     
     assert len(lines_text) == 1
     assert lines_text[0]['id'] == 'line1'
@@ -134,8 +133,8 @@ def test_kraken_htr_score_with_files(mock_glob, kraken_htr_config,
     
     # Devrait retourner des métriques
     assert isinstance(metrics, dict)
-    assert "dataset_test/cer" in metrics
-    assert "dataset_test/wer" in metrics
+    assert "score/cer" in metrics
+    assert "score/wer" in metrics
 
 
 @patch('src.tasks.htr.kraken_htr.load_any')

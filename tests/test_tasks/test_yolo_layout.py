@@ -26,7 +26,6 @@ def test_yolo_layout_initialization(yolo_config):
     assert task.name == "Layout Segmentation (YOLO)"
     assert task.config == yolo_config
     assert task.device == "cpu"
-    assert task.wandb_project == "LA-comparison"
 
 
 @patch('src.tasks.layout.yolo_layout.YOLO')
