@@ -23,7 +23,7 @@ class Config(object):
     def add_global_params_to_config(self, config):
         config["device"] = self.yaml.get("device", "cpu")
         config["use_wandb"] = self.yaml.get("use_wandb", False)
-        config["wandbproject"] = self.yaml.get("wandbproject", None)
+        config["wandb_project"] = self.yaml.get("wandb_project", None)
         return config
 
     def get_tasks(self) -> list:

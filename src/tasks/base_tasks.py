@@ -3,6 +3,8 @@ import torch
 import wandb
 from datetime import datetime
 import tabulate
+from pathlib import Path
+import os
 
 from src.utils.visualisation import visualize_folder
 
@@ -46,6 +48,19 @@ class BaseTask(ABC):
         if not self.use_wandb:
             return None
         
+        # Load API key from file if it exists
+        api_key_file = Path("wandb_api_key.txt")
+        if api_key_file.exists():
+            try:
+                with open(api_key_file, 'r') as f:
+                    api_key = f.read().strip()
+                    if api_key:
+                        # Login to wandb with the API key
+                        wandb.login(key=api_key, relogin=True)
+            except Exception as e:
+                print(f"Warning: Could not load wandb API key from {api_key_file}: {e}")
+        
+
         return wandb.init(
             project=self.wandb_project, 
             name=f"eval-{self.name}-{datetime.now().strftime('%Y%m%d_%H%M%S')}",

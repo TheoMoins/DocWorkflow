@@ -3,6 +3,7 @@
 /results
 
 /wandb/
+wandb_api_key.txt
 *.pyc
 
 src/tasks/layout/models/

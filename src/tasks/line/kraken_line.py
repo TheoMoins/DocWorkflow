@@ -133,6 +133,8 @@ class KrakenLineTask(BaseTask):
         Returns:
             Dictionary of evaluation metrics
         """
+        wandb_run = self._init_wandb()
+
         # Initialize metrics builder
         builder = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
         
@@ -196,7 +198,9 @@ class KrakenLineTask(BaseTask):
             "dataset_test/recall": metrics[0.75][0]["recall"].mean()
         }
 
+        self._log_to_wandb(metrics_dict, wandb_run)
         self._display_metrics(metrics_dict)
+        self._finish_wandb(wandb_run)
 
         return metrics_dict
 

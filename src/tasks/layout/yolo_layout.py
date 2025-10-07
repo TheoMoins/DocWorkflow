@@ -39,7 +39,6 @@ class YoloLayoutTask(BaseTask):
 
         self.name = "Layout Segmentation (YOLO)"
 
-        self.wandb_project = "LA-comparison"
         self.model_loaded = None
         self.model = None
 
@@ -119,6 +118,7 @@ class YoloLayoutTask(BaseTask):
         Returns:
             Dictionary of evaluation metrics
         """
+        wandb_run = self._init_wandb()
 
         warnings.filterwarnings('ignore', category=FutureWarning, module='mean_average_precision')
 
@@ -190,7 +190,9 @@ class YoloLayoutTask(BaseTask):
             "dataset_test/recall": metrics[0.75][0]["recall"].mean()
         }
 
+        self._log_to_wandb(metrics_dict, wandb_run)
         self._display_metrics(metrics_dict)
+        self._finish_wandb(wandb_run)
         return metrics_dict
     
 

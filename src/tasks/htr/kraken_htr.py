@@ -260,6 +260,7 @@ class KrakenHTRTask(BaseTask):
         Returns:
             Dictionary of evaluation metrics
         """
+        wandb_run = self._init_wandb()
         
         # Find all ground truth files
         gt_files = sorted(glob.glob(os.path.join(gt_path, "*.xml")))
@@ -341,28 +342,30 @@ class KrakenHTRTask(BaseTask):
             wer_output = jiwer.process_words(all_gt_texts, all_pred_texts)
             
             metrics_dict = {
-                "dataset_test/cer": cer_score,
-                "dataset_test/wer": wer_score,
-                "dataset_test/mer": mer_score,
-                "dataset_test/wil": wil_score,
-                "dataset_test/wip": wip_score,
-                "dataset_test/char_accuracy": char_accuracy,
-                "dataset_test/word_accuracy": word_accuracy,
-                "dataset_test/line_accuracy": line_accuracy,
-                "dataset_test/total_chars": sum(len(text) for text in all_gt_texts),
-                "dataset_test/total_words": sum(len(text.split()) for text in all_gt_texts),
-                "dataset_test/total_lines": total_lines,
-                "dataset_test/perfect_lines": perfect_lines,
-                "dataset_test/files_processed": files_processed,
-                "dataset_test/char_insertions": cer_output.insertions,
-                "dataset_test/char_deletions": cer_output.deletions,
-                "dataset_test/char_substitutions": cer_output.substitutions,
-                "dataset_test/word_insertions": wer_output.insertions,
-                "dataset_test/word_deletions": wer_output.deletions,
-                "dataset_test/word_substitutions": wer_output.substitutions,
+                "score/cer": cer_score,
+                "score/wer": wer_score,
+                "score/mer": mer_score,
+                "score/wil": wil_score,
+                "score/wip": wip_score,
+                "accuracy/char_accuracy": char_accuracy,
+                "accuracy/word_accuracy": word_accuracy,
+                "accuracy/line_accuracy": line_accuracy,
+                "total/total_chars": sum(len(text) for text in all_gt_texts),
+                "total/total_words": sum(len(text.split()) for text in all_gt_texts),
+                "total/total_lines": total_lines,
+                "total/perfect_lines": perfect_lines,
+                "total/files_processed": files_processed,
+                "detailed/char_insertions": cer_output.insertions,
+                "detailed/char_deletions": cer_output.deletions,
+                "detailed/char_substitutions": cer_output.substitutions,
+                "detailed/word_insertions": wer_output.insertions,
+                "detailed/word_deletions": wer_output.deletions,
+                "detailed/word_substitutions": wer_output.substitutions,
             }
             
+            self._log_to_wandb(metrics_dict, wandb_run)
             self._display_metrics(metrics_dict)
+            self._finish_wandb(wandb_run)
             
             return metrics_dict
             
