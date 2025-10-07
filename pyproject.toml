@@ -21,12 +21,12 @@ keywords = [
 # Dépendances minimales requises
 dependencies = [
     # Deep Learning & Computer Vision
-    "torch>=2.0.0,<2.3.0",
-    "torchvision>=0.15.0,<0.17.0",
+    "torch>=2.4.0,<2.8.0",
+    "torchvision>=0.19.0,<0.24.0",
     "ultralytics>=8.3.0",
     
     # Kraken ecosystem
-    "kraken>=4.3.0",
+    "kraken>=6.0.0,<7.0.0",
     "yaltai>=2.0.0",
     
     # Image processing
