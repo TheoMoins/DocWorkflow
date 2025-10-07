@@ -46,43 +46,77 @@ def predict_command(config: Config, task: str, dataset: str, output: str, save_i
     data_path = config.data[dataset]    
     if output == "":
         if not config.yaml.get("output_dir"):
-            output = "./results/"
-        output = config.yaml.get("output_dir") + "/"
+            base_output = "./results/"
+        else:
+            base_output = config.yaml.get("output_dir") + "/"
         if config.yaml.get("run_name"):
-            output = output + "/" + config.yaml.get("run_name") + "/"
-        output = Path(output + task)
+            base_output = base_output + config.yaml.get("run_name") + "/"
+    else:
+        base_output = output + "/"
+
 
     if task == 'all':
-        # Score toutes les tâches configurées et possibles
+        # Pipeline complète
         tasks_list = config.get_tasks()
         
         if not tasks_list:
             click.echo("Prediction cannot be done on any task.", err=True)
             return
-                
+        
+        click.echo(f"\n{'='*60}")
+        click.echo(f"RUNNING FULL PIPELINE")
+        click.echo(f"{'='*60}")
+        click.echo(f"Tasks configured: {', '.join(tasks_list)}")
+        
+        # Chaîner les prédictions : sortie de chaque étape = entrée de la suivante
+        current_input = data_path
+        
         for task_name in tasks_list:
             click.echo(f"\n{'='*50}")
-            click.echo(f"Predict {task_name}...")
-            task_obj = getattr(config, f"{task_name}_task")
-        
-            predict(task = task_obj, 
-                    data_path=data_path, 
-                    output=output,
-                    save_image=save_image)
+            click.echo(f"Step: {task_name.upper()}")
+            click.echo(f"{'='*50}")
+            click.echo(f"Input:  {current_input}")
             
-            # TODO : RECUPERER L'EXPORT POUR LE RERENTRER DANS LETAPE SUIVANTE ? 
+            task_obj = getattr(config, f"{task_name}_task")
+            task_output = Path(base_output) / task_name
+            task_output.mkdir(parents=True, exist_ok=True)
+            
+            click.echo(f"Output: {task_output}")
+            
+            # Prédire
+            predict(
+                task=task_obj, 
+                data_path=current_input, 
+                output=task_output,
+                save_image=save_image
+            )
+            
+            # La sortie de cette étape devient l'entrée de la suivante
+            current_input = task_output
+            
+            click.echo(f"{task_name} completed")
+        
+        click.echo(f"\n{'='*60}")
+        click.echo(f"FULL PIPELINE COMPLETE")
+        click.echo(f"Final output: {current_input}")
+        click.echo(f"{'='*60}\n")
 
     else:
-        # Score une tâche spécifique
+        # Tâche unique
         task_obj = getattr(config, f"{task}_task")
         if task_obj is None:
             click.echo(f"Error: Task '{task}' not configured", err=True)
             return
 
-        predict(task = task_obj, 
-                data_path=data_path, 
-                output=output,
-                save_image=save_image)    
+        task_output = Path(base_output) / task
+        task_output.mkdir(parents=True, exist_ok=True)
+
+        predict(
+            task=task_obj, 
+            data_path=data_path, 
+            output=task_output,
+            save_image=save_image
+        )
 
 
 @cli.command("score")

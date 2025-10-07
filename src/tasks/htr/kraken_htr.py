@@ -408,8 +408,7 @@ class KrakenHTRTask(BaseTask):
                     print(f"Warning: No lines found in {alto_path}")
                     continue
                 
-                # Recognize text - CORRECTION ICI
-                # Passer les chemins, pas l'objet image et la liste lines
+                # Recognize text
                 recognized_texts = self._recognize_text(image_path, alto_path)
                 
                 # Save ALTO with recognized text

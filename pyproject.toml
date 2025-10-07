@@ -23,7 +23,7 @@ dependencies = [
     # Deep Learning & Computer Vision
     "torch>=2.0.0,<2.3.0",
     "torchvision>=0.15.0,<0.17.0",
-    "ultralytics>=8.0.0",
+    "ultralytics>=8.3.0",
     
     # Kraken ecosystem
     "kraken>=4.3.0",

@@ -208,7 +208,6 @@ class KrakenLineTask(BaseTask):
         Args:
             output_dir: Directory to save ALTO XML files       
             save_image: if True: copy the image in the output_dir
-            # TODO : change the CLI to account for this option !
         Returns:
             Prediction results
         """
@@ -251,7 +250,7 @@ class KrakenLineTask(BaseTask):
                         text_direction=self.config.get("text_direction", "horizontal-lr"),
                         model=self.model,
                         device=self.device,
-                        regions=None,
+                        regions={},
                         ignore_lignes=False
                     )
                     predicted_lines = [{'baseline': line.baseline, 'boundary': line.boundary, 'id': line.id}

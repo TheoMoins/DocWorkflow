@@ -156,30 +156,6 @@ class BaseTask(ABC):
         """
         pass
 
-    # def evaluate(self, corpus_path=None):
-    #     """
-    #     Evaluate model and handle logging and result presentation.
-        
-    #     Args:
-    #         corpus_path: Optional path to additional corpus data
-    #         log_to_wandb: Whether to log results to Weights & Biases
-            
-    #     Returns:
-    #         Dictionary of evaluation metrics
-    #     """
-    #     # Initialize wandb if needed
-    #     run = self._init_wandb()
-        
-    #     # Compute metrics using model-specific implementation
-    #     metrics = self._compute_metrics(self.config["data_path"])
-    #     if corpus_path:
-    #         corpus_metrics = self._compute_metrics(self.config["corpus_path"], is_corpus=True)
-    #         metrics = {**metrics, **corpus_metrics}
-                
-    #     self._log_to_wandb(metrics, run)
-    #     self._finish_wandb(run)
-        
-    #     return metrics
     
     def visualize(self, task_name, data_path, xml_path=None, output_dir=None):
         """
