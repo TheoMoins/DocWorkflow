@@ -1,0 +1,15 @@
+run_name: "churro_htr_test"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+
+data:
+  test: "../data/minitest/"
+
+tasks:
+  htr:
+    type: ChurroHTR
+    config:
+      churro_path: "./churro"  
+      max_concurrency: 8       # Parallel requests to vLLM
+      resize: null             # Optional: resize images (e.g., 1024)

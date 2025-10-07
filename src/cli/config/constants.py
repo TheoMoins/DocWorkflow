@@ -10,3 +10,4 @@ class ModelImports(Enum):
 
     # HTR
     KRAKENHTR = ("src.tasks.htr.kraken_htr", "KrakenHTRTask")
+    CHURROHTR = ("src.tasks.htr.churro_htr", "ChurroHTRTask")

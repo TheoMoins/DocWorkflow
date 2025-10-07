@@ -1,0 +1,14 @@
+run_name: "catmus_pipeline"
+output_dir: "results"
+device: "cpu"
+use_wandb: true
+wandb_project: "HTR-comparison" 
+
+data:
+  test: "../data/catmus/test/"
+
+tasks:
+  htr:
+    type: KrakenHTR
+    config:
+      model_path: "src/tasks/htr/models/catmus-medieval-1.6.0.mlmodel"
