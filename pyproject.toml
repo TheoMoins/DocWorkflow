@@ -34,8 +34,8 @@ dependencies = [
     "opencv-python>=4.8.0",
     
     # Scientific computing
-    "numpy>=1.23.0,<2.0.0",
-    "scipy>=1.10.0",
+    "numpy>=2.0.0,<3.0.0",
+    "scipy>=1.13.0",
     
     # XML processing
     "lxml>=5.0.0",
@@ -46,7 +46,7 @@ dependencies = [
     
     # Configuration & Data
     "PyYAML>=6.0.0",
-    "pandas>=2.0.0",
+    "pandas>=2.2.0",
     "tabulate>=0.8.10,<1.0.0",
     
     # Metrics
@@ -54,7 +54,7 @@ dependencies = [
     "jiwer>=3.0.0",
     
     # Visualization
-    "matplotlib>=3.7.0",
+    "matplotlib>=3.8.0",
 
     # Weights and Biases
     "wandb>=0.16.0"
