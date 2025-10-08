@@ -4,7 +4,7 @@ device: "cuda"
 use_wandb: false
 
 data:
-  test: "../data/minitest/"
+  test: "../data/catmus/test/"
 
 tasks:
   htr:
