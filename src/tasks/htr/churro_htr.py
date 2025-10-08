@@ -24,7 +24,11 @@ class ChurroHTRTask(BaseHTR):
         self.resize = config.get('resize', None)
     
     def load(self):
-        """Validate CHURRO installation."""
+        """
+        Validate CHURRO installation.
+        """
+        self.churro_path = os.path.abspath(self.churro_path)
+
         if not os.path.exists(self.churro_path):
             raise FileNotFoundError(
                 f"CHURRO repository not found at {self.churro_path}. "
@@ -47,13 +51,11 @@ class ChurroHTRTask(BaseHTR):
             
         Returns:
             Dictionary mapping image filenames to recognized text
-        """
-        churro_script = os.path.join(self.churro_path, "run_churro_ocr.py")
-        
+        """        
         cmd = [
-            "python", churro_script,
+            "python", "run_churro_ocr.py",
             "--engine", "churro",
-            "--image-dir", str(image_dir),
+            "--image-dir", str(os.path.abspath(image_dir)),
             "--pattern", "*.jpg",
             "--output-dir", str(output_dir),
             "--max-concurrency", str(self.max_concurrency)
