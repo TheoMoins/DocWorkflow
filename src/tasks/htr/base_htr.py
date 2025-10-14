@@ -235,17 +235,15 @@ class BaseHTR(BaseTask):
                 pred_lines = self._extract_lines_text_from_alto(pred_file)
                 
                 if gt_lines:
-                    # Match lines by ID
-                    gt_dict = {line['id']: line['text'] for line in gt_lines}
-                    pred_dict = {line['id']: line['text'] for line in pred_lines}
-                    
-                    for line_id in gt_dict:
-                        gt_text = gt_dict[line_id]
-                        pred_text = pred_dict.get(line_id, '')
+                    for i, gt_line in enumerate(gt_lines):
+                        gt_text = gt_line['text']
                         
                         # Skip empty ground truth lines
                         if not gt_text.strip():
                             continue
+                        
+                        # Get corresponding prediction by index
+                        pred_text = pred_lines[i]['text'] if i < len(pred_lines) else ''
                         
                         total_lines += 1
                         all_gt_texts.append(gt_text)

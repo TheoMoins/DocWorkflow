@@ -1,12 +1,16 @@
 from src.tasks.htr.base_htr import BaseHTR
+
 import os
 import glob
-import subprocess
 from tqdm import tqdm
+from PIL import Image
 from pathlib import Path
 import shutil
-import tempfile
+import torch
+import gc
 
+from transformers import AutoProcessor, AutoModelForImageTextToText
+from qwen_vl_utils import process_vision_info
 
 class ChurroHTRTask(BaseHTR):
     """
@@ -18,81 +22,114 @@ class ChurroHTRTask(BaseHTR):
         super().__init__(config)
         self.name = "HTR (CHURRO)"
         
-        # CHURRO-specific config
-        self.churro_path = config.get('churro_path', './churro')
-        self.max_concurrency = config.get('max_concurrency', 8)
-        self.resize = config.get('resize', None)
+        # Model config
+        self.model_name = config.get('model_name', 'stanford-oval/churro-3B')
+        self.max_new_tokens = config.get('max_new_tokens', 512)
+        self.batch_size = config.get('batch_size', 1)
+
+        # Prompt template
+        self.prompt = config.get(
+            'prompt',
+            "You are an expert in transcription of historical documents from various languages. "
+            "Your task is to extract the full text from a given page in Markdown format."
+        )
+
+        self.processor = None
+        self.model = None
     
     def load(self):
         """
-        Validate CHURRO installation.
+        Load the CHURRO model.
         """
-        self.churro_path = os.path.abspath(self.churro_path)
-
-        if not os.path.exists(self.churro_path):
-            raise FileNotFoundError(
-                f"CHURRO repository not found at {self.churro_path}. "
-                "Clone it: git clone https://github.com/stanford-oval/churro.git"
-            )
         
-        churro_script = os.path.join(self.churro_path, "run_churro_ocr.py")
-        if not os.path.exists(churro_script):
-            raise FileNotFoundError(f"CHURRO script not found: {churro_script}")
+        print(f"Loading CHURRO model: {self.model_name}")
+        print("This may take several minutes on first run...")
         
-        print("CHURRO setup validated.")
+        # Load processor and model
+        self.processor = AutoProcessor.from_pretrained(
+            self.model_name,
+            trust_remote_code=True
+        )
+        
+        self.model = AutoModelForImageTextToText.from_pretrained(
+            self.model_name,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16 if self.device == 'cuda' else torch.float32
+        )
+        
+        # Move to device
+        self.model.to(self.device)
+        self.model.eval()
+        
+        print(f"Model loaded successfully on {self.device}")
     
-    def _run_churro_inference(self, image_dir, output_dir):
+    def _recognize_single_image(self, image_path):
         """
-        Run CHURRO inference on a directory of images.
+        Recognize text from a single image.
         
         Args:
-            image_dir: Directory containing images
-            output_dir: Directory to save text outputs
+            image_path: Path to the image file
             
         Returns:
-            Dictionary mapping image filenames to recognized text
-        """        
-        cmd = [
-            "python", "run_churro_ocr.py",
-            "--engine", "churro",
-            "--image-dir", str(os.path.abspath(image_dir)),
-            "--pattern", "*.jpg",
-            "--output-dir", str(output_dir),
-            "--max-concurrency", str(self.max_concurrency)
+            Recognized text as string
+        """
+        
+        # Load and prepare image
+        image = Image.open(image_path).convert("RGB")
+        
+        # Prepare messages for the model
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": self.prompt},
+                ],
+            }
         ]
         
-        if self.resize:
-            cmd.extend(["--resize", str(self.resize)])
+        # Process inputs
+        text = self.processor.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
         
-        print(f"Running CHURRO: {' '.join(cmd)}")
+        image_inputs, _ = process_vision_info(messages)
         
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=self.churro_path,
-                capture_output=True,
-                text=True,
-                check=True
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+        
+        # Generate
+        with torch.no_grad():
+            generated_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=self.max_new_tokens
             )
-            
-            print(result.stdout)
-            
-            # Parse outputs (CHURRO saves .txt files)
-            results = {}
-            for txt_file in glob.glob(os.path.join(output_dir, "*.txt")):
-                base_name = Path(txt_file).stem
-                with open(txt_file, 'r', encoding='utf-8') as f:
-                    text = f.read().strip()
-                results[base_name] = text
-            
-            return results
-            
-        except subprocess.CalledProcessError as e:
-            print(f"Error running CHURRO: {e}")
-            print(f"STDOUT: {e.stdout}")
-            print(f"STDERR: {e.stderr}")
-            raise
-    
+        
+        # Decode
+        generated_ids_trimmed = [
+            output[len(input_ids):]
+            for input_ids, output in zip(inputs["input_ids"], generated_ids)
+        ]
+        
+        output_text = self.processor.batch_decode(
+            generated_ids_trimmed,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False
+        )
+        
+        # Cleanup
+        image.close()
+        del inputs, generated_ids, generated_ids_trimmed
+        
+        return output_text[0]
+
+
     def predict(self, data_path, output_dir, save_image=True):
         """
         Run CHURRO HTR on images.
@@ -105,8 +142,11 @@ class ChurroHTRTask(BaseHTR):
         Returns:
             List of results
         """
-        # Find images
-        image_extensions = ['*.jpg', '*.jpeg', '*.png']
+        if not self.model:
+            self.load()
+        
+        # Find all images
+        image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff']
         image_paths = []
         for ext in image_extensions:
             image_paths.extend(glob.glob(os.path.join(data_path, ext)))
@@ -116,18 +156,16 @@ class ChurroHTRTask(BaseHTR):
         
         print(f"Found {len(image_paths)} images")
         
-        # Run CHURRO in temporary directory
-        with tempfile.TemporaryDirectory() as temp_dir:
-            print("Running CHURRO inference...")
-            text_results = self._run_churro_inference(data_path, temp_dir)
-            
-            # Convert to ALTO format
-            print("Converting to ALTO format...")
-            results = []
-            for image_path in tqdm(image_paths, desc="Creating ALTO files"):
-                base_name = Path(image_path).stem
-                text = text_results.get(base_name, '')
+        results = []
+        
+        # Process images
+        for image_path in tqdm(image_paths, desc="Recognizing text", unit="image"):
+            try:
+                # Recognize text
+                text = self._recognize_single_image(image_path)
                 
+                # Create ALTO file
+                base_name = Path(image_path).stem
                 output_path = os.path.join(output_dir, f"{base_name}.xml")
                 self._create_simple_alto_with_text(image_path, text, output_path)
                 
@@ -136,9 +174,22 @@ class ChurroHTRTask(BaseHTR):
                     'text': text
                 })
                 
+                # Copy image if requested
                 if save_image:
                     image_output = os.path.join(output_dir, os.path.basename(image_path))
                     if not os.path.exists(image_output):
                         shutil.copy2(image_path, image_output)
+                
+                # Clean up memory periodically
+                if len(results) % 10 == 0:
+                    gc.collect()
+                    if self.device == 'cuda':
+                        torch.cuda.empty_cache()
+                
+            except Exception as e:
+                print(f"Error processing {image_path}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
         
         return results

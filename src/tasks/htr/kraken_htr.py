@@ -36,6 +36,45 @@ class KrakenHTRTask(BaseHTR):
         self.model = load_any(model_path)
         self.to_device()
     
+    def _parse_points(self, points_str):
+        """
+        Parse points string that can be in two formats:
+        - Space-separated: "x1 y1 x2 y2"
+        - Comma-separated: "x1,y1 x2,y2"
+        
+        Args:
+            points_str: String containing point coordinates
+            
+        Returns:
+            List of [x, y] coordinate pairs
+        """
+        if not points_str:
+            return []
+        
+        points = []
+        coords = points_str.split()
+        
+        for coord in coords:
+            if ',' in coord:
+                # Format: "x,y"
+                x, y = coord.split(',')
+                points.append([float(x), float(y)])
+            else:
+                # This shouldn't happen if we split by space first,
+                # but keep for backwards compatibility
+                continue
+        
+        # If no commas found, try the old format (space-separated x y x y)
+        if not points and coords:
+            for i in range(0, len(coords), 2):
+                if i + 1 < len(coords):
+                    try:
+                        points.append([float(coords[i]), float(coords[i+1])])
+                    except ValueError:
+                        continue
+        
+        return points
+
     def _recognize_text(self, image_path, alto_path):
         """
         Recognize text by extracting lines from ALTO and processing them.
@@ -59,11 +98,7 @@ class KrakenHTRTask(BaseHTR):
         for textline in root.findall('.//alto:TextLine', ns):
             baseline_str = textline.get('BASELINE', '')
             if baseline_str:
-                coords = baseline_str.split()
-                baseline_points = []
-                for i in range(0, len(coords), 2):
-                    if i + 1 < len(coords):
-                        baseline_points.append([float(coords[i]), float(coords[i+1])])
+                baseline_points = self._parse_points(baseline_str)
                 
                 if len(baseline_points) >= 2:
                     # Get polygon if available
@@ -72,11 +107,7 @@ class KrakenHTRTask(BaseHTR):
                     if polygon is not None:
                         points_str = polygon.get('POINTS', '')
                         if points_str:
-                            coords = points_str.split()
-                            boundary_points = []
-                            for i in range(0, len(coords), 2):
-                                if i + 1 < len(coords):
-                                    boundary_points.append([float(coords[i]), float(coords[i+1])])
+                            boundary_points = self._parse_points(points_str)
                             if boundary_points:
                                 boundary = boundary_points
                     
@@ -88,7 +119,7 @@ class KrakenHTRTask(BaseHTR):
                         min_y = baseline_np[:, 1].min() - 10
                         max_y = baseline_np[:, 1].max() + 10
                         boundary = [[min_x, min_y], [max_x, min_y], 
-                                  [max_x, max_y], [min_x, max_y]]
+                                    [max_x, max_y], [min_x, max_y]]
                     
                     lines_data.append({
                         'baseline': baseline_points,

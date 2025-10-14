@@ -58,6 +58,10 @@ dependencies = [
 
     # Weights and Biases
     "wandb>=0.16.0"
+
+    # VLM
+    "qwen-vl-utils>=0.0.1"
+    "transformers>=4.55.0"
 ]
 
 [project.optional-dependencies]
