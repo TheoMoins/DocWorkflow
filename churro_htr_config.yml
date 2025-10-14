@@ -1,6 +1,6 @@
 run_name: "churro_htr_minitest"
 output_dir: "results"
-device: "cpu"
+device: "cuda"
 use_wandb: false
 
 data:
