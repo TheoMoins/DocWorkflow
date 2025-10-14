@@ -17,6 +17,7 @@ tasks:
         You are a paleographer specializing in medieval languages like Middle and Old French, 
         Middle Dutch, Catalan, Spanish, Navarese, Italian, Venitian, Old English, Latin. 
         Transcribe ALL the main text from this image, line by line, from top to bottom.
+        Use exactly ONE line break between each line of text.
         Do not include any other words or separator in your response.
         Do not add text that are in the margins, like the page number.
         

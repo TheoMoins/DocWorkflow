@@ -234,23 +234,29 @@ class BaseHTR(BaseTask):
                 gt_lines = self._extract_lines_text_from_alto(gt_file)
                 pred_lines = self._extract_lines_text_from_alto(pred_file)
                 
-                if gt_lines:
-                    for i, gt_line in enumerate(gt_lines):
-                        gt_text = gt_line['text']
-                        
-                        # Skip empty ground truth lines
-                        if not gt_text.strip():
-                            continue
-                        
-                        # Get corresponding prediction by index
-                        pred_text = pred_lines[i]['text'] if i < len(pred_lines) else ''
-                        
-                        total_lines += 1
-                        all_gt_texts.append(gt_text)
-                        all_pred_texts.append(pred_text)
-                        
-                        if pred_text == gt_text:
-                            perfect_lines += 1
+                # Check if prediction has only one line (CHURRO-style)
+                if len(pred_lines) == 1 and len(gt_lines) > 1:
+                    # Fallback: split prediction by line breaks
+                    single_text = pred_lines[0]['text']
+                    pred_texts_split = [t.strip() for t in single_text.split('\n') if t.strip()]
+                    
+                    # If split matches ground truth line count, use it
+                    if len(pred_texts_split) == len(gt_lines):
+                        for gt_line, pred_text in zip(gt_lines, pred_texts_split):
+                            gt_text = gt_line['text']
+                            if gt_text.strip():
+                                total_lines += 1
+                                all_gt_texts.append(gt_text)
+                                all_pred_texts.append(pred_text)
+                                if pred_text == gt_text:
+                                    perfect_lines += 1
+                    else:
+                        # Can't match lines: compare full page
+                        full_gt = ' '.join(line['text'] for line in gt_lines if line['text'].strip())
+                        full_pred = ' '.join(pred_texts_split)
+                        if full_gt.strip():
+                            all_gt_texts.append(full_gt)
+                            all_pred_texts.append(full_pred)
                 else:
                     # Fallback: compare full text
                     gt_text = self._extract_text_from_alto(gt_file)

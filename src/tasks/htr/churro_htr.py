@@ -31,7 +31,8 @@ class ChurroHTRTask(BaseHTR):
         self.prompt = config.get(
             'prompt',
             "You are an expert in transcription of historical documents from various languages. "
-            "Your task is to extract the full text from a given page in Markdown format."
+            "Your task is to extract the full text from a given page."
+            "Use exactly ONE line break between each line of text."
         )
 
         self.processor = None
@@ -129,6 +130,89 @@ class ChurroHTRTask(BaseHTR):
         
         return output_text[0]
 
+    def _split_churro_output_into_lines(self, alto_path, text, image_path):
+        """
+        Split CHURRO's single-line output into multiple TextLines based on line breaks.
+        Tries to match with existing layout structure if available.
+        
+        Args:
+            alto_path: Path to the ALTO file (may have layout info)
+            text: Full text from CHURRO
+            image_path: Path to source image
+            
+        Returns:
+            Path to updated ALTO file
+        """
+        from lxml import etree as ET
+        from PIL import Image
+        
+        # Split text by line breaks
+        lines_text = [line.strip() for line in text.split('\n') if line.strip()]
+        
+        if not lines_text:
+            return alto_path
+        
+        # Try to load existing ALTO structure
+        tree = ET.parse(alto_path)
+        root = tree.getroot()
+        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+        
+        # Get image dimensions
+        with Image.open(image_path) as img:
+            width, height = img.size
+        
+        # Find existing TextLines (from layout/line segmentation)
+        existing_lines = root.findall('.//alto:TextLine', ns)
+        
+        if existing_lines and len(existing_lines) == len(lines_text):
+            # Perfect match: update existing lines with CHURRO text
+            for line_elem, line_text in zip(existing_lines, lines_text):
+                # Remove old String elements
+                for string_elem in line_elem.findall('alto:String', ns):
+                    line_elem.remove(string_elem)
+                
+                # Add new String with CHURRO text
+                string_elem = ET.SubElement(line_elem, f"{{{ns['alto']}}}String")
+                string_elem.set('CONTENT', line_text)
+                string_elem.set('WC', '1.0')
+        
+        else:
+            # No match: create new structure with estimated line positions
+            text_blocks = root.findall('.//alto:TextBlock', ns)
+            
+            if text_blocks:
+                # Use first text block
+                text_block = text_blocks[0]
+                
+                # Remove existing TextLines
+                for line_elem in text_block.findall('alto:TextLine', ns):
+                    text_block.remove(line_elem)
+                
+                # Create new TextLines with estimated positions
+                line_height = height // max(len(lines_text), 1)
+                margin = 10
+                
+                for idx, line_text in enumerate(lines_text):
+                    y_pos = idx * line_height + margin
+                    line_elem = ET.SubElement(text_block, f"{{{ns['alto']}}}TextLine")
+                    line_elem.set('ID', f'line_{idx}')
+                    line_elem.set('HPOS', str(margin))
+                    line_elem.set('VPOS', str(y_pos))
+                    line_elem.set('WIDTH', str(width - 2 * margin))
+                    line_elem.set('HEIGHT', str(line_height - margin))
+                    
+                    baseline_y = y_pos + line_height // 2
+                    line_elem.set('BASELINE', f"{margin} {baseline_y} {width - margin} {baseline_y}")
+                    
+                    # Add String
+                    string_elem = ET.SubElement(line_elem, f"{{{ns['alto']}}}String")
+                    string_elem.set('CONTENT', line_text)
+                    string_elem.set('WC', '1.0')
+        
+        # Save updated ALTO
+        tree.write(alto_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+        return alto_path
+
 
     def predict(self, data_path, output_dir, save_image=True):
         """
@@ -164,10 +248,21 @@ class ChurroHTRTask(BaseHTR):
                 # Recognize text
                 text = self._recognize_single_image(image_path)
                 
-                # Create ALTO file
+                # Create basic ALTO file
                 base_name = Path(image_path).stem
                 output_path = os.path.join(output_dir, f"{base_name}.xml")
-                self._create_simple_alto_with_text(image_path, text, output_path)
+                
+                # Check if there's an existing ALTO with layout/lines
+                existing_alto = os.path.join(data_path, f"{base_name}.xml")
+                if os.path.exists(existing_alto):
+                    # Copy existing structure
+                    shutil.copy2(existing_alto, output_path)
+                else:
+                    # Create simple ALTO
+                    self._create_simple_alto_with_text(image_path, text, output_path)
+                
+                # Split CHURRO output into lines
+                self._split_churro_output_into_lines(output_path, text, image_path)
                 
                 results.append({
                     'file': image_path,
