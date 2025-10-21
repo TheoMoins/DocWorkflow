@@ -348,21 +348,42 @@ class DocumentVisualizer:
                 # Créer le nom du fichier de sortie
                 base_name = os.path.splitext(os.path.basename(self.image_path))[0]
                 vis_type = self.visualization_type
-                save_path = os.path.join(output_dir, f"{base_name}_{vis_type}.png")
                 
                 # Effectuer la visualisation
                 if self.visualization_type == 'layout':
+                    save_path = os.path.join(output_dir, f"{base_name}_{vis_type}.png")
                     self.draw_layout(save_path=save_path)
-                else:  # 'line'
-                    self.draw_lines(save_path=save_path)
+                    print(f"Visualization saved to {save_path}")
                     
-                print(f"Visualization saved to {save_path}")
+                elif self.visualization_type == 'line':
+                    save_path = os.path.join(output_dir, f"{base_name}_{vis_type}.png")
+                    self.draw_lines(save_path=save_path)
+                    print(f"Visualization saved to {save_path}")
+                    
+                elif self.visualization_type == 'htr':
+                    save_path = os.path.join(output_dir, f"{base_name}.txt")
+                    if self.export_text(save_path):
+                        print(f"Text exported to {save_path}")
+                    else:
+                        return False
+                else:
+                    print(f"Unknown visualization type: {self.visualization_type}")
+                    return False
+                    
             else:
                 # Affichage interactif
                 if self.visualization_type == 'layout':
                     self.draw_layout()
-                else:  # 'line'
+                elif self.visualization_type == 'line':
                     self.draw_lines()
+                elif self.visualization_type == 'htr':
+                    # Pour HTR, afficher le texte dans la console
+                    text = self.extract_text()
+                    print("\n" + "="*60)
+                    print(f"Text from: {os.path.basename(self.alto_path)}")
+                    print("="*60)
+                    print(text)
+                    print("="*60 + "\n")
                     
             return True
             
@@ -370,6 +391,57 @@ class DocumentVisualizer:
             print(f"Error during visualization: {e}")
             import traceback
             traceback.print_exc()
+            return False
+        
+    def extract_text(self):
+        """
+        Extrait le texte transcrit depuis le fichier ALTO.
+        
+        Returns:
+            String contenant le texte complet, ligne par ligne
+        """
+        text_lines = []
+        
+        # Parcourir tous les TextLine
+        for textline in self.root.findall('.//alto:TextLine', self.ns):
+            line_text = []
+            
+            # Extraire le texte de chaque String dans la ligne
+            for string_elem in textline.findall('.//alto:String', self.ns):
+                content = string_elem.get('CONTENT', '')
+                if content:
+                    line_text.append(content)
+            
+            # Joindre les mots de la ligne et ajouter à la liste
+            if line_text:
+                text_lines.append(' '.join(line_text))
+        
+        return '\n'.join(text_lines)
+    
+    def export_text(self, output_path):
+        """
+        Exporte le texte transcrit dans un fichier .txt
+        
+        Args:
+            output_path: Chemin du fichier de sortie
+            
+        Returns:
+            True si l'export a réussi, False sinon
+        """
+        try:
+            text = self.extract_text()
+            
+            if not text:
+                print(f"Warning: No text found in {self.alto_path}")
+                return False
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(text)
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error exporting text from {self.alto_path}: {e}")
             return False
 
 def visualize_folder(img_dir, xml_dir=None, output_dir=None, visualization_type='layout'):
@@ -380,7 +452,7 @@ def visualize_folder(img_dir, xml_dir=None, output_dir=None, visualization_type=
         xml_dir: Dossier contenant les fichiers ALTO XML
         img_dir: Dossier contenant les images (si différent de xml_dir)
         output_dir: Dossier où sauvegarder les visualisations
-        visualization_type: Type de visualisation ('layout' ou 'line')
+        visualization_type: Type de visualisation ('layout', 'line' ou 'htr')
         
     Returns:
         Nombre de visualisations réussies
@@ -414,7 +486,7 @@ def visualize_folder(img_dir, xml_dir=None, output_dir=None, visualization_type=
                 img_file = potential_img
                 break
         
-        if not img_file:
+        if not img_file and visualization_type != 'htr':
             print(f"Warning: No image found for {xml_file}")
             continue
         

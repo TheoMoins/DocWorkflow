@@ -239,10 +239,27 @@ def add_lines_to_alto(lines, output_path, alto_path):
         text_blocks = root.findall('.//alto:TextBlock', ns)
         if not text_blocks:
             print(f"Warning: No TextBlocks found in {alto_path}")
+
+        # Récupérer les labels des tags
+        tag_labels = {}
+        tags_section = root.find('.//alto:Tags', ns)
+        if tags_section is not None:
+            for tag in tags_section.findall('.//alto:OtherTag', ns):
+                tag_id = tag.get('ID')
+                label = tag.get('LABEL')
+                if tag_id and label:
+                    tag_labels[tag_id] = label
         
         # Préparer les blocs avec leurs boîtes délimitantes
         block_boxes = []
         for block in text_blocks:
+            tag_ref = block.get('TAGREFS', '')
+            block_label = tag_labels.get(tag_ref, '')
+            
+            # Ignorer les DropCapitalZone et autres zones non-textuelles
+            if 'DropCapitalZone' in block_label:
+                continue
+            
             x = int(block.get('HPOS', 0))
             y = int(block.get('VPOS', 0))
             w = int(block.get('WIDTH', 0))
