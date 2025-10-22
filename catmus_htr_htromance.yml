@@ -1,11 +1,11 @@
-run_name: "catmus_pipeline_minitest"
+run_name: "catmus_pipeline_htromance"
 output_dir: "results"
 device: "cpu"
 use_wandb: false
 wandb_project: "HTR-comparison" 
 
 data:
-  test: "../data/catmus/minitest/"
+  test: "../data/HTRomance-french/data/all"
 
 tasks:
   layout: 

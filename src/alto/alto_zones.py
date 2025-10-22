@@ -90,10 +90,10 @@ def extract_zones_from_alto(file_path):
     # Extract zones (TextBlocks)
     zones = []
     for block in root.findall('.//alto:TextBlock', ns):
-        hpos = int(block.get('HPOS', 0))
-        vpos = int(block.get('VPOS', 0))
-        width = int(block.get('WIDTH', 0))
-        height = int(block.get('HEIGHT', 0))
+        hpos = int(float(block.get('HPOS', 0)))
+        vpos = int(float(block.get('VPOS', 0)))
+        width = int(float(block.get('WIDTH', 0)))
+        height = int(float(block.get('HEIGHT', 0)))
         
         # Get zone label from TAGREFS
         tag_ref = block.get('TAGREFS', 'unknown')
