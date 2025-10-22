@@ -1,0 +1,23 @@
+run_name: "churro_htromance"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+
+data:
+  test: "../data/HTRomance-french/data/all"
+
+tasks:
+  htr:
+    type: ChurroHTR
+    config:
+      model_name: 'stanford-oval/churro-3B'
+      max_new_tokens: 512    
+      batch_size: 10
+      prompt: > 
+        You are a paleographer specializing in medieval languages like Middle and Old French, 
+        Middle Dutch, Catalan, Spanish, Navarese, Italian, Venitian, Old English, Latin. 
+        Transcribe ALL the main text from this image, line by line, from top to bottom.
+        Use exactly ONE line break between each line of text.
+        Do not include any other words or separator in your response.
+        Do not add text that are in the margins, like the page number.
+        
