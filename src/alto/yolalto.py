@@ -150,9 +150,7 @@ def create_alto_xml(detections, image_path, dimensions):
             tags.add((tag_id, label, "block type"))
 
     # Sort detections in reading order
-    print([det['label'] for det in detections])
     detections = sort_zones_reading_order(detections)
-    print([det['label'] for det in detections])
     
     NSMAP = {
         None: "http://www.loc.gov/standards/alto/ns-v4#",
