@@ -6,11 +6,12 @@ Adapted for the Document Analysis Framework.
 """
 
 from lxml import etree
-from src.alto.alto_lines import calculate_iou
 import itertools
 import os
 import hashlib
 
+from src.utils.utils import sort_zones_reading_order
+from src.alto.alto_lines import calculate_iou
 
 
 def create_tag_id(label, prefix="BT"):
@@ -147,6 +148,11 @@ def create_alto_xml(detections, image_path, dimensions):
             tag_id = create_tag_id(label, "BT")
             tag_registry[label] = tag_id
             tags.add((tag_id, label, "block type"))
+
+    # Sort detections in reading order
+    print([det['label'] for det in detections])
+    detections = sort_zones_reading_order(detections)
+    print([det['label'] for det in detections])
     
     NSMAP = {
         None: "http://www.loc.gov/standards/alto/ns-v4#",

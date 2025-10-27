@@ -1,6 +1,7 @@
 import os
 import numpy as np
 
+from src.utils.utils import sort_zones_reading_order
 from lxml import etree as ET
 
 
@@ -132,6 +133,8 @@ def extract_zones_from_alto(file_path):
             zone_data['boundary'] = boundary
         
         zones.append(zone_data)
+
+    zones = sort_zones_reading_order(zones)
     
     return str(image_path) if image_path else None, zones
 

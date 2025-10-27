@@ -5,6 +5,7 @@
 /wandb/
 wandb_api_key.txt
 *.pyc
+.ipynb_checkpoints
 
 src/tasks/layout/models/
 src/tasks/layout/__pycache__/
