@@ -6,6 +6,8 @@ import os
 import numpy as np
 from sklearn.cluster import DBSCAN
 
+IGNORED_ZONE_TYPES = {'DigitizationArtefactZone', 'MarginTextZone', 'NumberingZone', 'DropCapitalZone'}
+
 def setup_wandb(key=None):
     """
     Configure Weights & Biases for logging.

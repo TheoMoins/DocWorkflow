@@ -10,7 +10,7 @@ import itertools
 import os
 import hashlib
 
-from src.utils.utils import sort_zones_reading_order
+from src.utils.utils import sort_zones_reading_order, IGNORED_ZONE_TYPES
 from src.alto.alto_lines import calculate_iou
 
 
@@ -138,6 +138,8 @@ def create_alto_xml(detections, image_path, dimensions):
     Returns:
         lxml Element containing the ALTO XML
     """
+    detections = [d for d in detections if d['label'] not in IGNORED_ZONE_TYPES]
+
     # Build tag registry for all unique labels
     tag_registry = {}
     tags = set()

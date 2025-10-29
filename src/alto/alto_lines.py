@@ -6,6 +6,7 @@ from kraken.lib.xml import XMLPage
 
 from lxml import etree as ET
 
+from src.utils.utils import IGNORED_ZONE_TYPES
 
 def normalize_box(box, width, height, scale=100):
     """
@@ -79,6 +80,9 @@ def extract_lines_from_alto(file_path):
     region_polygons = {}  # Store region polygons by ID for spatial containment check
     
     for region_type, region_list in parsed.regions.items():
+        if region_type in IGNORED_ZONE_TYPES:
+            continue
+
         if region_type not in regions:
             regions[region_type] = []
         
@@ -95,6 +99,9 @@ def extract_lines_from_alto(file_path):
             line_regions = []
             if hasattr(line_obj, 'regions') and line_obj.regions:
                 line_regions = line_obj.regions
+
+            if any(region in IGNORED_ZONE_TYPES for region in line_regions):
+                continue
             
             lines.append({
                 'id': line_id,
@@ -257,7 +264,7 @@ def add_lines_to_alto(lines, output_path, alto_path):
             block_label = tag_labels.get(tag_ref, '')
             
             # Ignorer les DropCapitalZone et autres zones non-textuelles
-            if 'DropCapitalZone' in block_label:
+            if block_label in IGNORED_ZONE_TYPES:
                 continue
             
             x = int(block.get('HPOS', 0))

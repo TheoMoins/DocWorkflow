@@ -65,11 +65,11 @@ class YoloLayoutTask(BaseTask):
                 model = self.config["model_path"]
                 self.model_loaded = "trained"
 
-        if "DocYOLO" in self.name:
-            from doclayout_yolo import YOLOv10
-            self.model = YOLOv10(model)
-        else:
-            self.model = YOLO(model)
+        # if "DocYOLO" in self.name:
+        #     from doclayout_yolo import YOLOv10
+        #     self.model = YOLOv10(model)
+        # else:
+        self.model = YOLO(model)
         
         self.to_device()
     

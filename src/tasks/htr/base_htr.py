@@ -218,6 +218,9 @@ class BaseHTR(BaseTask):
         total_lines = 0
         perfect_lines = 0
         
+        # Track per-page scores
+        page_scores = []
+        
         # Process each file
         for gt_file in tqdm(gt_files, desc="Scoring HTR", unit="page"):
             base_name = os.path.basename(gt_file)
@@ -230,6 +233,10 @@ class BaseHTR(BaseTask):
                 continue
             
             try:
+                # Store page-specific texts for individual scoring
+                page_gt_texts = []
+                page_pred_texts = []
+                
                 # Try line-by-line comparison first
                 gt_lines = self._extract_lines_text_from_alto(gt_file)
                 pred_lines = self._extract_lines_text_from_alto(pred_file)
@@ -248,6 +255,8 @@ class BaseHTR(BaseTask):
                                 total_lines += 1
                                 all_gt_texts.append(gt_text)
                                 all_pred_texts.append(pred_text)
+                                page_gt_texts.append(gt_text)
+                                page_pred_texts.append(pred_text)
                                 if pred_text == gt_text:
                                     perfect_lines += 1
                     else:
@@ -257,6 +266,8 @@ class BaseHTR(BaseTask):
                         if full_gt.strip():
                             all_gt_texts.append(full_gt)
                             all_pred_texts.append(full_pred)
+                            page_gt_texts.append(full_gt)
+                            page_pred_texts.append(full_pred)
                 else:
                     # Fallback: compare full text
                     gt_text = self._extract_text_from_alto(gt_file)
@@ -265,6 +276,20 @@ class BaseHTR(BaseTask):
                     if gt_text.strip():
                         all_gt_texts.append(gt_text)
                         all_pred_texts.append(pred_text)
+                        page_gt_texts.append(gt_text)
+                        page_pred_texts.append(pred_text)
+                
+                # Calculate per-page CER and WER
+                if page_gt_texts and page_pred_texts:
+                    page_cer = cer(page_gt_texts, page_pred_texts)
+                    page_wer = wer(page_gt_texts, page_pred_texts)
+                    
+                    page_scores.append({
+                        'file': base_name,
+                        'path': gt_file,
+                        'cer': page_cer,
+                        'wer': page_wer
+                    })
                 
                 matched_files += 1
                 
@@ -315,7 +340,15 @@ class BaseHTR(BaseTask):
                 "detailed/word_deletions": wer_output.deletions,
                 "detailed/word_substitutions": wer_output.substitutions,
             }
+
+            # Identify 5 worst pages by CER
+            worst_pages_cer = sorted(page_scores, key=lambda x: x['cer'], reverse=True)[:5]
             
+            # Add worst pages to metrics (flat structure for CSV)
+            for i, page in enumerate(worst_pages_cer, 1):
+                metrics_dict[f"worst/top{i}_file"] = page['file']
+                metrics_dict[f"worst/top{i}_cer"] = page['cer']
+
             self._display_metrics(metrics_dict)
             return metrics_dict
             
