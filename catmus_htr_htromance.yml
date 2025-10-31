@@ -1,7 +1,7 @@
 run_name: "catmus_pipeline_htromance"
 output_dir: "results"
 device: "cpu"
-use_wandb: false
+use_wandb: true
 wandb_project: "HTR-comparison" 
 
 data:

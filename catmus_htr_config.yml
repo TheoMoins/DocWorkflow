@@ -5,7 +5,7 @@ use_wandb: true
 wandb_project: "HTR-comparison" 
 
 data:
-  test: "../data/catmus/test/"
+  test: "../data/export_20251029/"
 
 tasks:
   htr:
