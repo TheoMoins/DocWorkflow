@@ -205,6 +205,8 @@ class BaseHTR(BaseTask):
         Returns:
             Dictionary of evaluation metrics
         """
+        wandb_run = self._init_wandb()
+
         # Find all ground truth files
         gt_files = sorted(glob.glob(os.path.join(gt_path, "*.xml")))
         if not gt_files:
@@ -349,7 +351,9 @@ class BaseHTR(BaseTask):
                 metrics_dict[f"worst/top{i}_file"] = page['file']
                 metrics_dict[f"worst/top{i}_cer"] = page['cer']
 
+            self._log_to_wandb(metrics_dict, wandb_run)
             self._display_metrics(metrics_dict)
+            self._finish_wandb(wandb_run)
             return metrics_dict
             
         except Exception as e:
