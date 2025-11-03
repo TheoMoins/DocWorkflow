@@ -311,7 +311,7 @@ class BaseHTR(BaseTask):
             wer_score = wer(all_gt_texts, all_pred_texts)
             mer_score = mer(all_gt_texts, all_pred_texts)
             wil_score = wil(all_gt_texts, all_pred_texts)
-            wip_score = wip(all_gt_texts, all_pred_texts)
+            # wip_score = wip(all_gt_texts, all_pred_texts)
             
             char_accuracy = 1.0 - cer_score
             word_accuracy = 1.0 - wer_score
@@ -326,12 +326,12 @@ class BaseHTR(BaseTask):
                 "score/wer": wer_score,
                 "score/mer": mer_score,
                 "score/wil": wil_score,
-                "score/wip": wip_score,
+                # "score/wip": wip_score,
                 "accuracy/char_accuracy": char_accuracy,
                 "accuracy/word_accuracy": word_accuracy,
                 "accuracy/line_accuracy": line_accuracy,
-                "total/total_chars": sum(len(text) for text in all_gt_texts),
-                "total/total_words": sum(len(text.split()) for text in all_gt_texts),
+                "total/total_chars": sum(len(text) for text in all_pred_texts),
+                "total/total_words": sum(len(text.split()) for text in all_pred_texts),
                 "total/total_lines": total_lines,
                 "total/perfect_lines": perfect_lines,
                 "total/files_processed": matched_files,

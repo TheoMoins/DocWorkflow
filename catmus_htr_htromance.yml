@@ -5,7 +5,7 @@ use_wandb: true
 wandb_project: "HTR-comparison" 
 
 data:
-  test: "../data/HTRomance-french/data/all"
+  test: "../data/HTRomance-french/data/test"
 
 tasks:
   layout: 
