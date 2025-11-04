@@ -8,7 +8,7 @@ data:
 
 tasks:
   htr:
-    type: ChurroHTR
+    type: VLMHTR
     config:
       model_name: 'stanford-oval/churro-3B'
       max_new_tokens: 512    

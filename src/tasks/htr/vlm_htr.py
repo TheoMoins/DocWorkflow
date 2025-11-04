@@ -12,7 +12,7 @@ import gc
 from transformers import AutoProcessor, AutoModelForImageTextToText
 from qwen_vl_utils import process_vision_info
 
-class ChurroHTRTask(BaseHTR):
+class VLMHTRTask(BaseHTR):
     """
     HTR implementation using CHURRO VLM.
     Processes images directly without requiring line segmentation.
@@ -20,7 +20,7 @@ class ChurroHTRTask(BaseHTR):
     
     def __init__(self, config):
         super().__init__(config)
-        self.name = "HTR (CHURRO)"
+        self.name = "HTR (VLM)"
         
         # Model config
         self.model_name = config.get('model_name', 'stanford-oval/churro-3B')
@@ -40,29 +40,43 @@ class ChurroHTRTask(BaseHTR):
     
     def load(self):
         """
-        Load the CHURRO model.
+        Load a VLM model from transformers.
         """
         
-        print(f"Loading CHURRO model: {self.model_name}")
+        print(f"Loading VLM model: {self.model_name}")
         print("This may take several minutes on first run...")
-        
+            
         # Load processor and model
         self.processor = AutoProcessor.from_pretrained(
             self.model_name,
             trust_remote_code=True
         )
         
+        # Configuration options for model loading
+        model_kwargs = {
+            "trust_remote_code": True,
+            "torch_dtype": torch.bfloat16 if self.device == 'cuda' else torch.float32
+        }
+        
+        # Add optional config parameters
+        if self.config.get('device_map'):
+            model_kwargs['device_map'] = self.config['device_map']
+        
+        if self.config.get('attn_implementation'):
+            model_kwargs['attn_implementation'] = self.config['attn_implementation']
+        
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.model_name,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16 if self.device == 'cuda' else torch.float32
+            **model_kwargs
         )
         
-        # Move to device
-        self.model.to(self.device)
-        self.model.eval()
+        # Move to device if not using device_map
+        if not self.config.get('device_map'):
+            self.model.to(self.device)
         
+        self.model.eval()
         print(f"Model loaded successfully on {self.device}")
+
     
     def _recognize_single_image(self, image_path):
         """
@@ -96,7 +110,11 @@ class ChurroHTRTask(BaseHTR):
             add_generation_prompt=True
         )
         
-        image_inputs, _ = process_vision_info(messages)
+        try:
+            image_inputs, _ = process_vision_info(messages)
+        except (ImportError, Exception):
+            # Fallback for models that don't need it
+            image_inputs = [image]
         
         inputs = self.processor(
             text=[text],
@@ -106,12 +124,22 @@ class ChurroHTRTask(BaseHTR):
         ).to(self.device)
         
         # Generate
+        generation_kwargs = {
+            "max_new_tokens": self.max_new_tokens
+        }
+        
+        # Add optional generation parameters
+        if self.config.get('temperature'):
+            generation_kwargs['temperature'] = self.config['temperature']
+        if self.config.get('top_p'):
+            generation_kwargs['top_p'] = self.config['top_p']
+        
         with torch.no_grad():
             generated_ids = self.model.generate(
                 **inputs,
-                max_new_tokens=self.max_new_tokens
+                **generation_kwargs
             )
-        
+
         # Decode
         generated_ids_trimmed = [
             output[len(input_ids):]
