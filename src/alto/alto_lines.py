@@ -100,7 +100,7 @@ def extract_lines_from_alto(file_path):
             if hasattr(line_obj, 'regions') and line_obj.regions:
                 line_regions = line_obj.regions
 
-            if any(region in IGNORED_ZONE_TYPES for region in line_regions):
+            if not line_regions or any(region in IGNORED_ZONE_TYPES for region in line_regions):
                 continue
             
             lines.append({

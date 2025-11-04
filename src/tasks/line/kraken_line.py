@@ -18,6 +18,7 @@ from kraken.kraken import SEGMENTATION_DEFAULT_MODEL
 from kraken.lib.xml import XMLPage
 from yaltai.models.krakn import segment as line_segment
 
+from src.utils.utils import IGNORED_ZONE_TYPES
 from src.alto.alto_lines import extract_lines_from_alto, convert_lines_to_boxes, add_lines_to_alto
 
 class KrakenLineTask(BaseTask):
@@ -75,8 +76,14 @@ class KrakenLineTask(BaseTask):
         def process_image():
             try:
                 # Extract regions from ALTO file
-                _, _, alto_regions = extract_lines_from_alto(file_name)
-                
+                _, _, all_regions = extract_lines_from_alto(file_name)
+
+                # Only keep mainzones
+                alto_regions = {
+                    region_type: polygons 
+                    for region_type, polygons in all_regions.items() 
+                    if region_type not in IGNORED_ZONE_TYPES
+}                
                 if not alto_regions:
                     raise ValueError(f"No regions available in ALTO file {file_name}")
                 

@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-from src.utils.utils import sort_zones_reading_order, IGNORED_ZONE_TYPES
+from src.utils.utils import sort_zones_reading_order
 from lxml import etree as ET
 
 
@@ -132,8 +132,8 @@ def extract_zones_from_alto(file_path):
         if boundary:
             zone_data['boundary'] = boundary
         
-        if label not in IGNORED_ZONE_TYPES:
-            zones.append(zone_data)
+        # if label not in IGNORED_ZONE_TYPES:
+        zones.append(zone_data)
             
     zones = sort_zones_reading_order(zones)
     

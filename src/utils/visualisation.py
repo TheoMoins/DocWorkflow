@@ -337,7 +337,7 @@ class DocumentVisualizer:
         Returns:
             True si la visualisation a réussi, False sinon
         """
-        if not self.image or not self.root:
+        if self.image is None or self.root is None:
             print(f"Error: Could not load data for {self.image_path}")
             return False
         
