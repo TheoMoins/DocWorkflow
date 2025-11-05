@@ -1,4 +1,4 @@
-run_name: "nanonets_htromance"
+run_name: "paddle_htromance"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -11,7 +11,7 @@ tasks:
   htr:
     type: VLMHTR
     config:
-      model_name: "nanonets/Nanonets-OCR2-3B"
+      model_name: "PaddlePaddle/PaddleOCR-VL"
       max_new_tokens: 512    
       batch_size: 10
       prompt: > 
