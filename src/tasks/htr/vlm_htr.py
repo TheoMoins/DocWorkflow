@@ -9,7 +9,8 @@ import shutil
 import torch
 import gc
 
-from transformers import AutoProcessor, AutoModelForImageTextToText
+from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
+from utils.transformers_models import is_supported_by_auto_image_text
 from qwen_vl_utils import process_vision_info
 
 class VLMHTRTask(BaseHTR):
@@ -20,10 +21,10 @@ class VLMHTRTask(BaseHTR):
     
     def __init__(self, config):
         super().__init__(config)
-        self.name = "HTR (VLM)"
         
         # Model config
         self.model_name = config.get('model_name', 'stanford-oval/churro-3B')
+        self.name = "HTR_" + self.model_name.split('/')[-1]
         self.max_new_tokens = config.get('max_new_tokens', 512)
         self.batch_size = config.get('batch_size', 1)
 
@@ -40,23 +41,34 @@ class VLMHTRTask(BaseHTR):
     
     def load(self):
         """
-        Load a VLM model from transformers.
+        Load the VLM model from Transformers.
         """
         
         print(f"Loading VLM model: {self.model_name}")
         print("This may take several minutes on first run...")
-            
-        # Load processor and model
+
+        # Load processor
         self.processor = AutoProcessor.from_pretrained(
             self.model_name,
             trust_remote_code=True
         )
-        
+
         # Configuration options for model loading
         model_kwargs = {
             "trust_remote_code": True,
-            "torch_dtype": torch.bfloat16 if self.device == 'cuda' else torch.float32
         }
+        
+        # Handle torch_dtype vs dtype deprecation
+        if self.device == 'cuda':
+            if self.config.get('use_dtype_param', False):
+                model_kwargs['dtype'] = torch.bfloat16
+            else:
+                model_kwargs['torch_dtype'] = torch.bfloat16
+        else:
+            if self.config.get('use_dtype_param', False):
+                model_kwargs['dtype'] = torch.float32
+            else:
+                model_kwargs['torch_dtype'] = torch.float32
         
         # Add optional config parameters
         if self.config.get('device_map'):
@@ -65,18 +77,45 @@ class VLMHTRTask(BaseHTR):
         if self.config.get('attn_implementation'):
             model_kwargs['attn_implementation'] = self.config['attn_implementation']
         
-        self.model = AutoModelForImageTextToText.from_pretrained(
-            self.model_name,
-            **model_kwargs
-        )
+        # Determine which Auto class to use
+        model_class_name = self.config.get('model_class', None)
+        
+        if model_class_name == 'AutoModel':
+            # Explicitement demandé d'utiliser AutoModel
+            print("Using AutoModel (explicitly specified)")
+            self.model = AutoModel.from_pretrained(
+                self.model_name,
+                **model_kwargs
+            )
+        elif model_class_name == 'AutoModelForImageTextToText':
+            # Explicitement demandé d'utiliser AutoModelForImageTextToText
+            print("Using AutoModelForImageTextToText (explicitly specified)")
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                self.model_name,
+                **model_kwargs
+            )
+        else:
+            # Auto-détection
+            if is_supported_by_auto_image_text(self.model_name):
+                print("Using AutoModelForImageTextToText (auto-detected)")
+                self.model = AutoModelForImageTextToText.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
+            else:
+                print("Model not supported by AutoModelForImageTextToText, using AutoModel")
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
         
         # Move to device if not using device_map
         if not self.config.get('device_map'):
             self.model.to(self.device)
         
         self.model.eval()
+        
         print(f"Model loaded successfully on {self.device}")
-
     
     def _recognize_single_image(self, image_path):
         """
