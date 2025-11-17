@@ -94,21 +94,20 @@ def is_supported_by_auto_image_text(model_name_or_path):
         
         supported_models = get_supported_vision_models()
         
-        # Vérification directe
         if model_type in supported_models:
             print(f"  -> Direct match in supported models")
             return True
         
-        # Normaliser et vérifier
         normalized_type = normalize_model_type(model_type)
         print(f"  -> Normalized to: '{normalized_type}'")
         
-        if normalized_type in supported_models:
+        normalized_supported = {normalize_model_type(m) for m in supported_models}
+        
+        if normalized_type in normalized_supported:
             print(f"  -> Match after normalization!")
             return True
         
         print(f"  -> No match found")
-        print(f"  -> Supported models: {sorted(supported_models)}")
         return False
         
     except Exception as e:
