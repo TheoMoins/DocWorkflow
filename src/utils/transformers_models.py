@@ -61,10 +61,29 @@ def is_supported_by_auto_image_text(model_name_or_path):
         
         if model_type:
             supported_models = get_supported_vision_models()
-            return model_type in supported_models
+            
+            # Debug: afficher le model_type détecté
+            print(f"Detected model_type: '{model_type}'")
+            
+            # Vérification directe
+            if model_type in supported_models:
+                return True
+            
+            # Vérification avec normalisation (remplacer _ par - et vice versa)
+            model_type_normalized = model_type.replace('_', '-')
+            if model_type_normalized in supported_models:
+                print(f"Matched with normalized name: '{model_type_normalized}'")
+                return True
+            
+            model_type_with_underscore = model_type.replace('-', '_')
+            if model_type_with_underscore in supported_models:
+                print(f"Matched with underscore name: '{model_type_with_underscore}'")
+                return True
         
         return False
         
     except Exception as e:
         print(f"Could not determine model type: {e}")
+        import traceback
+        traceback.print_exc()
         return False
