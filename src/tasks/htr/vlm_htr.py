@@ -10,7 +10,7 @@ import torch
 import gc
 
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
-from utils.transformers_models import is_supported_by_auto_image_text
+from src.utils.transformers_models import is_supported_by_auto_image_text
 from qwen_vl_utils import process_vision_info
 
 class VLMHTRTask(BaseHTR):
