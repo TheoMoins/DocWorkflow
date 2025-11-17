@@ -1,5 +1,5 @@
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel, AutoConfig
-import torch
+import re
 
 
 def get_supported_vision_models():
@@ -54,8 +54,11 @@ def normalize_model_type(model_type):
     if not model_type:
         return None
     
-    # Remplacer _ par -
-    normalized = model_type.replace('_', '-')
+    normalized = model_type
+    normalized = re.sub(r'(\d)_(\d)', r'\1.\2', normalized)
+    
+    # Remplacer les _ restants par -
+    normalized = normalized.replace('_', '-')
     
     # Enlever les suffixes connus
     for suffix in ['-text', '-vision', '-chat', '-instruct', '-model']:
@@ -101,18 +104,11 @@ def is_supported_by_auto_image_text(model_name_or_path):
         print(f"  -> Normalized to: '{normalized_type}'")
         
         if normalized_type in supported_models:
-            print(f"  -> Match after normalization")
+            print(f"  -> Match after normalization!")
             return True
         
-        # Vérification partielle (pour gérer les variations)
-        for supported_model in supported_models:
-            # qwen2.5-vl matche qwen2-5-vl, etc.
-            if (normalized_type.startswith(supported_model) or 
-                supported_model.startswith(normalized_type)):
-                print(f"  -> Partial match with '{supported_model}'")
-                return True
-        
-        print(f"  -> No match found, will use AutoModel")
+        print(f"  -> No match found")
+        print(f"  -> Supported models: {sorted(supported_models)}")
         return False
         
     except Exception as e:
