@@ -13,6 +13,13 @@ from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from src.utils.transformers_models import is_supported_by_auto_image_text
 from qwen_vl_utils import process_vision_info
 
+from unsloth import FastVisionModel
+from unsloth.trainer import UnslothVisionDataCollator
+from transformers import TrainingArguments
+from trl import SFTTrainer
+from datasets import Dataset
+import pandas as pd
+
 class VLMHTRTask(BaseHTR):
     """
     HTR implementation using CHURRO VLM.
@@ -21,20 +28,38 @@ class VLMHTRTask(BaseHTR):
     
     def __init__(self, config):
         super().__init__(config)
-        
-        # Model config
+
         self.model_name = config.get('model_name', 'stanford-oval/churro-3B')
         self.name = "HTR_" + self.model_name.split('/')[-1]
         self.max_new_tokens = config.get('max_new_tokens', 512)
         self.batch_size = config.get('batch_size', 1)
+        
+        self.prompt = config.get('prompt',
+                                 "You are an expert in transcription of historical documents from various languages. "
+                                 "Your task is to extract the full text from a given page."
+                                 "Use exactly ONE line break between each line of text."
+                                )
 
-        # Prompt template
-        self.prompt = config.get(
-            'prompt',
-            "You are an expert in transcription of historical documents from various languages. "
-            "Your task is to extract the full text from a given page."
-            "Use exactly ONE line break between each line of text."
-        )
+        # Store all hyperparameters in a dictionary
+        self.hyperparams = {
+            # Model loading configuration
+            'use_dtype_param': config.get('use_dtype_param', False),
+            'device_map': config.get('device_map'),
+            'attn_implementation': config.get('attn_implementation'),
+            'model_class': config.get('model_class', None),
+
+            # Training hyperparameters
+            'use_4bit': config.get('use_4bit', False),
+            'lora_r': config.get('lora_r', 16),
+            'lora_dropout': config.get('lora_dropout', 0),
+            'use_rslora': config.get('use_rslora', False),
+            'output_dir': config.get('output_dir', f"src/tasks/htr/models/"),
+            'train_batch_size': config.get('train_batch_size', 1),
+            'warmup_ratio': config.get('warmup_ratio', 0.1),
+            'epochs': config.get('epochs', 3),
+            'learning_rate': config.get('learning_rate', 2e-4),
+            'weight_decay': config.get('weight_decay', 0.01),
+        }
 
         self.processor = None
         self.model = None
@@ -60,25 +85,25 @@ class VLMHTRTask(BaseHTR):
         
         # Handle torch_dtype vs dtype deprecation
         if self.device == 'cuda':
-            if self.config.get('use_dtype_param', False):
+            if self.hyperparams['use_dtype_param']:
                 model_kwargs['dtype'] = torch.bfloat16
             else:
                 model_kwargs['torch_dtype'] = torch.bfloat16
         else:
-            if self.config.get('use_dtype_param', False):
+            if self.hyperparams['use_dtype_param']:
                 model_kwargs['dtype'] = torch.float32
             else:
                 model_kwargs['torch_dtype'] = torch.float32
-        
+
         # Add optional config parameters
-        if self.config.get('device_map'):
-            model_kwargs['device_map'] = self.config['device_map']
-        
-        if self.config.get('attn_implementation'):
-            model_kwargs['attn_implementation'] = self.config['attn_implementation']
-        
+        if self.hyperparams['device_map']:
+            model_kwargs['device_map'] = self.hyperparams['device_map']
+
+        if self.hyperparams['attn_implementation']:
+            model_kwargs['attn_implementation'] = self.hyperparams['attn_implementation']
+
         # Determine which Auto class to use
-        model_class_name = self.config.get('model_class', None)
+        model_class_name = self.hyperparams['model_class']
         
         if model_class_name == 'AutoModel':
             # Explicitement demandé d'utiliser AutoModel
@@ -110,8 +135,7 @@ class VLMHTRTask(BaseHTR):
                 )
         
         # Move to device if not using device_map
-        if not self.config.get('device_map'):
-            self.model.to(self.device)
+        self.model.to(self.device)
         
         self.model.eval()
         
@@ -166,12 +190,6 @@ class VLMHTRTask(BaseHTR):
         generation_kwargs = {
             "max_new_tokens": self.max_new_tokens
         }
-        
-        # Add optional generation parameters
-        if self.config.get('temperature'):
-            generation_kwargs['temperature'] = self.config['temperature']
-        if self.config.get('top_p'):
-            generation_kwargs['top_p'] = self.config['top_p']
         
         with torch.no_grad():
             generated_ids = self.model.generate(
@@ -355,3 +373,171 @@ class VLMHTRTask(BaseHTR):
                 continue
         
         return results
+    
+
+    def train(self, data_path, seed=42):
+        """
+        Fine-tune the VLM model using Unsloth.
+        
+        Args:
+            data_path: Path to training data (directory with images and ALTO XML files)
+            seed: Random seed for reproducibility
+        """       
+        print(f"Starting VLM fine-tuning with Unsloth")
+        print(f"Model: {self.model_name}")
+        print(f"Data path: {data_path}")
+        
+        # Prepare training data
+        print("Preparing training data...")
+        training_samples = self._prepare_training_data(data_path)
+        
+        if not training_samples:
+            raise ValueError("No valid training samples found")
+        
+        print(f"Found {len(training_samples)} training samples")
+        
+        # Load model with Unsloth
+        print("Loading model with Unsloth...")
+        model, tokenizer = FastVisionModel.from_pretrained(
+            self.model_name,
+            load_in_4bit=self.hyperparams['use_4bit'],
+            use_gradient_checkpointing="unsloth",
+        )
+
+        # Configure LoRA
+        model = FastVisionModel.get_peft_model(
+            model,
+            target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
+                              "gate_proj", "up_proj", "down_proj",],
+            r=self.hyperparams['lora_r'],
+            lora_alpha=self.hyperparams['lora_r'],
+            lora_dropout=self.hyperparams['lora_dropout'],
+
+            use_rslora=self.hyperparams['use_rslora'],
+            loftq_config=None,
+        )
+
+        # Create dataset
+        dataset = Dataset.from_pandas(pd.DataFrame(training_samples))
+
+        # Training arguments
+        training_args = TrainingArguments(
+            output_dir=self.hyperparams['output_dir'],
+            per_device_train_batch_size=self.hyperparams['train_batch_size'],
+            warmup_ratio=self.hyperparams['warmup_ratio'],
+            num_train_epochs=self.hyperparams['epochs'],
+            learning_rate=self.hyperparams['learning_rate'],
+            weight_decay=self.hyperparams['weight_decay'],
+            seed=seed,
+            save_strategy="steps",
+            report_to="wandb" if self.use_wandb else "none",
+        )
+        
+        # Initialize trainer
+        trainer = SFTTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            args=training_args,
+            train_dataset=dataset,
+            dataset_text_field="text",
+            dataset_kwargs={"skip_prepare_dataset": True},
+            data_collator=UnslothVisionDataCollator(model, tokenizer),
+            max_seq_length=self.hyperparams['max_seq_length'],
+        )
+        
+        # Start training
+        print("Starting training...")
+        trainer.train()
+        
+        # Save the fine-tuned model
+        output_dir = training_args.output_dir
+        print(f"Saving fine-tuned model to {output_dir}")
+        
+        model.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}")
+        tokenizer.save_pretrained(f"{output_dir}/final_model")
+        
+        
+        print(f"Training complete! Model saved to {output_dir}")
+        
+        # Clean up
+        del model, tokenizer, trainer
+        gc.collect()
+        if self.device == 'cuda':
+            torch.cuda.empty_cache()
+
+    def _prepare_training_data(self, data_path):
+        """
+        Prepare training data from ALTO XML files and images.
+        
+        Args:
+            data_path: Directory containing images and ALTO XML files
+            
+        Returns:
+            List of training samples with conversation format
+        """
+        
+        samples = []
+        
+        # Find all ALTO XML files
+        xml_files = glob.glob(os.path.join(data_path, "*.xml"))
+        
+        for xml_path in xml_files:
+            try:
+                # Extract ground truth text from ALTO
+                text = self._extract_text_from_alto(xml_path)
+                
+                if not text or not text.strip():
+                    continue
+                
+                # Find corresponding image
+                base_name = Path(xml_path).stem
+                image_path = None
+                
+                for ext in ['.jpg', '.jpeg', '.png', '.tif', '.tiff']:
+                    potential_path = os.path.join(data_path, base_name + ext)
+                    if os.path.exists(potential_path):
+                        image_path = potential_path
+                        break
+                
+                if not image_path:
+                    print(f"Warning: No image found for {xml_path}")
+                    continue
+                
+                # Load image
+                image = Image.open(image_path).convert("RGB")
+                
+                # Create conversation format for training
+                conversation = {
+                    "image": image,
+                    "messages": [
+                        {
+                            "role": "user", 
+                            "content": [
+                                {"type": "image"},
+                                {"type": "text", "text": self.prompt}
+                            ]
+                        },
+                        {
+                            "role": "assistant",
+                            "content": text
+                        }
+                    ]
+                }
+                
+                # Convert to format expected by trainer
+                sample = {
+                    "image": image,
+                    "text": self.processor.apply_chat_template(
+                        conversation["messages"],
+                        tokenize=False,
+                        add_generation_prompt=False
+                    )
+                }
+                
+                samples.append(sample)
+                
+            except Exception as e:
+                print(f"Error processing {xml_path}: {e}")
+                continue
+        
+        return samples

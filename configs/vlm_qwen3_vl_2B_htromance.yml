@@ -12,7 +12,7 @@ tasks:
     type: VLMHTR
     config:
       model_name: "Qwen/Qwen3-VL-2B-Instruct"
-      max_new_tokens: 512    
+      max_new_tokens: 1024    
       batch_size: 10
       prompt: > 
         You are a paleographer specializing in medieval languages like Middle and Old French, 

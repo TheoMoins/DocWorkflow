@@ -62,6 +62,9 @@ dependencies = [
     # VLM
     "qwen-vl-utils>=0.0.1"
     "transformers>=4.55.0"
+
+    # Unsloth
+    "unsloth>=2024.11.7"
 ]
 
 [project.optional-dependencies]
