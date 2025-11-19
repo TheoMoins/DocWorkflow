@@ -484,14 +484,6 @@ class VLMHTRTask(BaseHTR):
             List of training samples with conversation format
         """
         
-        # Load processor if not already loaded
-        if self.processor is None:
-            print("Loading processor for data preparation...")
-            self.processor = AutoProcessor.from_pretrained(
-                self.model_name,
-                trust_remote_code=True
-            )
-        
         samples = []
         
         # Find all ALTO XML files
@@ -518,37 +510,27 @@ class VLMHTRTask(BaseHTR):
                 print(f"Warning: No image found for {xml_path}")
                 continue
             
-            # Load image
+            # Load image as PIL object
             image = Image.open(image_path).convert("RGB")
             
-            # Create conversation format for training
-            conversation = {
-                "image": image,
-                "messages": [
-                    {
-                        "role": "user", 
-                        "content": [
-                            {"type": "image"},
-                            {"type": "text", "text": self.prompt}
-                        ]
-                    },
-                    {
-                        "role": "assistant",
-                        "content": text
-                    }
-                ]
-            }
+            # Create conversation format exactly as in Unsloth docs
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self.prompt},
+                        {"type": "image", "image": image}
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": text}
+                    ]
+                }
+            ]
             
-            # Convert to format expected by trainer
-            sample = {
-                "image": image,
-                "text": self.processor.apply_chat_template(
-                    conversation["messages"],
-                    tokenize=False,
-                    add_generation_prompt=False
-                )
-            }
-            
-            samples.append(sample)
+            # Store in the format expected by Unsloth
+            samples.append({"messages": conversation})
         
         return samples
