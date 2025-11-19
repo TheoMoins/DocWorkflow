@@ -46,6 +46,7 @@ class VLMHTRTask(BaseHTR):
             'lora_r': config.get('lora_r', 16),
             'lora_dropout': config.get('lora_dropout', 0),
             'use_rslora': config.get('use_rslora', False),
+            'max_seq_length': config.get('max_seq_length', 4096),
             'output_dir': config.get('output_dir', f"src/tasks/htr/models/"),
             'train_batch_size': config.get('train_batch_size', 1),
             'warmup_ratio': config.get('warmup_ratio', 0.1),
