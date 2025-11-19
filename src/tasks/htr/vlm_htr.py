@@ -443,6 +443,12 @@ class VLMHTRTask(BaseHTR):
                         
             def _formatting_func(example):
                 messages = example["messages"]
+                if self.processor is None:
+                    print("Loading processor for data preparation...")
+                    self.processor = AutoProcessor.from_pretrained(
+                        self.model_name,
+                        trust_remote_code=True
+                    )
                 
                 # Apply chat template
                 text = self.processor.apply_chat_template(
