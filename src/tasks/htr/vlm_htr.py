@@ -13,13 +13,6 @@ from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from src.utils.transformers_models import is_supported_by_auto_image_text
 from qwen_vl_utils import process_vision_info
 
-from unsloth import FastVisionModel
-from unsloth.trainer import UnslothVisionDataCollator
-from transformers import TrainingArguments
-from trl import SFTTrainer
-from datasets import Dataset
-import pandas as pd
-
 class VLMHTRTask(BaseHTR):
     """
     HTR implementation using CHURRO VLM.
@@ -383,87 +376,102 @@ class VLMHTRTask(BaseHTR):
             data_path: Path to training data (directory with images and ALTO XML files)
             seed: Random seed for reproducibility
         """       
-        print(f"Starting VLM fine-tuning with Unsloth")
-        print(f"Model: {self.model_name}")
-        print(f"Data path: {data_path}")
-        
-        # Prepare training data
-        print("Preparing training data...")
-        training_samples = self._prepare_training_data(data_path)
-        
-        if not training_samples:
-            raise ValueError("No valid training samples found")
-        
-        print(f"Found {len(training_samples)} training samples")
-        
-        # Load model with Unsloth
-        print("Loading model with Unsloth...")
-        model, tokenizer = FastVisionModel.from_pretrained(
-            self.model_name,
-            load_in_4bit=self.hyperparams['use_4bit'],
-            use_gradient_checkpointing="unsloth",
-        )
 
-        # Configure LoRA
-        model = FastVisionModel.get_peft_model(
-            model,
-            target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                              "gate_proj", "up_proj", "down_proj",],
-            r=self.hyperparams['lora_r'],
-            lora_alpha=self.hyperparams['lora_r'],
-            lora_dropout=self.hyperparams['lora_dropout'],
+        print(f"To train this model, you must change the environnement to vlm-training:")
+        print(f"\n  source envs/vlm-training/bin/activate")        
+        response = input("Would you like to launch training now? (y/n): ")
 
-            use_rslora=self.hyperparams['use_rslora'],
-            loftq_config=None,
-        )
+        if response.lower() == 'y':
 
-        # Create dataset
-        dataset = Dataset.from_pandas(pd.DataFrame(training_samples))
+            from unsloth import FastVisionModel
+            from unsloth.trainer import UnslothVisionDataCollator
+            from transformers import TrainingArguments
+            from trl import SFTTrainer
+            from datasets import Dataset
+            import pandas as pd
 
-        # Training arguments
-        training_args = TrainingArguments(
-            output_dir=self.hyperparams['output_dir'],
-            per_device_train_batch_size=self.hyperparams['train_batch_size'],
-            warmup_ratio=self.hyperparams['warmup_ratio'],
-            num_train_epochs=self.hyperparams['epochs'],
-            learning_rate=self.hyperparams['learning_rate'],
-            weight_decay=self.hyperparams['weight_decay'],
-            seed=seed,
-            save_strategy="steps",
-            report_to="wandb" if self.use_wandb else "none",
-        )
-        
-        # Initialize trainer
-        trainer = SFTTrainer(
-            model=model,
-            tokenizer=tokenizer,
-            args=training_args,
-            train_dataset=dataset,
-            dataset_text_field="text",
-            dataset_kwargs={"skip_prepare_dataset": True},
-            data_collator=UnslothVisionDataCollator(model, tokenizer),
-            max_seq_length=self.hyperparams['max_seq_length'],
-        )
-        
-        # Start training
-        print("Starting training...")
-        trainer.train()
-        
-        # Save the fine-tuned model
-        output_dir = training_args.output_dir
-        print(f"Saving fine-tuned model to {output_dir}")
-        
-        model.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
-        tokenizer.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
-        
-        
-        print(f"Training complete! Model saved to {output_dir}")
-        
-        # Clean up
-        del model, tokenizer, trainer
-        gc.collect()
-        if self.device == 'cuda':
-            torch.cuda.empty_cache()
+
+            print(f"Starting VLM fine-tuning with Unsloth")
+            print(f"Model: {self.model_name}")
+            print(f"Data path: {data_path}")
+            
+            # Prepare training data
+            print("Preparing training data...")
+            training_samples = self._prepare_training_data(data_path)
+            
+            if not training_samples:
+                raise ValueError("No valid training samples found")
+            
+            print(f"Found {len(training_samples)} training samples")
+            
+            # Load model with Unsloth
+            print("Loading model with Unsloth...")
+            model, tokenizer = FastVisionModel.from_pretrained(
+                self.model_name,
+                load_in_4bit=self.hyperparams['use_4bit'],
+                use_gradient_checkpointing="unsloth",
+            )
+
+            # Configure LoRA
+            model = FastVisionModel.get_peft_model(
+                model,
+                target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
+                                "gate_proj", "up_proj", "down_proj",],
+                r=self.hyperparams['lora_r'],
+                lora_alpha=self.hyperparams['lora_r'],
+                lora_dropout=self.hyperparams['lora_dropout'],
+
+                use_rslora=self.hyperparams['use_rslora'],
+                loftq_config=None,
+            )
+
+            # Create dataset
+            dataset = Dataset.from_pandas(pd.DataFrame(training_samples))
+
+            # Training arguments
+            training_args = TrainingArguments(
+                output_dir=self.hyperparams['output_dir'],
+                per_device_train_batch_size=self.hyperparams['train_batch_size'],
+                warmup_ratio=self.hyperparams['warmup_ratio'],
+                num_train_epochs=self.hyperparams['epochs'],
+                learning_rate=self.hyperparams['learning_rate'],
+                weight_decay=self.hyperparams['weight_decay'],
+                seed=seed,
+                save_strategy="steps",
+                report_to="wandb" if self.use_wandb else "none",
+            )
+            
+            # Initialize trainer
+            trainer = SFTTrainer(
+                model=model,
+                tokenizer=tokenizer,
+                args=training_args,
+                train_dataset=dataset,
+                dataset_text_field="text",
+                dataset_kwargs={"skip_prepare_dataset": True},
+                data_collator=UnslothVisionDataCollator(model, tokenizer),
+                max_seq_length=self.hyperparams['max_seq_length'],
+            )
+            
+            # Start training
+            print("Starting training...")
+            trainer.train()
+            
+            # Save the fine-tuned model
+            output_dir = training_args.output_dir
+            print(f"Saving fine-tuned model to {output_dir}")
+            
+            model.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
+            tokenizer.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
+            
+            
+            print(f"Training complete! Model saved to {output_dir}")
+            
+            # Clean up
+            del model, tokenizer, trainer
+            gc.collect()
+            if self.device == 'cuda':
+                torch.cuda.empty_cache()
 
     def _prepare_training_data(self, data_path):
         """
