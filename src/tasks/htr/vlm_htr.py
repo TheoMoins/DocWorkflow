@@ -440,15 +440,27 @@ class VLMHTRTask(BaseHTR):
                 save_strategy="steps",
                 report_to="wandb" if self.use_wandb else "none",
             )
-            
+                        
+            def _formatting_func(example):
+                messages = example["messages"]
+                
+                # Apply chat template
+                text = self.processor.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=False
+                )
+                
+                return {"text": text, "images": messages}
+
             # Initialize trainer
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
-                train_dataset=converted_dataset,  # Directement la liste
+                train_dataset=converted_dataset,
+                formatting_func=_formatting_func,
                 data_collator=UnslothVisionDataCollator(model, tokenizer),
-                max_seq_length=self.hyperparams['max_seq_length'],
             )
             
             # Start training
