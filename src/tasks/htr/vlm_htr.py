@@ -412,6 +412,7 @@ class VLMHTRTask(BaseHTR):
             model, tokenizer = FastVisionModel.from_pretrained(
                 self.model_name,
                 load_in_4bit=self.hyperparams['use_4bit'],
+                full_finetuning=False,
                 use_gradient_checkpointing="unsloth",
             )
 
