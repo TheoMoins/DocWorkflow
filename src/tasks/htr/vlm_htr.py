@@ -368,7 +368,7 @@ class VLMHTRTask(BaseHTR):
         return results
     
 
-    def train(self, data_path, seed=42):
+    def train(self, data_path=None, seed=42):
         """
         Fine-tune the VLM model using Unsloth.
         
@@ -390,19 +390,21 @@ class VLMHTRTask(BaseHTR):
             from datasets import Dataset
             import pandas as pd
 
-
+            if not data_path:
+                raise ValueError("Training data path is required")
+            
             print(f"Starting VLM fine-tuning with Unsloth")
             print(f"Model: {self.model_name}")
             print(f"Data path: {data_path}")
             
             # Prepare training data
             print("Preparing training data...")
-            training_samples = self._prepare_training_data(data_path)
+            converted_dataset = self._prepare_training_data(data_path)
             
-            if not training_samples:
+            if not converted_dataset:
                 raise ValueError("No valid training samples found")
             
-            print(f"Found {len(training_samples)} training samples")
+            print(f"Found {len(converted_dataset)} training samples")
             
             # Load model with Unsloth
             print("Loading model with Unsloth...")
@@ -425,9 +427,6 @@ class VLMHTRTask(BaseHTR):
                 loftq_config=None,
             )
 
-            # Create dataset
-            dataset = Dataset.from_pandas(pd.DataFrame(training_samples))
-
             # Training arguments
             training_args = TrainingArguments(
                 output_dir=self.hyperparams['output_dir'],
@@ -446,9 +445,7 @@ class VLMHTRTask(BaseHTR):
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
-                train_dataset=dataset,
-                dataset_text_field="text",
-                dataset_kwargs={"skip_prepare_dataset": True},
+                train_dataset=converted_dataset,  # Directement la liste
                 data_collator=UnslothVisionDataCollator(model, tokenizer),
                 max_seq_length=self.hyperparams['max_seq_length'],
             )
