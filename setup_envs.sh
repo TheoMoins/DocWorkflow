@@ -17,9 +17,12 @@ source envs/vlm-training/bin/activate
 # Install unsloth and dependencies
 pip install --upgrade pip
 pip install torch torchvision torchaudio
-pip install unsloth
+pip install unsloth qwen-vl-utils
 pip install --no-deps trl peft accelerate bitsandbytes
-pip install transformers datasets pandas pyyaml lxml pillow
+pip install transformers datasets pandas pyyaml lxml pillow 
+pip install matplotlib click tabulate jiwer
+
+pip install -e . --no-deps 
 
 deactivate
 

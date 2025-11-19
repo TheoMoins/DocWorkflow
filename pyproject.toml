@@ -18,7 +18,6 @@ keywords = [
     "alto-xml"
 ]
 
-# Dépendances minimales requises
 dependencies = [
     # Deep Learning & Computer Vision
     "torch>=2.1.0,<2.5.0",
@@ -82,9 +81,10 @@ gpu = [
     "nvidia-cudnn-cu12",
 ]
 
-# Toutes les dépendances optionnelles
-all = [
-    "docworkflow[dev,gpu]",
+# Dépendances pour l'entraînement VLM (environnement séparé)
+train = [
+    "unsloth[cu121-torch240]>=2024.11",
+    "datasets>=2.14.0",
 ]
 
 [project.scripts]
