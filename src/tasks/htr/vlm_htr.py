@@ -453,8 +453,8 @@ class VLMHTRTask(BaseHTR):
         output_dir = training_args.output_dir
         print(f"Saving fine-tuned model to {output_dir}")
         
-        model.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}")
-        tokenizer.save_pretrained(f"{output_dir}/final_model")
+        model.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
+        tokenizer.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
         
         
         print(f"Training complete! Model saved to {output_dir}")
@@ -482,62 +482,57 @@ class VLMHTRTask(BaseHTR):
         xml_files = glob.glob(os.path.join(data_path, "*.xml"))
         
         for xml_path in xml_files:
-            try:
-                # Extract ground truth text from ALTO
-                text = self._extract_text_from_alto(xml_path)
-                
-                if not text or not text.strip():
-                    continue
-                
-                # Find corresponding image
-                base_name = Path(xml_path).stem
-                image_path = None
-                
-                for ext in ['.jpg', '.jpeg', '.png', '.tif', '.tiff']:
-                    potential_path = os.path.join(data_path, base_name + ext)
-                    if os.path.exists(potential_path):
-                        image_path = potential_path
-                        break
-                
-                if not image_path:
-                    print(f"Warning: No image found for {xml_path}")
-                    continue
-                
-                # Load image
-                image = Image.open(image_path).convert("RGB")
-                
-                # Create conversation format for training
-                conversation = {
-                    "image": image,
-                    "messages": [
-                        {
-                            "role": "user", 
-                            "content": [
-                                {"type": "image"},
-                                {"type": "text", "text": self.prompt}
-                            ]
-                        },
-                        {
-                            "role": "assistant",
-                            "content": text
-                        }
-                    ]
-                }
-                
-                # Convert to format expected by trainer
-                sample = {
-                    "image": image,
-                    "text": self.processor.apply_chat_template(
-                        conversation["messages"],
-                        tokenize=False,
-                        add_generation_prompt=False
-                    )
-                }
-                
-                samples.append(sample)
-                
-            except Exception as e:
-                print(f"Error processing {xml_path}: {e}")
+            # Extract ground truth text from ALTO
+            text = self._extract_text_from_alto(xml_path)
+            
+            if not text or not text.strip():
                 continue
+            
+            # Find corresponding image
+            base_name = Path(xml_path).stem
+            image_path = None
+            
+            for ext in ['.jpg', '.jpeg', '.png', '.tif', '.tiff']:
+                potential_path = os.path.join(data_path, base_name + ext)
+                if os.path.exists(potential_path):
+                    image_path = potential_path
+                    break
+            
+            if not image_path:
+                print(f"Warning: No image found for {xml_path}")
+                continue
+            
+            # Load image
+            image = Image.open(image_path).convert("RGB")
+            
+            # Create conversation format for training
+            conversation = {
+                "image": image,
+                "messages": [
+                    {
+                        "role": "user", 
+                        "content": [
+                            {"type": "image"},
+                            {"type": "text", "text": self.prompt}
+                        ]
+                    },
+                    {
+                        "role": "assistant",
+                        "content": text
+                    }
+                ]
+            }
+            
+            # Convert to format expected by trainer
+            sample = {
+                "image": image,
+                "text": self.processor.apply_chat_template(
+                    conversation["messages"],
+                    tokenize=False,
+                    add_generation_prompt=False
+                )
+            }
+            
+            samples.append(sample)
         
         return samples
