@@ -441,8 +441,8 @@ class VLMHTRTask(BaseHTR):
                 report_to="wandb" if self.use_wandb else "none",
             )
                         
-            def _formatting_func(example):
-                messages = example["messages"]
+            def _formatting_func(examples):
+                messages = examples["messages"]
                 if self.processor is None:
                     print("Loading processor for data preparation...")
                     self.processor = AutoProcessor.from_pretrained(
@@ -450,14 +450,15 @@ class VLMHTRTask(BaseHTR):
                         trust_remote_code=True
                     )
                 
-                # Apply chat template
-                text = self.processor.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=False
-                )
+                texts = []
+                for message in messages:
+                    texts.append(self.processor.apply_chat_template(
+                                    messages,
+                                    tokenize=False,
+                                    add_generation_prompt=False
+                                ))
                 
-                return {"text": text, "images": messages}
+                return { "text" : texts, }
 
             # Initialize trainer
             trainer = SFTTrainer(
