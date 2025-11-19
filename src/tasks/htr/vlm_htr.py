@@ -458,7 +458,7 @@ class VLMHTRTask(BaseHTR):
                                     add_generation_prompt=False
                                 ))
                 
-                return { "text" : texts, }
+                return texts
 
             # Initialize trainer
             trainer = SFTTrainer(
