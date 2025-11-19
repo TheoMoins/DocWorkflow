@@ -484,6 +484,14 @@ class VLMHTRTask(BaseHTR):
             List of training samples with conversation format
         """
         
+        # Load processor if not already loaded
+        if self.processor is None:
+            print("Loading processor for data preparation...")
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_name,
+                trust_remote_code=True
+            )
+        
         samples = []
         
         # Find all ALTO XML files
