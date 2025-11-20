@@ -407,6 +407,9 @@ class VLMHTRTask(BaseHTR):
             
             print(f"Found {len(converted_dataset)} training samples")
             
+            # Convert list to Dataset object
+            train_dataset = Dataset.from_list(converted_dataset)
+            
             # Load model with Unsloth
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
@@ -423,11 +426,12 @@ class VLMHTRTask(BaseHTR):
                 r=self.hyperparams['lora_r'],
                 lora_alpha=self.hyperparams['lora_r'],
                 lora_dropout=self.hyperparams['lora_dropout'],
-
+                
                 use_rslora=self.hyperparams['use_rslora'],
+                use_dora=False,
                 loftq_config=None,
             )
-
+            
             # Training arguments
             training_args = TrainingArguments(
                 output_dir=self.hyperparams['output_dir'],
@@ -438,36 +442,28 @@ class VLMHTRTask(BaseHTR):
                 weight_decay=self.hyperparams['weight_decay'],
                 seed=seed,
                 save_strategy="steps",
+                save_steps=500,
+                save_total_limit=2,
                 report_to="wandb" if self.use_wandb else "none",
+                logging_steps=10,
+                optim="adamw_8bit",
+                lr_scheduler_type="cosine",
+                remove_unused_columns=False,
+                dataset_text_field="messages",  # Important pour Unsloth
             )
-                        
-            def _formatting_func(examples):
-                messages = examples["messages"]
-                if self.processor is None:
-                    print("Loading processor for data preparation...")
-                    self.processor = AutoProcessor.from_pretrained(
-                        self.model_name,
-                        trust_remote_code=True
-                    )
-                
-                texts = []
-                for message in messages:
-                    texts.append(self.processor.apply_chat_template(
-                                    messages,
-                                    tokenize=False,
-                                    add_generation_prompt=False
-                                ))
-                
-                return texts
-
-            # Initialize trainer
+            
+            # Initialize trainer sans formatting_func
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
-                train_dataset=converted_dataset,
-                formatting_func=_formatting_func,
+                train_dataset=train_dataset,  # Dataset object au lieu de list
+                dataset_text_field="messages",
+                dataset_kwargs={"skip_prepare_dataset": True},
                 data_collator=UnslothVisionDataCollator(model, tokenizer),
+                max_seq_length=2048,
+                dataset_num_proc=2,
+                packing=False,  # Important pour vision
             )
             
             # Start training
