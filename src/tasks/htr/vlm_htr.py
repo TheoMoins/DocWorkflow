@@ -494,7 +494,6 @@ class VLMHTRTask(BaseHTR):
                 optim="adamw_8bit",
                 lr_scheduler_type="cosine",
                 remove_unused_columns=False,
-                dataset_text_field="messages",  # Important pour Unsloth
             )
             
             # Initialize trainer
