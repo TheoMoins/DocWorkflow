@@ -384,12 +384,12 @@ class VLMHTRTask(BaseHTR):
 
         if response.lower() == 'y':
 
-            from unsloth import FastVisionModel
+            from unsloth import FastVisionModel, is_bf16_supported
             from unsloth.trainer import UnslothVisionDataCollator
             from transformers import TrainingArguments
             from trl import SFTTrainer
-            from datasets import Dataset
-            import pandas as pd
+            from datasets import Dataset, Features, Value
+            from PIL import Image
 
             if not data_path:
                 raise ValueError("Training data path is required")
@@ -400,15 +400,60 @@ class VLMHTRTask(BaseHTR):
             
             # Prepare training data
             print("Preparing training data...")
-            converted_dataset = self._prepare_training_data(data_path)
+            samples = self._prepare_training_data(data_path)
             
-            if not converted_dataset:
+            if not samples:
                 raise ValueError("No valid training samples found")
             
-            print(f"Found {len(converted_dataset)} training samples")
+            print(f"Found {len(samples)} training samples")
             
-            # Convert list to Dataset object
-            train_dataset = Dataset.from_list(converted_dataset)
+            # Create Dataset with lazy loading
+            features = Features({
+                'image_path': Value('string'),
+                'text': Value('string'),
+                'prompt': Value('string')
+            })
+            
+            train_dataset = Dataset.from_list(samples, features=features)
+            
+            # Function to load images on-the-fly during training
+            def prepare_messages(examples):
+                """Load images and format messages for a batch"""
+                messages_list = []
+                
+                for idx in range(len(examples['image_path'])):
+                    # Load image only when needed
+                    image = Image.open(examples['image_path'][idx]).convert("RGB")
+                    
+                    # Create conversation format
+                    conversation = [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": examples['prompt'][idx]},
+                                {"type": "image", "image": image}
+                            ]
+                        },
+                        {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": examples['text'][idx]}
+                            ]
+                        }
+                    ]
+                    
+                    messages_list.append({"messages": conversation})
+                
+                return {"messages": messages_list}
+            
+            # Apply the transformation with batching for efficiency
+            train_dataset = train_dataset.map(
+                prepare_messages,
+                batched=True,
+                batch_size=1,  # Process one at a time to avoid memory issues
+                remove_columns=train_dataset.column_names,  # Remove original columns
+                desc="Preparing messages"
+            )
             
             # Load model with Unsloth
             print("Loading model with Unsloth...")
@@ -452,18 +497,17 @@ class VLMHTRTask(BaseHTR):
                 dataset_text_field="messages",  # Important pour Unsloth
             )
             
-            # Initialize trainer sans formatting_func
+            # Initialize trainer
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
-                train_dataset=train_dataset,  # Dataset object au lieu de list
+                train_dataset=train_dataset,
                 dataset_text_field="messages",
                 dataset_kwargs={"skip_prepare_dataset": True},
                 data_collator=UnslothVisionDataCollator(model, tokenizer),
                 max_seq_length=2048,
-                dataset_num_proc=2,
-                packing=False,  # Important pour vision
+                packing=False,
             )
             
             # Start training
@@ -488,13 +532,13 @@ class VLMHTRTask(BaseHTR):
 
     def _prepare_training_data(self, data_path):
         """
-        Prepare training data from ALTO XML files and images.
+        Prepare training data paths without loading images in memory.
         
         Args:
             data_path: Directory containing images and ALTO XML files
             
         Returns:
-            List of training samples with conversation format
+            List of training samples with image paths (not loaded images)
         """
         
         samples = []
@@ -523,27 +567,11 @@ class VLMHTRTask(BaseHTR):
                 print(f"Warning: No image found for {xml_path}")
                 continue
             
-            # Load image as PIL object
-            image = Image.open(image_path).convert("RGB")
-            
-            # Create conversation format exactly as in Unsloth docs
-            conversation = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": self.prompt},
-                        {"type": "image", "image": image}
-                    ]
-                },
-                {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "text", "text": text}
-                    ]
-                }
-            ]
-            
-            # Store in the format expected by Unsloth
-            samples.append({"messages": conversation})
+            # Store only the path, not the loaded image
+            samples.append({
+                "image_path": image_path,
+                "text": text,
+                "prompt": self.prompt
+            })    
         
         return samples
