@@ -462,7 +462,7 @@ class VLMHTRTask(BaseHTR):
                     add_generation_prompt=False
                 )
                 
-                return text
+                return [text]
 
             trainer = SFTTrainer(
                 model=model,
