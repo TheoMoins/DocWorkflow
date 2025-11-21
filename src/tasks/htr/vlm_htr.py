@@ -396,13 +396,24 @@ class VLMHTRTask(BaseHTR):
             print(f"Model: {self.model_name}")
             
             print("Preparing training data...")
-            samples = self._prepare_training_data(data_path)
+            converted_dataset_list = self._prepare_training_data(data_path)
             
-            if not samples:
+            if not converted_dataset_list:
                 raise ValueError("No valid training samples found")
             
-            print(f"Found {len(samples)} training samples")
-            converted_dataset = Dataset.from_list(samples)
+            print(f"Found {len(converted_dataset_list)} training samples")
+            def load_image_in_conversation(example):
+                for message in example["messages"]:
+                    if message["role"] == "user":
+                        for item in message["content"]:
+                            if item.get("type") == "image" and "image" in item:
+                                # Charger l'image PIL si c'est un chemin
+                                if isinstance(item["image"], str):
+                                    item["image"] = Image.open(item["image"])
+                return example
+
+            converted_dataset = Dataset.from_list(converted_dataset_list)
+            converted_dataset = converted_dataset.map(load_image_in_conversation)
 
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
@@ -510,7 +521,7 @@ class VLMHTRTask(BaseHTR):
                     "role": "user",
                     "content": [
                         {"type": "text", "text": self.prompt},
-                        {"type": "image", "image_path": Image.open(image_path)}
+                        {"type": "image", "image_path": image_path}
                     ]
                 },
                 {
