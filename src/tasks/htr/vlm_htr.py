@@ -510,7 +510,7 @@ class VLMHTRTask(BaseHTR):
                     "role": "user",
                     "content": [
                         {"type": "text", "text": self.prompt},
-                        {"type": "image", "image": image_path}
+                        {"type": "image", "image_url": image_path}
                     ]
                 },
                 {
