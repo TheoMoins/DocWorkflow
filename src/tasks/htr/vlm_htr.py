@@ -385,7 +385,7 @@ class VLMHTRTask(BaseHTR):
         if response.lower() == 'y':
             from unsloth import FastVisionModel
             from unsloth.trainer import UnslothVisionDataCollator
-            from transformers import TrainingArguments
+            from transformers import TrainingArguments, AutoProcessor
             from trl import SFTTrainer
             from datasets import Dataset
 
@@ -394,7 +394,6 @@ class VLMHTRTask(BaseHTR):
             
             print(f"Starting VLM fine-tuning with Unsloth")
             print(f"Model: {self.model_name}")
-            print(f"Data path: {data_path}")
             
             print("Preparing training data...")
             samples = self._prepare_training_data(data_path)
@@ -424,6 +423,7 @@ class VLMHTRTask(BaseHTR):
                 loftq_config=None,
             )
 
+            # Training arguments
             training_args = TrainingArguments(
                 output_dir=self.hyperparams['output_dir'],
                 per_device_train_batch_size=self.hyperparams['train_batch_size'],
@@ -436,6 +436,7 @@ class VLMHTRTask(BaseHTR):
                 save_steps=500,
                 logging_steps=10,
                 report_to="wandb" if self.use_wandb else "none",
+                remove_unused_columns=False,
             )
             
             if self.processor is None:
@@ -445,40 +446,34 @@ class VLMHTRTask(BaseHTR):
                     trust_remote_code=True
                 )
             
-            def formatting_func(examples):
-                image = Image.open(examples["image_path"]).convert("RGB")
+            class CustomVisionDataCollator(UnslothVisionDataCollator):
+                """Custom collator that loads images from paths."""
                 
-                conversation = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": examples["prompt"]},
-                            {"type": "image", "image": image}
-                        ]
-                    },
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {"type": "text", "text": examples["text"]}
-                        ]
-                    }
-                ]
-                
-                text = self.processor.apply_chat_template(
-                    conversation,
-                    tokenize=False,
-                    add_generation_prompt=False
-                )
-                
-                return [text]
-
+                def __call__(self, features):
+                    # Charger les images depuis les chemins
+                    for feature in features:
+                        if "messages" in feature:
+                            messages = feature["messages"]
+                            for message in messages:
+                                if isinstance(message, dict) and message.get("role") == "user":
+                                    for content in message.get("content", []):
+                                        if isinstance(content, dict) and content.get("type") == "image":
+                                            if "image_path" in content:
+                                                # Charger l'image
+                                                image = Image.open(content["image_path"]).convert("RGB")
+                                                content["image"] = image
+                                                del content["image_path"]
+                    
+                    # Appeler le collator parent
+                    return super().__call__(features)
+            
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
                 train_dataset=train_dataset,
-                formatting_func=formatting_func,
-                data_collator=UnslothVisionDataCollator(model, tokenizer),
+                dataset_text_field="messages",
+                data_collator=CustomVisionDataCollator(model, tokenizer),
             )
             
             print("Starting training...")
@@ -503,8 +498,8 @@ class VLMHTRTask(BaseHTR):
 
     def _prepare_training_data(self, data_path):
         """
-        Prepare training data WITHOUT complex nested structures.
-        Store only simple data types that Dataset can handle.
+        Prepare training data with conversation structure.
+        Images are stored as PATHS, not loaded objects.
         """
         samples = []
         xml_files = glob.glob(os.path.join(data_path, "*.xml"))
@@ -529,10 +524,22 @@ class VLMHTRTask(BaseHTR):
                 print(f"Warning: No image found for {xml_path}")
                 continue
             
-            samples.append({
-                "image_path": image_path,
-                "text": text,
-                "prompt": self.prompt
-            })
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self.prompt},
+                        {"type": "image", "image_path": image_path}  # Juste le chemin
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": text}
+                    ]
+                }
+            ]
+            
+            samples.append({"messages": conversation})
         
         return samples

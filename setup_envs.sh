@@ -20,7 +20,7 @@ pip install torch torchvision torchaudio
 pip install unsloth qwen-vl-utils
 pip install --no-deps trl peft accelerate bitsandbytes
 pip install transformers datasets pandas pyyaml lxml pillow 
-pip install matplotlib click tabulate jiwer
+pip install matplotlib click tabulate jiwer wandb
 
 pip install -e . --no-deps 
 
