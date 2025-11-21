@@ -396,15 +396,13 @@ class VLMHTRTask(BaseHTR):
             print(f"Model: {self.model_name}")
             
             print("Preparing training data...")
-            samples = self._prepare_training_data(data_path)
+            converted_dataset = self._prepare_training_data(data_path)
             
-            if not samples:
+            if not converted_dataset:
                 raise ValueError("No valid training samples found")
             
-            print(f"Found {len(samples)} training samples")
-            
-            train_dataset = Dataset.from_list(samples)
-            
+            print(f"Found {len(converted_dataset)} training samples")
+                        
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
                 self.model_name,
@@ -440,6 +438,7 @@ class VLMHTRTask(BaseHTR):
                 dataset_kwargs = {"skip_prepare_dataset": True},
                 dataset_num_proc = 4,
                 max_seq_length = self.hyperparams['max_seq_length'],
+                dataset_text_field="",
             )
             
             if self.processor is None:
@@ -453,8 +452,7 @@ class VLMHTRTask(BaseHTR):
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
-                train_dataset=train_dataset,
-                dataset_text_field="messages",
+                train_dataset=converted_dataset,
                 data_collator=UnslothVisionDataCollator(model, tokenizer),
             )
             
@@ -511,7 +509,7 @@ class VLMHTRTask(BaseHTR):
                     "role": "user",
                     "content": [
                         {"type": "text", "text": self.prompt},
-                        {"type": "image", "image_path": image_path}  # Juste le chemin
+                        {"type": "image", "image_path": Image.open(image_path)}
                     ]
                 },
                 {
