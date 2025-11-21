@@ -428,13 +428,15 @@ class VLMHTRTask(BaseHTR):
                 
                 return {"messages": conversation}
 
+            converted_dataset = [format_conversation(sample) for sample in samples]
+
             # Create dataset and map to conversation format
-            converted_dataset = Dataset.from_list(samples)
-            converted_dataset = converted_dataset.map(
-                format_conversation,
-                remove_columns=["image_path", "text"],
-                desc="Loading images and formatting conversations"
-            )
+            # converted_dataset = Dataset.from_list(samples)
+            # converted_dataset = converted_dataset.map(
+            #     format_conversation,
+            #     remove_columns=["image_path", "text"],
+            #     desc="Loading images and formatting conversations"
+            # )
 
 
             print("Loading model with Unsloth...")
