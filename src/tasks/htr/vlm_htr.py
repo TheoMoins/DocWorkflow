@@ -402,7 +402,38 @@ class VLMHTRTask(BaseHTR):
                 raise ValueError("No valid training samples found")
             
             print(f"Found {len(samples)} training samples")
+
+
+            def format_conversation(example):
+                """Load image and format as conversation"""
+                image = Image.open(example["image_path"]).convert("RGB")
+                
+                conversation = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": self.prompt},
+                            {"type": "image", "image": image}
+                        ]
+                    },
+                    {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": example["text"]}
+                        ]
+                    }
+                ]
+                
+                return {"messages": conversation}
+
+            # Create dataset and map to conversation format
             converted_dataset = Dataset.from_list(samples)
+            converted_dataset = converted_dataset.map(
+                format_conversation,
+                remove_columns=["image_path", "text"],
+                desc="Loading images and formatting conversations"
+            )
+
 
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
@@ -480,7 +511,7 @@ class VLMHTRTask(BaseHTR):
     def _prepare_training_data(self, data_path):
         """
         Prepare training data with conversation structure.
-        Images are stored as PATHS, not loaded objects.
+        Returns a list of image paths and texts, images will be loaded on-the-fly.
         """
         samples = []
         xml_files = glob.glob(os.path.join(data_path, "*.xml"))
@@ -505,22 +536,10 @@ class VLMHTRTask(BaseHTR):
                 print(f"Warning: No image found for {xml_path}")
                 continue
             
-            conversation = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": self.prompt},
-                        {"type": "image", "image_url": image_path}
-                    ]
-                },
-                {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "text", "text": text}
-                    ]
-                }
-            ]
-            
-            samples.append({"messages": conversation})
+            # Store the path for now
+            samples.append({
+                "image_path": image_path,
+                "text": text
+            })
         
         return samples
