@@ -383,13 +383,11 @@ class VLMHTRTask(BaseHTR):
         response = input("Would you like to launch training now? (y/n): ")
 
         if response.lower() == 'y':
-
-            from unsloth import FastVisionModel, is_bf16_supported
+            from unsloth import FastVisionModel
             from unsloth.trainer import UnslothVisionDataCollator
             from transformers import TrainingArguments
             from trl import SFTTrainer
-            from datasets import Dataset, Features, Value
-            from PIL import Image
+            from datasets import Dataset
 
             if not data_path:
                 raise ValueError("Training data path is required")
@@ -398,7 +396,6 @@ class VLMHTRTask(BaseHTR):
             print(f"Model: {self.model_name}")
             print(f"Data path: {data_path}")
             
-            # Prepare training data
             print("Preparing training data...")
             samples = self._prepare_training_data(data_path)
             
@@ -407,55 +404,8 @@ class VLMHTRTask(BaseHTR):
             
             print(f"Found {len(samples)} training samples")
             
-            # Create Dataset with lazy loading
-            features = Features({
-                'image_path': Value('string'),
-                'text': Value('string'),
-                'prompt': Value('string')
-            })
+            train_dataset = Dataset.from_list(samples)
             
-            train_dataset = Dataset.from_list(samples, features=features)
-            
-            # Function to load images on-the-fly during training
-            def prepare_messages(examples):
-                """Load images and format messages for a batch"""
-                messages_list = []
-                
-                for idx in range(len(examples['image_path'])):
-                    # Load image only when needed
-                    image = Image.open(examples['image_path'][idx]).convert("RGB")
-                    
-                    # Create conversation format
-                    conversation = [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": examples['prompt'][idx]},
-                                {"type": "image", "image": image}
-                            ]
-                        },
-                        {
-                            "role": "assistant",
-                            "content": [
-                                {"type": "text", "text": examples['text'][idx]}
-                            ]
-                        }
-                    ]
-                    
-                    messages_list.append({"messages": conversation})
-                
-                return {"messages": messages_list}
-            
-            # Apply the transformation with batching for efficiency
-            train_dataset = train_dataset.map(
-                prepare_messages,
-                batched=True,
-                batch_size=1,  # Process one at a time to avoid memory issues
-                remove_columns=train_dataset.column_names,  # Remove original columns
-                desc="Preparing messages"
-            )
-            
-            # Load model with Unsloth
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
                 self.model_name,
@@ -463,21 +413,17 @@ class VLMHTRTask(BaseHTR):
                 use_gradient_checkpointing="unsloth",
             )
 
-            # Configure LoRA
             model = FastVisionModel.get_peft_model(
                 model,
-                target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                                "gate_proj", "up_proj", "down_proj",],
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                            "gate_proj", "up_proj", "down_proj"],
                 r=self.hyperparams['lora_r'],
                 lora_alpha=self.hyperparams['lora_r'],
                 lora_dropout=self.hyperparams['lora_dropout'],
-                
                 use_rslora=self.hyperparams['use_rslora'],
-                use_dora=False,
                 loftq_config=None,
             )
-            
-            # Training arguments
+
             training_args = TrainingArguments(
                 output_dir=self.hyperparams['output_dir'],
                 per_device_train_batch_size=self.hyperparams['train_batch_size'],
@@ -488,71 +434,82 @@ class VLMHTRTask(BaseHTR):
                 seed=seed,
                 save_strategy="steps",
                 save_steps=500,
-                save_total_limit=2,
-                report_to="wandb" if self.use_wandb else "none",
                 logging_steps=10,
-                optim="adamw_8bit",
-                lr_scheduler_type="cosine",
-                remove_unused_columns=False,
+                report_to="wandb" if self.use_wandb else "none",
             )
             
-            # Initialize trainer
+            if self.processor is None:
+                print("Loading processor for data preparation...")
+                self.processor = AutoProcessor.from_pretrained(
+                    self.model_name,
+                    trust_remote_code=True
+                )
+            
+            def formatting_func(examples):
+                """Format conversations for training"""
+                texts = []
+                for conversation in examples["messages"]:
+                    for content_item in conversation[0]["content"]:
+                        if content_item["type"] == "image":
+                            image_path = content_item["image_path"]
+                            content_item["image"] = Image.open(image_path).convert("RGB")
+                    
+                    # Appliquer le template
+                    text = self.processor.apply_chat_template(
+                        conversation,
+                        tokenize=False,
+                        add_generation_prompt=False
+                    )
+                    texts.append(text)
+                
+                return texts
+
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
                 train_dataset=train_dataset,
-                dataset_text_field="messages",
-                dataset_kwargs={"skip_prepare_dataset": True},
+                formatting_func=formatting_func,
                 data_collator=UnslothVisionDataCollator(model, tokenizer),
-                max_seq_length=2048,
-                packing=False,
             )
             
-            # Start training
             print("Starting training...")
             trainer.train()
             
-            # Save the fine-tuned model
-            output_dir = training_args.output_dir
-            print(f"Saving fine-tuned model to {output_dir}")
+            output_dir = self.hyperparams['output_dir']
+            model_name = self.model_name.split('/')[-1]
+            save_path = f"{output_dir}/{model_name}-finetuned"
             
-            model.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
-            tokenizer.save_pretrained(f"{output_dir}/{self.model_name.split('/')[-1]}-unsloth")
+            print(f"Saving fine-tuned model to {save_path}")
+            model.save_pretrained(save_path)
+            tokenizer.save_pretrained(save_path)
             
+            print(f"Training complete! Model saved to {save_path}")
             
-            print(f"Training complete! Model saved to {output_dir}")
-            
-            # Clean up
+            # Cleanup
             del model, tokenizer, trainer
             gc.collect()
             if self.device == 'cuda':
                 torch.cuda.empty_cache()
 
+
     def _prepare_training_data(self, data_path):
         """
-        Prepare training data paths without loading images in memory.
+        Prepare training data WITHOUT loading images into memory.
         
-        Args:
-            data_path: Directory containing images and ALTO XML files
-            
         Returns:
-            List of training samples with image paths (not loaded images)
+            List of samples with IMAGE PATHS (not loaded images)
         """
-        
         samples = []
-        
-        # Find all ALTO XML files
         xml_files = glob.glob(os.path.join(data_path, "*.xml"))
         
         for xml_path in xml_files:
-            # Extract ground truth text from ALTO
+            # Extract text
             text = self._extract_text_from_alto(xml_path)
-            
             if not text or not text.strip():
                 continue
             
-            # Find corresponding image
+            # Find image
             base_name = Path(xml_path).stem
             image_path = None
             
@@ -566,11 +523,22 @@ class VLMHTRTask(BaseHTR):
                 print(f"Warning: No image found for {xml_path}")
                 continue
             
-            # Store only the path, not the loaded image
-            samples.append({
-                "image_path": image_path,
-                "text": text,
-                "prompt": self.prompt
-            })    
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self.prompt},
+                        {"type": "image", "image_path": image_path}
+                    ]
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": text}
+                    ]
+                }
+            ]
+            
+            samples.append({"messages": conversation})
         
         return samples
