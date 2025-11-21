@@ -446,23 +446,23 @@ class VLMHTRTask(BaseHTR):
                 )
             
             def formatting_func(examples):
-                """Format conversations for training"""
-                texts = []
-                for conversation in examples["messages"]:
-                    for content_item in conversation[0]["content"]:
-                        if content_item["type"] == "image":
-                            image_path = content_item["image_path"]
-                            content_item["image"] = Image.open(image_path).convert("RGB")
-                    
-                    # Appliquer le template
-                    text = self.processor.apply_chat_template(
-                        conversation,
-                        tokenize=False,
-                        add_generation_prompt=False
-                    )
-                    texts.append(text)
+                conversation = examples["messages"]
                 
-                return texts
+                for message in conversation:
+                    if message["role"] == "user":
+                        for content_item in message["content"]:
+                            if content_item.get("type") == "image" and "image_path" in content_item:
+                                image_path = content_item["image_path"]
+                                content_item["image"] = Image.open(image_path).convert("RGB")
+                                del content_item["image_path"]
+                
+                text = self.processor.apply_chat_template(
+                    conversation,
+                    tokenize=False,
+                    add_generation_prompt=False
+                )
+                
+                return text
 
             trainer = SFTTrainer(
                 model=model,
