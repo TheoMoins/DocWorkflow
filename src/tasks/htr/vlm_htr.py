@@ -385,7 +385,7 @@ class VLMHTRTask(BaseHTR):
         if response.lower() == 'y':
             from unsloth import FastVisionModel
             from unsloth.trainer import UnslothVisionDataCollator
-            from transformers import TrainingArguments, AutoProcessor
+            from transformers import AutoProcessor
             from trl import SFTTrainer, SFTConfig
             from datasets import Dataset
 
@@ -404,16 +404,13 @@ class VLMHTRTask(BaseHTR):
             print(f"Found {len(samples)} training samples")
 
 
-            def format_conversation(example):
-                """Load image and format as conversation"""
-                image = Image.open(example["image_path"]).convert("RGB")
-                
+            def format_conversation(example):                
                 conversation = [
                     {
                         "role": "user",
                         "content": [
                             {"type": "text", "text": self.prompt},
-                            {"type": "image", "image": image}
+                            {"type": "image", "image": example["image_path"]}
                         ]
                     },
                     {
