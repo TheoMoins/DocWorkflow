@@ -53,6 +53,7 @@ class VLMHTRTask(BaseHTR):
             'epochs': config.get('epochs', 3),
             'learning_rate': config.get('learning_rate', 2e-4),
             'weight_decay': config.get('weight_decay', 0.01),
+            'dataset_num_proc': config.get('dataset_num_proc', 1)
         }
 
         self.processor = None
@@ -465,7 +466,7 @@ class VLMHTRTask(BaseHTR):
                 report_to="wandb" if self.use_wandb else "none",
                 remove_unused_columns=False,
                 dataset_kwargs = {"skip_prepare_dataset": True},
-                dataset_num_proc = 4,
+                dataset_num_proc = self.hyperparams['dataset_num_proc'],
                 max_seq_length = self.hyperparams['max_seq_length'],
                 dataset_text_field="",
             )
@@ -482,7 +483,7 @@ class VLMHTRTask(BaseHTR):
                 tokenizer=tokenizer,
                 args=training_args,
                 train_dataset=converted_dataset,
-                data_collator=UnslothVisionDataCollator(model, tokenizer),
+                data_collator=UnslothVisionDataCollator(model, self.processor),
             )
             
             print("Starting training...")
