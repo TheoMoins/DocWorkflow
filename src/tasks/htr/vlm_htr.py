@@ -396,13 +396,14 @@ class VLMHTRTask(BaseHTR):
             print(f"Model: {self.model_name}")
             
             print("Preparing training data...")
-            converted_dataset = self._prepare_training_data(data_path)
+            samples = self._prepare_training_data(data_path)
             
-            if not converted_dataset:
+            if not samples:
                 raise ValueError("No valid training samples found")
             
-            print(f"Found {len(converted_dataset)} training samples")
-                        
+            print(f"Found {len(samples)} training samples")
+            converted_dataset = Dataset.from_list(samples)
+
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
                 self.model_name,
