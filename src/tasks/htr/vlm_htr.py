@@ -386,7 +386,7 @@ class VLMHTRTask(BaseHTR):
             from unsloth import FastVisionModel
             from unsloth.trainer import UnslothVisionDataCollator
             from transformers import TrainingArguments, AutoProcessor
-            from trl import SFTTrainer
+            from trl import SFTTrainer, SFTConfig
             from datasets import Dataset
 
             if not data_path:
@@ -424,7 +424,7 @@ class VLMHTRTask(BaseHTR):
             )
 
             # Training arguments
-            training_args = TrainingArguments(
+            training_args = SFTConfig(
                 output_dir=self.hyperparams['output_dir'],
                 per_device_train_batch_size=self.hyperparams['train_batch_size'],
                 warmup_ratio=self.hyperparams['warmup_ratio'],
