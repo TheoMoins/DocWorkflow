@@ -71,7 +71,8 @@ class VLMHTRTask(BaseHTR):
         # Load processor
         self.processor = AutoProcessor.from_pretrained(
             self.model_name,
-            trust_remote_code=True
+            trust_remote_code=True,
+            use_fast=False
         )
 
         # Configuration options for model loading
@@ -406,21 +407,23 @@ class VLMHTRTask(BaseHTR):
             print(f"Found {len(samples)} training samples")
 
 
-            def format_conversation(example):                
+            def format_conversation(example):
+                img = Image.open(example["image_path"]).convert("RGB")
+
                 conversation = [
                     {
                         "role": "user",
                         "content": [
                             {"type": "text", "text": self.prompt},
-                            {"type": "image", "image": example["image_path"]}
-                        ]
+                            {"type": "image", "image": img},
+                        ],
                     },
                     {
                         "role": "assistant",
                         "content": [
                             {"type": "text", "text": example["text"]}
-                        ]
-                    }
+                        ],
+                    },
                 ]
                 
                 return {"messages": conversation}
@@ -477,7 +480,8 @@ class VLMHTRTask(BaseHTR):
                 print("Loading processor for data preparation...")
                 self.processor = AutoProcessor.from_pretrained(
                     self.model_name,
-                    trust_remote_code=True
+                    trust_remote_code=True,
+                    use_fast=False
                 )
                         
             trainer = SFTTrainer(
