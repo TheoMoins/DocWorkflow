@@ -5,7 +5,7 @@ use_wandb: true
 wandb_project: "HTR-comparison" 
 
 data:
-  train: "../data/HTRomance-french/data/train"
+  train: "../data/HTRomance-french/data/minitrain"
   valid: "../data/HTRomance-french/data/valid"
   test: "../data/HTRomance-french/data/test"
 
