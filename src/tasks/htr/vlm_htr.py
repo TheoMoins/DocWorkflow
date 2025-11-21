@@ -49,6 +49,7 @@ class VLMHTRTask(BaseHTR):
             'max_seq_length': config.get('max_seq_length', 4096),
             'output_dir': config.get('output_dir', f"src/tasks/htr/models/"),
             'train_batch_size': config.get('train_batch_size', 1),
+            'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 4),
             'warmup_ratio': config.get('warmup_ratio', 0.1),
             'epochs': config.get('epochs', 3),
             'learning_rate': config.get('learning_rate', 2e-4),
@@ -455,6 +456,7 @@ class VLMHTRTask(BaseHTR):
             training_args = SFTConfig(
                 output_dir=self.hyperparams['output_dir'],
                 per_device_train_batch_size=self.hyperparams['train_batch_size'],
+                gradient_accumulation_steps=self.hyperparams['gradient_accumulation_steps'],
                 warmup_ratio=self.hyperparams['warmup_ratio'],
                 num_train_epochs=self.hyperparams['epochs'],
                 learning_rate=self.hyperparams['learning_rate'],
