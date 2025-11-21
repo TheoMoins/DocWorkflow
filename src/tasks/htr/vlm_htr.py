@@ -446,15 +446,23 @@ class VLMHTRTask(BaseHTR):
                 )
             
             def formatting_func(examples):
-                conversation = examples["messages"]
+                image = Image.open(examples["image_path"]).convert("RGB")
                 
-                for message in conversation:
-                    if message["role"] == "user":
-                        for content_item in message["content"]:
-                            if content_item.get("type") == "image" and "image_path" in content_item:
-                                image_path = content_item["image_path"]
-                                content_item["image"] = Image.open(image_path).convert("RGB")
-                                del content_item["image_path"]
+                conversation = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": examples["prompt"]},
+                            {"type": "image", "image": image}
+                        ]
+                    },
+                    {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": examples["text"]}
+                        ]
+                    }
+                ]
                 
                 text = self.processor.apply_chat_template(
                     conversation,
@@ -495,10 +503,8 @@ class VLMHTRTask(BaseHTR):
 
     def _prepare_training_data(self, data_path):
         """
-        Prepare training data WITHOUT loading images into memory.
-        
-        Returns:
-            List of samples with IMAGE PATHS (not loaded images)
+        Prepare training data WITHOUT complex nested structures.
+        Store only simple data types that Dataset can handle.
         """
         samples = []
         xml_files = glob.glob(os.path.join(data_path, "*.xml"))
@@ -523,22 +529,10 @@ class VLMHTRTask(BaseHTR):
                 print(f"Warning: No image found for {xml_path}")
                 continue
             
-            conversation = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": self.prompt},
-                        {"type": "image", "image_path": image_path}
-                    ]
-                },
-                {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "text", "text": text}
-                    ]
-                }
-            ]
-            
-            samples.append({"messages": conversation})
+            samples.append({
+                "image_path": image_path,
+                "text": text,
+                "prompt": self.prompt
+            })
         
         return samples
