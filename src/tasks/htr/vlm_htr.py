@@ -437,6 +437,9 @@ class VLMHTRTask(BaseHTR):
                 logging_steps=10,
                 report_to="wandb" if self.use_wandb else "none",
                 remove_unused_columns=False,
+                dataset_kwargs = {"skip_prepare_dataset": True},
+                dataset_num_proc = 4,
+                max_seq_length = self.hyperparams['max_seq_length'],
             )
             
             if self.processor is None:
@@ -445,35 +448,14 @@ class VLMHTRTask(BaseHTR):
                     self.model_name,
                     trust_remote_code=True
                 )
-            
-            class CustomVisionDataCollator(UnslothVisionDataCollator):
-                """Custom collator that loads images from paths."""
-                
-                def __call__(self, features):
-                    # Charger les images depuis les chemins
-                    for feature in features:
-                        if "messages" in feature:
-                            messages = feature["messages"]
-                            for message in messages:
-                                if isinstance(message, dict) and message.get("role") == "user":
-                                    for content in message.get("content", []):
-                                        if isinstance(content, dict) and content.get("type") == "image":
-                                            if "image_path" in content:
-                                                # Charger l'image
-                                                image = Image.open(content["image_path"]).convert("RGB")
-                                                content["image"] = image
-                                                del content["image_path"]
-                    
-                    # Appeler le collator parent
-                    return super().__call__(features)
-            
+                        
             trainer = SFTTrainer(
                 model=model,
                 tokenizer=tokenizer,
                 args=training_args,
                 train_dataset=train_dataset,
                 dataset_text_field="messages",
-                data_collator=CustomVisionDataCollator(model, tokenizer),
+                data_collator=UnslothVisionDataCollator(model, tokenizer),
             )
             
             print("Starting training...")
