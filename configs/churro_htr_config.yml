@@ -1,7 +1,7 @@
 run_name: "churro_htr_minitest"
 output_dir: "results"
 device: "cuda"
-use_wandb: false
+use_wandb: true
 
 data:
   test: "../data/HTRomance-french/data/test"
@@ -14,6 +14,7 @@ tasks:
       max_new_tokens: 512    
       batch_size: 10
       prompt: > 
+        You are a paleographer specializing in french medieval languages
         Follow these instructions:
 
         1. You will be provided with a scanned document page.
