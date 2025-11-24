@@ -561,7 +561,8 @@ class VLMHTRTask(BaseHTR):
             
             # Create inference config
             print("\nCreating inference configuration...")
-            config_path = self._create_finetuned_config(model_save_path)
+            test_path = '/'.join("../data/HTRomance-french/data/train".split('/')[:-1] + ['test'])
+            config_path = self._create_finetuned_config(model_save_path, test_path)
             
             print(f"\nTo run prediction with fine-tuned model:")
             print(f"   docworkflow -c {config_path} predict -t htr -d test")
@@ -609,7 +610,7 @@ class VLMHTRTask(BaseHTR):
         
         return samples
     
-    def _create_finetuned_config(self, output_dir, original_config_path=None):
+    def _create_finetuned_config(self, output_dir, test_path):
         """
         Create a configuration file for the fine-tuned model.
         
@@ -620,18 +621,16 @@ class VLMHTRTask(BaseHTR):
         Returns:
             Path to the created config file
         """
-        
-        print(self.config)
 
         # Create config for the fine-tuned model
         config = {
-            'run_name': f"{self.config.get('run_name', 'model')}_finetuned",
+            'run_name': f"{self.name}_finetuned",
             'output_dir': 'results',
             'device': self.config.get('device', 'cuda'),
             'use_wandb': self.config.get('use_wandb', False),
             'wandb_project': self.config.get('wandb_project', 'HTR-comparison'),
             'data': {
-                'test': self.config.get('data', {}).get('test', '../data/test/')
+                'test': test_path
             },
             'tasks': {
                 'htr': {
