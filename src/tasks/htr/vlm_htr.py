@@ -621,9 +621,8 @@ class VLMHTRTask(BaseHTR):
             Path to the created config file
         """
         
-        model_name = self.model_name.split('/')[-1]
-        finetuned_name = f"{model_name}-finetuned"
-        
+        print(self.config)
+
         # Create config for the fine-tuned model
         config = {
             'run_name': f"{self.config.get('run_name', 'model')}_finetuned",

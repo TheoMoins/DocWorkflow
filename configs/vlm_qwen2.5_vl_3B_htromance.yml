@@ -16,6 +16,17 @@ tasks:
       model_name: "Qwen/Qwen2.5-VL-3B-Instruct"
       max_new_tokens: 512    
       batch_size: 10
+      use_4bit: false
+      lora_r: 16
+      lora_dropout: 0
+      max_seq_length: 4096
+      train_batch_size: 1
+      gradient_accumulation_steps: 4
+      warmup_ratio: 0.1
+      epochs: 3
+      learning_rate: 2e-4
+      weight_decay: 0.01
+      dataset_num_proc: 1
       prompt: > 
         You are a paleographer specializing in medieval languages like Middle and Old French, 
         Middle Dutch, Catalan, Spanish, Navarese, Italian, Venitian, Old English, Latin. 
