@@ -4,7 +4,7 @@ device: "cuda"
 use_wandb: false
 
 data:
-  test: "../data/catmus/minitest/"
+  test: "../data/HTRomance-french/data/test"
 
 tasks:
   htr:
@@ -14,10 +14,18 @@ tasks:
       max_new_tokens: 512    
       batch_size: 10
       prompt: > 
-        You are a paleographer specializing in medieval languages like Middle and Old French, 
-        Middle Dutch, Catalan, Spanish, Navarese, Italian, Venitian, Old English, Latin. 
-        Transcribe ALL the main text from this image, line by line, from top to bottom.
-        Use exactly ONE line break between each line of text.
-        Do not include any other words or separator in your response.
-        Do not add text that are in the margins, like the page number.
-        
+        Follow these instructions:
+
+        1. You will be provided with a scanned document page.
+
+        2. Perform transcription on the main text from this image, line by line, from top to bottom.
+
+        3. If you encounter any non-text elements, simply skip them without attempting to describe them.
+
+        4. Do not modernize or standardize the text. For example, if the transcription is using "ſ" instead of "s" or "а" instead of "a", keep it that way.
+
+        5. When you come across text in languages other than English, transcribe it as accurately as possible without translation.
+
+        6. Do not include any other words or separator in your response.
+
+        Remember, your goal is to accurately transcribe the text from the scanned page as much as possible. Process the entire page, even if it contains a large amount of text, and provide clear, well-formatted output. Pay attention to the appropriate reading order and layout of the text.
