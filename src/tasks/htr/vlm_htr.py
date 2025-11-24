@@ -466,23 +466,6 @@ class VLMHTRTask(BaseHTR):
             
             print(f"Found {len(samples)} training samples")
 
-            print("\n" + "="*60)
-            print("CHECKING TRAINING DATA SAMPLES")
-            print("="*60)
-            
-            for i, sample in enumerate(samples[:3]):  # Inspecter 3 premiers exemples
-                print(f"\n--- Sample {i+1} ---")
-                print(f"Image: {sample['image_path']}")
-                print(f"Text length: {len(sample['text'])} chars")
-                print(f"Number of lines: {sample['text'].count(chr(10)) + 1}")
-                print(f"First 200 chars: {sample['text'][:200]}...")
-            
-            print("="*60 + "\n")
-            
-            response = input("Does this look correct? Continue training? (y/n): ")
-            if response.lower() != 'y':
-                return
-
 
             def format_conversation(example):
                 img = Image.open(example["image_path"]).convert("RGB")
@@ -647,9 +630,9 @@ class VLMHTRTask(BaseHTR):
             'use_wandb': self.config.get('use_wandb', False),
             'wandb_project': self.config.get('wandb_project', 'HTR-comparison'),
             'data': {
-                'train': global_path + 'train',
-                'valid': global_path + 'valid',
-                'test': global_path + 'test'
+                'train': global_path + '/train',
+                'valid': global_path + '/valid',
+                'test': global_path + '/test'
             },
             'tasks': {
                 'htr': {
