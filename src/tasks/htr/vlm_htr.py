@@ -476,7 +476,6 @@ class VLMHTRTask(BaseHTR):
                 print(f"Text length: {len(sample['text'])} chars")
                 print(f"Number of lines: {sample['text'].count(chr(10)) + 1}")
                 print(f"First 200 chars: {sample['text'][:200]}...")
-                print(f"Prompt: {sample['prompt'][:100]}...")
             
             print("="*60 + "\n")
             
