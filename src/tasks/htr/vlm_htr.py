@@ -466,6 +466,24 @@ class VLMHTRTask(BaseHTR):
             
             print(f"Found {len(samples)} training samples")
 
+            print("\n" + "="*60)
+            print("CHECKING TRAINING DATA SAMPLES")
+            print("="*60)
+            
+            for i, sample in enumerate(samples[:3]):  # Inspecter 3 premiers exemples
+                print(f"\n--- Sample {i+1} ---")
+                print(f"Image: {sample['image_path']}")
+                print(f"Text length: {len(sample['text'])} chars")
+                print(f"Number of lines: {sample['text'].count(chr(10)) + 1}")
+                print(f"First 200 chars: {sample['text'][:200]}...")
+                print(f"Prompt: {sample['prompt'][:100]}...")
+            
+            print("="*60 + "\n")
+            
+            response = input("Does this look correct? Continue training? (y/n): ")
+            if response.lower() != 'y':
+                return
+
 
             def format_conversation(example):
                 img = Image.open(example["image_path"]).convert("RGB")
@@ -489,25 +507,6 @@ class VLMHTRTask(BaseHTR):
                 return {"messages": conversation}
 
             converted_dataset = [format_conversation(sample) for sample in samples]
-
-
-            print("\n" + "="*60)
-            print("CHECKING TRAINING DATA SAMPLES")
-            print("="*60)
-            
-            for i, sample in enumerate(converted_dataset[:3]):  # Inspecter 3 premiers exemples
-                print(f"\n--- Sample {i+1} ---")
-                print(f"Image: {sample['image_path']}")
-                print(f"Text length: {len(sample['text'])} chars")
-                print(f"Number of lines: {sample['text'].count(chr(10)) + 1}")
-                print(f"First 200 chars: {sample['text'][:200]}...")
-                print(f"Prompt: {sample['prompt'][:100]}...")
-            
-            print("="*60 + "\n")
-            
-            response = input("Does this look correct? Continue training? (y/n): ")
-            if response.lower() != 'y':
-                return
 
 
             print("Loading model with Unsloth...")
