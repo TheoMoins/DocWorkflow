@@ -491,6 +491,25 @@ class VLMHTRTask(BaseHTR):
             converted_dataset = [format_conversation(sample) for sample in samples]
 
 
+            print("\n" + "="*60)
+            print("CHECKING TRAINING DATA SAMPLES")
+            print("="*60)
+            
+            for i, sample in enumerate(converted_dataset[:3]):  # Inspecter 3 premiers exemples
+                print(f"\n--- Sample {i+1} ---")
+                print(f"Image: {sample['image_path']}")
+                print(f"Text length: {len(sample['text'])} chars")
+                print(f"Number of lines: {sample['text'].count(chr(10)) + 1}")
+                print(f"First 200 chars: {sample['text'][:200]}...")
+                print(f"Prompt: {sample['prompt'][:100]}...")
+            
+            print("="*60 + "\n")
+            
+            response = input("Does this look correct? Continue training? (y/n): ")
+            if response.lower() != 'y':
+                return
+
+
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
                 self.model_name,
@@ -561,8 +580,8 @@ class VLMHTRTask(BaseHTR):
             
             # Create inference config
             print("\nCreating inference configuration...")
-            test_path = '/'.join("../data/HTRomance-french/data/train".split('/')[:-1] + ['test'])
-            config_path = self._create_finetuned_config(model_save_path, test_path)
+            global_path = '/'.join("../data/HTRomance-french/data/train".split('/')[:-1])
+            config_path = self._create_finetuned_config(model_save_path, global_path)
             
             print(f"\nTo run prediction with fine-tuned model:")
             print(f"   docworkflow -c {config_path} predict -t htr -d test")
@@ -610,7 +629,7 @@ class VLMHTRTask(BaseHTR):
         
         return samples
     
-    def _create_finetuned_config(self, output_dir, test_path):
+    def _create_finetuned_config(self, output_dir, global_path):
         """
         Create a configuration file for the fine-tuned model.
         
@@ -630,7 +649,9 @@ class VLMHTRTask(BaseHTR):
             'use_wandb': self.config.get('use_wandb', False),
             'wandb_project': self.config.get('wandb_project', 'HTR-comparison'),
             'data': {
-                'test': test_path
+                'train': global_path + 'train',
+                'valid': global_path + 'valid',
+                'test': global_path + 'test'
             },
             'tasks': {
                 'htr': {
