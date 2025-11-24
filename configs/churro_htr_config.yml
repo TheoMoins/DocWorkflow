@@ -2,6 +2,8 @@ run_name: "churro_htr_minitest"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
+wandb_project: "HTR-comparison" 
+
 
 data:
   test: "../data/HTRomance-french/data/test"
