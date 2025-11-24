@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import torch
 import gc
+import yaml
 
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from src.utils.transformers_models import is_supported_by_auto_image_text
@@ -47,7 +48,7 @@ class VLMHTRTask(BaseHTR):
             'lora_dropout': config.get('lora_dropout', 0),
             'use_rslora': config.get('use_rslora', False),
             'max_seq_length': config.get('max_seq_length', 4096),
-            'output_dir': config.get('output_dir', f"src/tasks/htr/models/"),
+            'output_dir': config.get('output_dir', f"src/tasks/htr/models"),
             'train_batch_size': config.get('train_batch_size', 1),
             'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 4),
             'warmup_ratio': config.get('warmup_ratio', 0.1),
@@ -59,77 +60,136 @@ class VLMHTRTask(BaseHTR):
 
         self.processor = None
         self.model = None
-    
+
     def load(self):
         """
         Load the VLM model from Transformers.
+        Supports both full models and LoRA adapters.
         """
         
         print(f"Loading VLM model: {self.model_name}")
         print("This may take several minutes on first run...")
 
-        # Load processor
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_name,
-            trust_remote_code=True,
-            use_fast=False
-        )
-
-        # Configuration options for model loading
-        model_kwargs = {
-            "trust_remote_code": True,
-        }
+        use_lora = self.config.get('use_lora_adapter', False)
         
-        # Handle torch_dtype vs dtype deprecation
-        if self.device == 'cuda':
-            if self.hyperparams['use_dtype_param']:
-                model_kwargs['dtype'] = torch.bfloat16
+        if use_lora: 
+            from peft import PeftModel
+            
+            base_model_name = self.config.get('base_model_name')
+            if not base_model_name:
+                raise ValueError("base_model_name must be specified when use_lora_adapter=true")
+            
+            print(f"Loading base model: {base_model_name}")
+            print(f"Loading LoRA adapter from: {self.model_name}")
+            
+            # Load processor from adapter directory or base model
+            try:
+                self.processor = AutoProcessor.from_pretrained(
+                    self.model_name,
+                    trust_remote_code=True
+                )
+            except:
+                self.processor = AutoProcessor.from_pretrained(
+                    base_model_name,
+                    trust_remote_code=True
+                )
+
+            # Configuration for base model loading
+            model_kwargs = {
+                "trust_remote_code": True,
+            }
+            
+            if self.device == 'cuda':
+                if self.hyperparams['use_dtype_param']:
+                    model_kwargs['dtype'] = torch.bfloat16
+                else:
+                    model_kwargs['torch_dtype'] = torch.bfloat16
             else:
-                model_kwargs['torch_dtype'] = torch.bfloat16
-        else:
-            if self.hyperparams['use_dtype_param']:
-                model_kwargs['dtype'] = torch.float32
+                if self.hyperparams['use_dtype_param']:
+                    model_kwargs['dtype'] = torch.float32
+                else:
+                    model_kwargs['torch_dtype'] = torch.float32
+
+            # Load base model
+            model_class_name = self.hyperparams['model_class']
+            
+            if model_class_name == 'AutoModel':
+                base_model = AutoModel.from_pretrained(base_model_name, **model_kwargs)
+            elif model_class_name == 'AutoModelForImageTextToText':
+                base_model = AutoModelForImageTextToText.from_pretrained(base_model_name, **model_kwargs)
             else:
-                model_kwargs['torch_dtype'] = torch.float32
-
-        # Add optional config parameters
-        if self.hyperparams['device_map']:
-            model_kwargs['device_map'] = self.hyperparams['device_map']
-
-        if self.hyperparams['attn_implementation']:
-            model_kwargs['attn_implementation'] = self.hyperparams['attn_implementation']
-
-        # Determine which Auto class to use
-        model_class_name = self.hyperparams['model_class']
-        
-        if model_class_name == 'AutoModel':
-            # Explicitement demandé d'utiliser AutoModel
-            print("Using AutoModel (explicitly specified)")
-            self.model = AutoModel.from_pretrained(
+                if is_supported_by_auto_image_text(base_model_name):
+                    base_model = AutoModelForImageTextToText.from_pretrained(base_model_name, **model_kwargs)
+                else:
+                    base_model = AutoModel.from_pretrained(base_model_name, **model_kwargs)
+            
+            # Load LoRA adapter
+            print("Loading LoRA adapter...")
+            self.model = PeftModel.from_pretrained(
+                base_model,
                 self.model_name,
-                **model_kwargs
+                is_trainable=False
             )
-        elif model_class_name == 'AutoModelForImageTextToText':
-            # Explicitement demandé d'utiliser AutoModelForImageTextToText
-            print("Using AutoModelForImageTextToText (explicitly specified)")
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                self.model_name,
-                **model_kwargs
-            )
+            
         else:
-            # Auto-détection
-            if is_supported_by_auto_image_text(self.model_name):
-                print("Using AutoModelForImageTextToText (auto-detected)")
+            # Load processor
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_name,
+                trust_remote_code=True
+            )
+
+            # Configuration options for model loading
+            model_kwargs = {
+                "trust_remote_code": True,
+            }
+            
+            # Handle torch_dtype vs dtype deprecation
+            if self.device == 'cuda':
+                if self.hyperparams['use_dtype_param']:
+                    model_kwargs['dtype'] = torch.bfloat16
+                else:
+                    model_kwargs['torch_dtype'] = torch.bfloat16
+            else:
+                if self.hyperparams['use_dtype_param']:
+                    model_kwargs['dtype'] = torch.float32
+                else:
+                    model_kwargs['torch_dtype'] = torch.float32
+
+            # Add optional config parameters
+            if self.hyperparams['device_map']:
+                model_kwargs['device_map'] = self.hyperparams['device_map']
+
+            if self.hyperparams['attn_implementation']:
+                model_kwargs['attn_implementation'] = self.hyperparams['attn_implementation']
+
+            # Determine which Auto class to use
+            model_class_name = self.hyperparams['model_class']
+            
+            if model_class_name == 'AutoModel':
+                print("Using AutoModel (explicitly specified)")
+                self.model = AutoModel.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
+            elif model_class_name == 'AutoModelForImageTextToText':
+                print("Using AutoModelForImageTextToText (explicitly specified)")
                 self.model = AutoModelForImageTextToText.from_pretrained(
                     self.model_name,
                     **model_kwargs
                 )
             else:
-                print("Model not supported by AutoModelForImageTextToText, using AutoModel")
-                self.model = AutoModel.from_pretrained(
-                    self.model_name,
-                    **model_kwargs
-                )
+                if is_supported_by_auto_image_text(self.model_name):
+                    print("Using AutoModelForImageTextToText (auto-detected)")
+                    self.model = AutoModelForImageTextToText.from_pretrained(
+                        self.model_name,
+                        **model_kwargs
+                    )
+                else:
+                    print("Model not supported by AutoModelForImageTextToText, using AutoModel")
+                    self.model = AutoModel.from_pretrained(
+                        self.model_name,
+                        **model_kwargs
+                    )
         
         # Move to device if not using device_map
         self.model.to(self.device)
@@ -212,9 +272,9 @@ class VLMHTRTask(BaseHTR):
         
         return output_text[0]
 
-    def _split_churro_output_into_lines(self, alto_path, text, image_path):
+    def _split_output_into_lines(self, alto_path, text, image_path):
         """
-        Split CHURRO's single-line output into multiple TextLines based on line breaks.
+        Split single-line output into multiple TextLines based on line breaks.
         Tries to match with existing layout structure if available.
         
         Args:
@@ -344,7 +404,7 @@ class VLMHTRTask(BaseHTR):
                     self._create_simple_alto_with_text(image_path, text, output_path)
                 
                 # Split CHURRO output into lines
-                self._split_churro_output_into_lines(output_path, text, image_path)
+                self._split_output_into_lines(output_path, text, image_path)
                 
                 results.append({
                     'file': image_path,
@@ -430,14 +490,6 @@ class VLMHTRTask(BaseHTR):
 
             converted_dataset = [format_conversation(sample) for sample in samples]
 
-            # Create dataset and map to conversation format
-            # converted_dataset = Dataset.from_list(samples)
-            # converted_dataset = converted_dataset.map(
-            #     format_conversation,
-            #     remove_columns=["image_path", "text"],
-            #     desc="Loading images and formatting conversations"
-            # )
-
 
             print("Loading model with Unsloth...")
             model, tokenizer = FastVisionModel.from_pretrained(
@@ -497,15 +549,22 @@ class VLMHTRTask(BaseHTR):
             print("Starting training...")
             trainer.train()
             
-            output_dir = self.hyperparams['output_dir']
-            model_name = self.model_name.split('/')[-1]
-            save_path = f"{output_dir}/{model_name}-finetuned"
+            output_dir = training_args.output_dir
+            model_save_path = f"{output_dir}/{self.model_name.split('/')[-1]}-finetuned"
             
-            print(f"Saving fine-tuned model to {save_path}")
-            model.save_pretrained(save_path)
-            tokenizer.save_pretrained(save_path)
+            print(f"Saving fine-tuned model to {model_save_path}")
             
-            print(f"Training complete! Model saved to {save_path}")
+            model.save_pretrained(model_save_path)
+            tokenizer.save_pretrained(model_save_path)
+            
+            print(f"Training complete! Model saved to {model_save_path}")
+            
+            # Create inference config
+            print("\nCreating inference configuration...")
+            config_path = self._create_finetuned_config(model_save_path)
+            
+            print(f"\nTo run prediction with fine-tuned model:")
+            print(f"   docworkflow -c {config_path} predict -t htr -d test")
             
             # Cleanup
             del model, tokenizer, trainer
@@ -549,3 +608,55 @@ class VLMHTRTask(BaseHTR):
             })
         
         return samples
+    
+    def _create_finetuned_config(self, output_dir, original_config_path=None):
+        """
+        Create a configuration file for the fine-tuned model.
+        
+        Args:
+            output_dir: Directory where the model was saved
+            original_config_path: Path to the original training config (optional)
+        
+        Returns:
+            Path to the created config file
+        """
+        
+        model_name = self.model_name.split('/')[-1]
+        finetuned_name = f"{model_name}-finetuned"
+        
+        # Create config for the fine-tuned model
+        config = {
+            'run_name': f"{self.config.get('run_name', 'model')}_finetuned",
+            'output_dir': 'results',
+            'device': self.config.get('device', 'cuda'),
+            'use_wandb': self.config.get('use_wandb', False),
+            'wandb_project': self.config.get('wandb_project', 'HTR-comparison'),
+            'data': {
+                'test': self.config.get('data', {}).get('test', '../data/test/')
+            },
+            'tasks': {
+                'htr': {
+                    'type': 'VLMHTR',
+                    'config': {
+                        'model_name': output_dir,
+                        'base_model_name': self.model_name,
+                        'use_lora_adapter': True,
+                        'max_new_tokens': self.max_new_tokens,
+                        'batch_size': self.batch_size,
+                        'prompt': self.prompt,
+                        **{k: v for k, v in self.hyperparams.items() 
+                        if k in ['use_dtype_param', 'device_map', 'attn_implementation', 'model_class']
+                        and v is not None}
+                    }
+                }
+            }
+        }
+        
+        # Save config in the model directory
+        model_config_path = Path(output_dir) / 'inference_config.yml'
+        with open(model_config_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        
+        print(f"\n Inference config saved to: {model_config_path}")
+        
+        return model_config_path
