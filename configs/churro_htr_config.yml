@@ -15,6 +15,17 @@ tasks:
       model_name: 'stanford-oval/churro-3B'
       max_new_tokens: 700       
       batch_size: 10
+      use_4bit: true
+      lora_r: 8
+      lora_dropout: 0.1
+      max_seq_length: 4096
+      train_batch_size: 4
+      gradient_accumulation_steps: 2
+      warmup_ratio: 0.1
+      epochs: 5
+      learning_rate: 0.0002
+      weight_decay: 0.01
+      dataset_num_proc: 4
       prompt: > 
         You are a paleographer specializing in french medieval languages
         Follow these instructions:

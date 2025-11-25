@@ -501,9 +501,9 @@ class VLMHTRTask(BaseHTR):
             model = FastVisionModel.get_peft_model(
                 model,
                 
-                finetune_vision_layers     = False, # False if not finetuning vision layers
+                finetune_vision_layers     = True, # False if not finetuning vision layers
                 finetune_language_layers   = True, # False if not finetuning language layers
-                finetune_attention_modules = False, # False if not finetuning attention layers
+                finetune_attention_modules = True, # False if not finetuning attention layers
                 finetune_mlp_modules       = True, # False if not finetuning MLP layers 
                                
                 r=self.hyperparams['lora_r'],
