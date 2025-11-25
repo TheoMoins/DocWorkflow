@@ -13,10 +13,7 @@ tasks:
     type: VLMHTR
     config:
       model_name: 'stanford-oval/churro-3B'
-      max_new_tokens: 700
-      temperature: 0.7            
-      top_p: 0.8                 
-      repetition_penalty: 1.5            
+      max_new_tokens: 700       
       batch_size: 10
       prompt: > 
         You are a paleographer specializing in french medieval languages

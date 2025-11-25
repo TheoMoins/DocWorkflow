@@ -246,10 +246,6 @@ class VLMHTRTask(BaseHTR):
         # Generate
         generation_kwargs = {
             "max_new_tokens": self.max_new_tokens,
-            "temperature": self.config.get('temperature', 1),
-            "top_p": self.config.get('top_p', 1),
-            "repetition_penalty": self.config.get('repetition_penalty', 1),
-            "length_penalty": self.config.get("lenght_penalty", 1)
         }
         
         with torch.no_grad():
