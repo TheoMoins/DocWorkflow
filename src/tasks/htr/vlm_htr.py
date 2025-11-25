@@ -44,9 +44,6 @@ class VLMHTRTask(BaseHTR):
 
             # Training hyperparameters
             'use_4bit': config.get('use_4bit', False),
-            'target_modules': config.get("target_modules", 
-                                         ["q_proj", "k_proj", "v_proj", "o_proj",
-                                          "gate_proj", "up_proj", "down_proj"]),
             'lora_r': config.get('lora_r', 16),
             'lora_dropout': config.get('lora_dropout', 0),
             'use_rslora': config.get('use_rslora', False),
@@ -503,7 +500,12 @@ class VLMHTRTask(BaseHTR):
 
             model = FastVisionModel.get_peft_model(
                 model,
-                target_modules=self.hyperparams['target_modules'],
+                
+                finetune_vision_layers     = False, # False if not finetuning vision layers
+                finetune_language_layers   = True, # False if not finetuning language layers
+                finetune_attention_modules = False, # False if not finetuning attention layers
+                finetune_mlp_modules       = True, # False if not finetuning MLP layers 
+                               
                 r=self.hyperparams['lora_r'],
                 lora_alpha=self.hyperparams['lora_r'],
                 lora_dropout=self.hyperparams['lora_dropout'],

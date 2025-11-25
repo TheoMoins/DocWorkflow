@@ -27,7 +27,6 @@ tasks:
       learning_rate: 0.0001
       weight_decay: 0.01
       dataset_num_proc: 4
-      target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
       prompt: > 
         You are a paleographer specializing in french medieval languages
         Follow these instructions:
