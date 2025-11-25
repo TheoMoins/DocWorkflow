@@ -14,11 +14,9 @@ tasks:
     config:
       model_name: 'stanford-oval/churro-3B'
       max_new_tokens: 700
-      temperature: 1            
-      top_p: 1                 
-      repetition_penalty: 1     
-      do_sample: false       
-      length_penalty: 0.8        
+      temperature: 0.7            
+      top_p: 0.8                 
+      repetition_penalty: 1.5            
       batch_size: 10
       prompt: > 
         You are a paleographer specializing in french medieval languages

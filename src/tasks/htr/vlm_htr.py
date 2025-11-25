@@ -249,7 +249,6 @@ class VLMHTRTask(BaseHTR):
             "temperature": self.config.get('temperature', 1),
             "top_p": self.config.get('top_p', 1),
             "repetition_penalty": self.config.get('repetition_penalty', 1),
-            "do_sample": self.config.get('do_sample', True),
             "length_penalty": self.config.get("lenght_penalty", 1)
         }
         
