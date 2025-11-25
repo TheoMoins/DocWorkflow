@@ -16,9 +16,9 @@ tasks:
       model_name: "Qwen/Qwen2.5-VL-3B-Instruct"
       max_new_tokens: 700    
       batch_size: 10
-      use_4bit: false
-      lora_r: 16
-      lora_dropout: 0
+      use_4bit: true
+      lora_r: 8
+      lora_dropout: 0.1
       max_seq_length: 4096
       train_batch_size: 4
       gradient_accumulation_steps: 2
@@ -27,6 +27,7 @@ tasks:
       learning_rate: 0.0001
       weight_decay: 0.01
       dataset_num_proc: 4
+      target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
       prompt: > 
         You are a paleographer specializing in french medieval languages
         Follow these instructions:
