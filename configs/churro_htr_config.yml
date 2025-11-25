@@ -1,4 +1,4 @@
-run_name: "churro_htr_minitest"
+run_name: "churro_htr_htromance"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -13,11 +13,12 @@ tasks:
     type: VLMHTR
     config:
       model_name: 'stanford-oval/churro-3B'
-      max_new_tokens: 2000
+      max_new_tokens: 1000
       temperature: 0.7            
       top_p: 0.9                  
       repetition_penalty: 1.2     
-      do_sample: true                
+      do_sample: true       
+      length_penalty: 0.8         
       batch_size: 10
       prompt: > 
         You are a paleographer specializing in french medieval languages
@@ -29,10 +30,13 @@ tasks:
 
         3. If you encounter any non-text elements, simply skip them without attempting to describe them.
 
-        4. Do not modernize or standardize the text. For example, if the transcription is using "ſ" instead of "s" or "а" instead of "a", keep it that way.
+        4. Do not modernize or standardize the text. 
+        For example, if the transcription is using "ſ" instead of "s" or "а" instead of "a", keep it that way.
 
         5. When you come across text in languages other than English, transcribe it as accurately as possible without translation.
 
         6. Do not include any other words or separator in your response.
 
-        Remember, your goal is to accurately transcribe the text from the scanned page as much as possible. Process the entire page, even if it contains a large amount of text, and provide clear, well-formatted output. Pay attention to the appropriate reading order and layout of the text.
+        Remember, your goal is to accurately transcribe the text from the scanned page as much as possible. 
+        Process the entire page, even if it contains a large amount of text, and provide clear, well-formatted output. 
+        Pay attention to the appropriate reading order and layout of the text.
