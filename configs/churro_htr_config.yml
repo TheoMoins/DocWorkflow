@@ -17,8 +17,8 @@ tasks:
       temperature: 1            
       top_p: 1                 
       repetition_penalty: 1     
-      do_sample: false       
-      length_penalty: 1        
+      do_sample: true       
+      length_penalty: 0.8        
       batch_size: 10
       prompt: > 
         You are a paleographer specializing in french medieval languages
