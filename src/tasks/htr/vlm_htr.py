@@ -522,11 +522,13 @@ class VLMHTRTask(BaseHTR):
                 learning_rate=self.hyperparams['learning_rate'],
                 weight_decay=self.hyperparams['weight_decay'],
                 seed=seed,
+                optim = "adamw_8bit",
                 save_strategy="steps",
                 save_steps=500,
                 logging_steps=10,
                 report_to="wandb" if self.use_wandb else "none",
                 remove_unused_columns=False,
+
                 dataset_kwargs = {"skip_prepare_dataset": True},
                 dataset_num_proc = self.hyperparams['dataset_num_proc'],
                 max_seq_length = self.hyperparams['max_seq_length'],
