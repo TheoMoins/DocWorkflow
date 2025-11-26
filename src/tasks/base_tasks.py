@@ -22,7 +22,7 @@ class BaseTask(ABC):
             models_dir: Directory containing model weights
         """
         self.config = config
-        self.name = "unknown"
+        self.name = config.get('run_name', "unknown")
         self.model = None
         self.device = config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
         self.use_wandb = config.get('use_wandb', True)

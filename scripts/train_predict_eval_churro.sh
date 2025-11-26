@@ -33,6 +33,7 @@ WANDB_PROJECT="HTR-comparison"
 # Paths
 CONFIG_DIR="configs/experiments"
 CONFIG_FILE="${CONFIG_DIR}/${EXPERIMENT_NAME}.yml"
+CONFIG_RESULT="src/tasks/htr/models/${EXPERIMENT_NAME}/inference_config.yml"
 
 # ========================================
 # BANNER
@@ -95,15 +96,22 @@ tasks:
       prompt: > 
         You are a paleographer specializing in medieval languages.
         Follow these instructions:
+
         1. You will be provided with a scanned document page.
+
         2. Perform transcription on the main text from this image, line by line, from top to bottom.
+
         3. If you encounter any non-text elements, simply skip them without attempting to describe them.
+
         4. Do not translate, modernize or standardize the text. 
         For example, if the transcription is using "ſ" instead of "s" or "а" instead of "a", keep it that way.
+
         5. Do not include any other words or separator in your response.
+
         Remember, your goal is to accurately transcribe the text from the scanned page as much as possible. 
         Process the entire page, even if it contains a large amount of text, and provide clear, well-formatted output. 
         Pay attention to the appropriate reading order and layout of the text.
+
 EOF
 
 echo "✓ Config file created"
@@ -128,7 +136,7 @@ echo ""
 echo "[3/4] Starting prediction on test set..."
 
 # Predict on test set
-docworkflow -c ${CONFIG_FILE} predict -t htr -d test
+docworkflow -c ${CONFIG_RESULT} predict -t htr -d test
 
 echo "✓ Prediction completed"
 echo ""
@@ -140,7 +148,7 @@ echo ""
 echo "[4/4] Starting evaluation..."
 
 # Evaluate predictions
-docworkflow -c ${CONFIG_FILE} score -t htr -d test
+docworkflow -c ${CONFIG_RESULT} score -t htr -d test
 
 echo "✓ Evaluation completed"
 echo ""
