@@ -63,7 +63,7 @@ class BaseTask(ABC):
 
         return wandb.init(
             project=self.wandb_project, 
-            name=f"eval-{self.name}-{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            name=f"eval-{self.model_name}-{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             config=self.config
         )
     
