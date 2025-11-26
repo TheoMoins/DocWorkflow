@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Script: train_predict_eval_vlm.sh
-# Usage: ./train_predict_eval_vlm.sh [experiment_name] [epochs] [batch_size] [grad_accum] [lora_r] [learning_rate]
+# Script: train_predict_eval_churro.sh
+# Usage: ./train_predict_eval_churro.sh [experiment_name] [epochs] [batch_size] [grad_accum] [lora_r] [learning_rate]
 
 set -e  # Exit on error
 
