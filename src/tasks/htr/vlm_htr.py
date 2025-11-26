@@ -442,141 +442,141 @@ class VLMHTRTask(BaseHTR):
 
         print(f"To train this model, you must change the environnement to vlm-training:")
         print(f"\n  source envs/vlm-training/bin/activate")        
-        response = input("Would you like to launch training now? (y/n): ")
 
-        if response.lower() == 'y':
-            from unsloth import FastVisionModel
-            from unsloth.trainer import UnslothVisionDataCollator
-            from transformers import AutoProcessor
-            from trl import SFTTrainer, SFTConfig
-            from datasets import Dataset
+        from unsloth import FastVisionModel
+        from unsloth.trainer import UnslothVisionDataCollator
+        from transformers import AutoProcessor
+        from trl import SFTTrainer, SFTConfig
 
-            if not data_path:
-                raise ValueError("Training data path is required")
+        if not data_path:
+            raise ValueError("Training data path is required")
+        
+        # Create inference config
+        global_path = '/'.join(data_path.split('/')[:-1])
+        
+        print(f"Starting VLM fine-tuning with Unsloth")
+        print(f"Model: {self.model_name}")
+        
+        print("Preparing training data...")
+        train_samples = self._prepare_training_data(data_path)
+        valid_samples = self._prepare_training_data(global_path+"/valid")
+        
+        if not train_samples:
+            raise ValueError("No valid training samples found")
+        
+        print(f"Found {len(train_samples)} training samples and {len(valid_samples)} validation samples")
+
+
+        def format_conversation(example):
+            img = Image.open(example["image_path"]).convert("RGB")
+
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self.prompt},
+                        {"type": "image", "image": img},
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": example["text"]}
+                    ],
+                },
+            ]
             
-            print(f"Starting VLM fine-tuning with Unsloth")
-            print(f"Model: {self.model_name}")
+            return {"messages": conversation}
+
+        converted_train_set = [format_conversation(sample) for sample in train_samples]
+        converted_valid_set = [format_conversation(sample) for sample in train_samples]
+
+
+        print("Loading model with Unsloth...")
+        model, tokenizer = FastVisionModel.from_pretrained(
+            self.model_name,
+            load_in_4bit=self.hyperparams['use_4bit'],
+            use_gradient_checkpointing="unsloth",
+        )
+
+        model = FastVisionModel.get_peft_model(
+            model,
             
-            print("Preparing training data...")
-            samples = self._prepare_training_data(data_path)
-            
-            if not samples:
-                raise ValueError("No valid training samples found")
-            
-            print(f"Found {len(samples)} training samples")
+            finetune_vision_layers     = True, # False if not finetuning vision layers
+            finetune_language_layers   = True, # False if not finetuning language layers
+            finetune_attention_modules = True, # False if not finetuning attention layers
+            finetune_mlp_modules       = True, # False if not finetuning MLP layers 
+                            
+            r=self.hyperparams['lora_r'],
+            lora_alpha=self.hyperparams['lora_r'],
+            lora_dropout=self.hyperparams['lora_dropout'],
+            use_rslora=self.hyperparams['use_rslora'],
+            loftq_config=None,
+        )
 
+        # Training arguments
+        training_args = SFTConfig(
+            output_dir=self.hyperparams['output_dir'],
+            per_device_train_batch_size=self.hyperparams['train_batch_size'],
+            gradient_accumulation_steps=self.hyperparams['gradient_accumulation_steps'],
+            warmup_ratio=self.hyperparams['warmup_ratio'],
+            num_train_epochs=self.hyperparams['epochs'],
+            learning_rate=self.hyperparams['learning_rate'],
+            weight_decay=self.hyperparams['weight_decay'],
+            seed=seed,
+            optim = "adamw_8bit",
+            save_strategy="steps",
+            save_steps=500,
+            logging_steps=10,
+            report_to="wandb" if self.use_wandb else "none",
+            remove_unused_columns=False,
 
-            def format_conversation(example):
-                img = Image.open(example["image_path"]).convert("RGB")
-
-                conversation = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": self.prompt},
-                            {"type": "image", "image": img},
-                        ],
-                    },
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {"type": "text", "text": example["text"]}
-                        ],
-                    },
-                ]
-                
-                return {"messages": conversation}
-
-            converted_dataset = [format_conversation(sample) for sample in samples]
-
-
-            print("Loading model with Unsloth...")
-            model, tokenizer = FastVisionModel.from_pretrained(
+            dataset_kwargs = {"skip_prepare_dataset": True},
+            dataset_num_proc = self.hyperparams['dataset_num_proc'],
+            max_seq_length = self.hyperparams['max_seq_length'],
+            dataset_text_field="",
+        )
+        
+        if self.processor is None:
+            print("Loading processor for data preparation...")
+            self.processor = AutoProcessor.from_pretrained(
                 self.model_name,
-                load_in_4bit=self.hyperparams['use_4bit'],
-                use_gradient_checkpointing="unsloth",
+                trust_remote_code=True,
+                use_fast=False
             )
-
-            model = FastVisionModel.get_peft_model(
-                model,
-                
-                finetune_vision_layers     = True, # False if not finetuning vision layers
-                finetune_language_layers   = True, # False if not finetuning language layers
-                finetune_attention_modules = True, # False if not finetuning attention layers
-                finetune_mlp_modules       = True, # False if not finetuning MLP layers 
-                               
-                r=self.hyperparams['lora_r'],
-                lora_alpha=self.hyperparams['lora_r'],
-                lora_dropout=self.hyperparams['lora_dropout'],
-                use_rslora=self.hyperparams['use_rslora'],
-                loftq_config=None,
-            )
-
-            # Training arguments
-            training_args = SFTConfig(
-                output_dir=self.hyperparams['output_dir'],
-                per_device_train_batch_size=self.hyperparams['train_batch_size'],
-                gradient_accumulation_steps=self.hyperparams['gradient_accumulation_steps'],
-                warmup_ratio=self.hyperparams['warmup_ratio'],
-                num_train_epochs=self.hyperparams['epochs'],
-                learning_rate=self.hyperparams['learning_rate'],
-                weight_decay=self.hyperparams['weight_decay'],
-                seed=seed,
-                optim = "adamw_8bit",
-                save_strategy="steps",
-                save_steps=500,
-                logging_steps=10,
-                report_to="wandb" if self.use_wandb else "none",
-                remove_unused_columns=False,
-
-                dataset_kwargs = {"skip_prepare_dataset": True},
-                dataset_num_proc = self.hyperparams['dataset_num_proc'],
-                max_seq_length = self.hyperparams['max_seq_length'],
-                dataset_text_field="",
-            )
-            
-            if self.processor is None:
-                print("Loading processor for data preparation...")
-                self.processor = AutoProcessor.from_pretrained(
-                    self.model_name,
-                    trust_remote_code=True,
-                    use_fast=False
-                )
-                        
-            trainer = SFTTrainer(
-                model=model,
-                tokenizer=tokenizer,
-                args=training_args,
-                train_dataset=converted_dataset,
-                data_collator=UnslothVisionDataCollator(model, self.processor),
-            )
-            
-            print("Starting training...")
-            trainer.train()
-            
-            output_dir = training_args.output_dir
-            model_save_path = f"{output_dir}/{self.model_name.split('/')[-1]}-finetuned"
-            
-            print(f"Saving fine-tuned model to {model_save_path}")
-            
-            model.save_pretrained(model_save_path)
-            tokenizer.save_pretrained(model_save_path)
-            
-            print(f"Training complete! Model saved to {model_save_path}")
-            
-            # Create inference config
-            print("\nCreating inference configuration...")
-            global_path = '/'.join("../data/HTRomance-french/data/train".split('/')[:-1])
-            config_path = self._create_finetuned_config(model_save_path, global_path)
-            
-            print(f"\nTo run prediction with fine-tuned model:")
-            print(f"   docworkflow -c {config_path} predict -t htr -d test")
-            
-            # Cleanup
-            del model, tokenizer, trainer
-            gc.collect()
-            if self.device == 'cuda':
-                torch.cuda.empty_cache()
+                    
+        trainer = SFTTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            args=training_args,
+            train_dataset=converted_train_set,
+            eval_dataset=converted_valid_set,
+            data_collator=UnslothVisionDataCollator(model, self.processor),
+        )
+        
+        print("Starting training...")
+        trainer.train()
+        
+        output_dir = training_args.output_dir
+        model_save_path = f"{output_dir}/{self.model_name.split('/')[-1]}-finetuned"
+        
+        print(f"Saving fine-tuned model to {model_save_path}")
+        
+        model.save_pretrained(model_save_path)
+        tokenizer.save_pretrained(model_save_path)
+        
+        print(f"Training complete! Model saved to {model_save_path}")
+        
+        config_path = self._create_finetuned_config(model_save_path, global_path)
+        
+        print(f"\nTo run prediction with fine-tuned model:")
+        print(f"   docworkflow -c {config_path} predict -t htr -d test")
+        
+        # Cleanup
+        del model, tokenizer, trainer
+        gc.collect()
+        if self.device == 'cuda':
+            torch.cuda.empty_cache()
 
 
     def _prepare_training_data(self, data_path):
