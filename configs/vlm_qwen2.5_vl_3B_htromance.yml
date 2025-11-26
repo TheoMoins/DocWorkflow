@@ -18,14 +18,14 @@ tasks:
       batch_size: 10
       use_4bit: true
       lora_r: 8
-      lora_dropout: 0.1
+      lora_dropout: 0
       max_seq_length: 4096
       train_batch_size: 4
-      gradient_accumulation_steps: 4
+      gradient_accumulation_steps: 1
       warmup_ratio: 0.1
       epochs: 1
-      learning_rate: 0.00001
-      weight_decay: 0.05
+      learning_rate: 0.0001
+      weight_decay: 0.01
       dataset_num_proc: 4
       prompt: > 
         You are a paleographer specializing in french medieval languages
@@ -39,9 +39,8 @@ tasks:
 
         4. Do not modernize or standardize the text. For example, if the transcription is using "ſ" instead of "s" or "а" instead of "a", keep it that way.
 
-        5. When you come across text in languages other than English, transcribe it as accurately as possible without translation.
+        5. Do not include any other words or separator in your response.
 
-        6. Do not include any other words or separator in your response.
-
-        Remember, your goal is to accurately transcribe the text from the scanned page as much as possible. Process the entire page, even if it contains a large amount of text, and provide clear, well-formatted output. Pay attention to the appropriate reading order and layout of the text.
-     
+        Remember, your goal is to accurately transcribe the text from the scanned page as much as possible. 
+        Process the entire page, even if it contains a large amount of text, and provide clear, well-formatted output. 
+        Pay attention to the appropriate reading order and layout of the text.
