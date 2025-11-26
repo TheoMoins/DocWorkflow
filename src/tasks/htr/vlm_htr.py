@@ -24,7 +24,6 @@ class VLMHTRTask(BaseHTR):
         super().__init__(config)
 
         self.model_name = config.get('model_name', 'stanford-oval/churro-3B')
-        self.name = "HTR_" + self.model_name.split('/')[-1]
         self.max_new_tokens = config.get('max_new_tokens', 512)
         self.batch_size = config.get('batch_size', 1)
         
@@ -628,7 +627,7 @@ class VLMHTRTask(BaseHTR):
 
         # Create config for the fine-tuned model
         config = {
-            'run_name': f"{self.name}_finetuned",
+            'run_name': f"{self.model_name}_finetuned",
             'output_dir': 'results',
             'device': self.config.get('device', 'cuda'),
             'use_wandb': self.config.get('use_wandb', False),
