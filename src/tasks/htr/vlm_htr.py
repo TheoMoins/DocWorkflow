@@ -557,7 +557,7 @@ class VLMHTRTask(BaseHTR):
         trainer.train()
         
         output_dir = training_args.output_dir
-        model_save_path = f"{output_dir}/{self.run_name.split('/')[-1]}-finetuned"
+        model_save_path = f"{output_dir}/{self.name.split('/')[-1]}-finetuned"
         
         print(f"Saving fine-tuned model to {model_save_path}")
         
@@ -628,7 +628,7 @@ class VLMHTRTask(BaseHTR):
 
         # Create config for the fine-tuned model
         config = {
-            'run_name': f"{self.run_name}_finetuned",
+            'run_name': f"{self.name}_finetuned",
             'output_dir': 'results',
             'device': self.config.get('device', 'cuda'),
             'use_wandb': self.config.get('use_wandb', False),
