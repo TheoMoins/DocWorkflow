@@ -28,7 +28,7 @@ tasks:
       weight_decay: 0.01
       dataset_num_proc: 4
       prompt: > 
-        You are a paleographer specializing in french medieval languages
+        You are a paleographer specializing in medieval languages
         Follow these instructions:
 
         1. You will be provided with a scanned document page.

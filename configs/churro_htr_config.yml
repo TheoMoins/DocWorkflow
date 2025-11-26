@@ -24,12 +24,12 @@ tasks:
       train_batch_size: 4
       gradient_accumulation_steps: 1
       warmup_ratio: 0.1
-      epochs: 1
+      epochs: 5
       learning_rate: 0.0001
       weight_decay: 0.01
       dataset_num_proc: 4
       prompt: > 
-        You are a paleographer specializing in french medieval languages.
+        You are a paleographer specializing in medieval languages.
         Follow these instructions:
 
         1. You will be provided with a scanned document page.
@@ -38,7 +38,7 @@ tasks:
 
         3. If you encounter any non-text elements, simply skip them without attempting to describe them.
 
-        4. Do not modernize or standardize the text. 
+        4. Do not translate, modernize or standardize the text. 
         For example, if the transcription is using "ſ" instead of "s" or "а" instead of "a", keep it that way.
 
         5. Do not include any other words or separator in your response.
