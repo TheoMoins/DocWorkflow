@@ -33,7 +33,7 @@ WANDB_PROJECT="HTR-comparison"
 # Paths
 CONFIG_DIR="configs/experiments"
 CONFIG_FILE="${CONFIG_DIR}/${EXPERIMENT_NAME}.yml"
-CONFIG_RESULT="src/tasks/htr/models/${EXPERIMENT_NAME}/inference_config.yml"
+CONFIG_RESULT="src/tasks/htr/models/${EXPERIMENT_NAME}-finetuned/inference_config.yml"
 
 # ========================================
 # BANNER
