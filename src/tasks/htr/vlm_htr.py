@@ -451,9 +451,8 @@ class VLMHTRTask(BaseHTR):
         if not data_path:
             raise ValueError("Training data path is required")
         
-        # Create inference config
-        global_path = '/'.join(data_path.split('/')[:-1])
-        
+        global_path = str(data_path.parent)     
+           
         print(f"Starting VLM fine-tuning with Unsloth")
         print(f"Model: {self.model_name}")
         
