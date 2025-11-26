@@ -6,6 +6,8 @@ wandb_project: "HTR-comparison"
 
 
 data:
+  train: "../data/HTRomance-french/data/train"
+  valid: "../data/HTRomance-french/data/valid"
   test: "../data/HTRomance-french/data/test"
 
 tasks:
