@@ -265,6 +265,10 @@ class VLMHTRTask(BaseHTR):
             clean_up_tokenization_spaces=False
         )
         
+        print(f"=== RAW VLM OUTPUT for {image_path} ===")
+        print(repr(output_text[0][:500]))  # repr() montre les \n explicitement
+        print("=" * 50)
+
         # Cleanup
         image.close()
         del inputs, generated_ids, generated_ids_trimmed
