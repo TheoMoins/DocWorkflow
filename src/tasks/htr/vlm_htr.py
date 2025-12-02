@@ -353,8 +353,25 @@ class VLMHTRTask(BaseHTR):
                     string_elem.set('CONTENT', line_text)
                     string_elem.set('WC', '1.0')
         
+        def indent_xml(elem, level=0):
+            i = "\n" + level*"  "
+            if len(elem):
+                if not elem.text or not elem.text.strip():
+                    elem.text = i + "  "
+                if not elem.tail or not elem.tail.strip():
+                    elem.tail = i
+                for child in elem:
+                    indent_xml(child, level+1)
+                if not child.tail or not child.tail.strip():
+                    child.tail = i
+            else:
+                if level and (not elem.tail or not elem.tail.strip()):
+                    elem.tail = i
+
+        indent_xml(root)
+
         # Save updated ALTO
-        tree.write(alto_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+        tree.write(alto_path, xml_declaration=True, encoding="UTF-8")
         return alto_path
 
 
