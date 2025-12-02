@@ -264,10 +264,6 @@ class VLMHTRTask(BaseHTR):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False
         )
-        
-        print(f"=== RAW VLM OUTPUT for {image_path} ===")
-        print(repr(output_text[0][:500]))  # repr() montre les \n explicitement
-        print("=" * 50)
 
         # Cleanup
         image.close()
@@ -328,6 +324,9 @@ class VLMHTRTask(BaseHTR):
             if text_blocks:
                 # Use first text block
                 text_block = text_blocks[0]
+
+                for extra_block in text_blocks[1:]:
+                    extra_block.getparent().remove(extra_block)
                 
                 # Remove existing TextLines
                 for line_elem in text_block.findall('alto:TextLine', ns):
