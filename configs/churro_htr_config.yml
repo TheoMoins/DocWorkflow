@@ -24,7 +24,7 @@ tasks:
       train_batch_size: 4
       gradient_accumulation_steps: 1
       warmup_ratio: 0.1
-      epochs: 10
+      epochs: 5
       learning_rate: 0.0001
       weight_decay: 0.01
       dataset_num_proc: 4
@@ -34,8 +34,11 @@ tasks:
 
         1. You will be provided with a scanned document page.
 
-        2. Perform transcription on the main text from this image, line by line, from top to bottom.
-        If the page has multiple columns, you must translate the columns one after the other, without mixing them on the same line.
+        2. Identify the zones containing the main text, excluding any paratext.
+        When a page is divided into columns or blocks, each one is a different zone. 
+
+        2. Perform transcription on the text inside the zones from this image, line by line, from top to bottom.
+        If the page has multiple zones, you must translate the columns one after the other, without mixing them on the same line.
 
         3. If you encounter any non-text elements, simply skip them without attempting to describe them.
 
