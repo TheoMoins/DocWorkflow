@@ -551,7 +551,8 @@ class VLMHTRTask(BaseHTR):
             remove_unused_columns=False,
 
             dataset_kwargs = {"skip_prepare_dataset": True},
-            dataset_num_proc = self.hyperparams['dataset_num_proc'],
+            dataset_num_proc = 0,  # CHANGEZ ICI : 4 -> 0
+            dataloader_num_workers=0,  # AJOUTEZ CETTE LIGNE
             max_seq_length = self.hyperparams['max_seq_length'],
             dataset_text_field="",
         )
