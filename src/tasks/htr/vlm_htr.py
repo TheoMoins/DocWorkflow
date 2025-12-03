@@ -551,8 +551,7 @@ class VLMHTRTask(BaseHTR):
             remove_unused_columns=False,
 
             dataset_kwargs = {"skip_prepare_dataset": True},
-            dataset_num_proc = 0,  # CHANGEZ ICI : 4 -> 0
-            dataloader_num_workers=0,  # AJOUTEZ CETTE LIGNE
+            dataset_num_proc = self.hyperparams['dataset_num_proc'],
             max_seq_length = self.hyperparams['max_seq_length'],
             dataset_text_field="",
         )
@@ -565,6 +564,27 @@ class VLMHTRTask(BaseHTR):
                 use_fast=False
             )
                     
+        # TEST: Vérifier les données converties
+        print("\nTesting converted datasets...")
+        print(f"Train dataset size: {len(converted_train_set)}")
+        print(f"Valid dataset size: {len(converted_valid_set)}")
+        print(f"First train sample keys: {converted_train_set[0].keys()}")
+
+        # TEST: Vérifier qu'on peut charger la première image
+        try:
+            first_sample = converted_train_set[0]
+            messages = first_sample['messages']
+            user_content = messages[0]['content']
+            for item in user_content:
+                if item['type'] == 'image':
+                    img = item['image']
+                    print(f"✓ First image loaded: {img.size if hasattr(img, 'size') else type(img)}")
+                    break
+        except Exception as e:
+            print(f"✗ Error with first sample: {e}")
+            import traceback
+            traceback.print_exc()
+
         trainer = SFTTrainer(
             model=model,
             tokenizer=tokenizer,
@@ -574,7 +594,24 @@ class VLMHTRTask(BaseHTR):
             data_collator=UnslothVisionDataCollator(model, self.processor),
         )
         
-        print("Starting training...")
+
+        print("Trainer created successfully")
+        print("Testing data collator with first sample...")
+
+        # TEST: Vérifier que le data collator fonctionne
+        try:
+            test_batch = [converted_train_set[0]]
+            collator = UnslothVisionDataCollator(model, self.processor)
+            collated = collator(test_batch)
+            print(f"✓ Data collator test passed. Batch keys: {collated.keys()}")
+            del collated, test_batch
+        except Exception as e:
+            print(f"✗ Data collator test FAILED: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+        print("Starting training loop...")
         trainer.train()
         
         output_dir = training_args.output_dir
