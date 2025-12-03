@@ -27,7 +27,7 @@ tasks:
       epochs: 5
       learning_rate: 0.0001
       weight_decay: 0.01
-      dataset_num_proc: 4
+      dataset_num_proc: 1
       prompt: > 
         You are a paleographer specializing in medieval languages.
         Follow these instructions:

@@ -508,7 +508,7 @@ class VLMHTRTask(BaseHTR):
             return {"messages": conversation}
 
         converted_train_set = [format_conversation(sample) for sample in train_samples]
-        converted_valid_set = [format_conversation(sample) for sample in train_samples]
+        converted_valid_set = [format_conversation(sample) for sample in valid_samples]
 
 
         print("Loading model with Unsloth...")
