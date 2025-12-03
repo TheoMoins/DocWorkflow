@@ -594,28 +594,6 @@ class VLMHTRTask(BaseHTR):
             data_collator=UnslothVisionDataCollator(model, self.processor),
         )
         
-
-        print("Testing manual forward pass...")
-        try:
-            model.eval()
-            test_batch = [converted_train_set[0]]
-            collated = UnslothVisionDataCollator(model, self.processor)(test_batch)
-            
-            # AJOUTEZ CECI : Déplacer explicitement sur le device
-            collated = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
-                        for k, v in collated.items()}
-            
-            with torch.no_grad():
-                outputs = model(**collated)
-            print(f"✓ Manual forward pass succeeded. Loss: {outputs.loss if hasattr(outputs, 'loss') else 'N/A'}")
-            del outputs, collated, test_batch
-            torch.cuda.empty_cache()
-        except Exception as e:
-            print(f"✗ Manual forward pass FAILED: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
-
         trainer.train()
         
         output_dir = training_args.output_dir
