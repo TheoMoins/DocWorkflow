@@ -13,31 +13,31 @@ echo ""
 # Make the main script executable
 chmod +x scripts/train_predict_eval_churro.sh
 
-# ========================================
-# EXPERIMENT 1: Baseline (5 epochs)
-# ========================================
+# # ========================================
+# # EXPERIMENT 1: Baseline (5 epochs)
+# # ========================================
 
-echo "Running Experiment 1: Baseline (5 epochs)"
-./scripts/train_predict_eval_churro.sh \
-    "churro_5ep_bs4_lr1e4" \
-    5 \
-    4 \
-    1 \
-    8 \
-    0.0001
+# echo "Running Experiment 1: Baseline (5 epochs)"
+# ./scripts/train_predict_eval_churro.sh \
+#     "churro_5ep_bs4_lr1e4" \
+#     5 \
+#     4 \
+#     1 \
+#     8 \
+#     0.0001
 
-# ========================================
-# EXPERIMENT 2: More epochs (10)
-# ========================================
+# # ========================================
+# # EXPERIMENT 2: More epochs (10)
+# # ========================================
 
-echo "Running Experiment 2: 10 epochs"
-./scripts/train_predict_eval_churro.sh \
-    "churro_10ep_bs4_lr1e4" \
-    10 \
-    4 \
-    1 \
-    8 \
-    0.0001
+# echo "Running Experiment 2: 10 epochs"
+# ./scripts/train_predict_eval_churro.sh \
+#     "churro_10ep_bs4_lr1e4" \
+#     10 \
+#     4 \
+#     1 \
+#     8 \
+#     0.0001
 
 # ========================================
 # EXPERIMENT 3: Even more epochs (20)
