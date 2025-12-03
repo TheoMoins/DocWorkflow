@@ -595,23 +595,23 @@ class VLMHTRTask(BaseHTR):
         )
         
 
-        print("Trainer created successfully")
-        print("Testing data collator with first sample...")
-
-        # TEST: Vérifier que le data collator fonctionne
+        print("Testing manual forward pass...")
         try:
+            model.eval()
             test_batch = [converted_train_set[0]]
-            collator = UnslothVisionDataCollator(model, self.processor)
-            collated = collator(test_batch)
-            print(f"✓ Data collator test passed. Batch keys: {collated.keys()}")
-            del collated, test_batch
+            collated = UnslothVisionDataCollator(model, self.processor)(test_batch)
+            
+            with torch.no_grad():
+                outputs = model(**collated)
+            print(f"✓ Manual forward pass succeeded. Loss: {outputs.loss if hasattr(outputs, 'loss') else 'N/A'}")
+            del outputs, collated, test_batch
+            torch.cuda.empty_cache()
         except Exception as e:
-            print(f"✗ Data collator test FAILED: {e}")
+            print(f"✗ Manual forward pass FAILED: {e}")
             import traceback
             traceback.print_exc()
             raise
-
-        print("Starting training loop...")
+        
         trainer.train()
         
         output_dir = training_args.output_dir
