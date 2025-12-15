@@ -4,7 +4,7 @@ device: "cpu"
 use_wandb: false
 
 data:
-  test: "../data/corpus_roman_16_part_1_minitest"
+  test: "../data/corpus_roman_16_part_1"
 
 tasks:
   layout: 
