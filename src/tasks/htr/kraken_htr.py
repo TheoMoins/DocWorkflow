@@ -1,3 +1,8 @@
+"""
+REFACTORISATION : src/tasks/htr/kraken_htr.py
+Utilise la méthode predict() de BaseTask, n'implémente que _process_batch()
+"""
+
 from src.tasks.htr.base_htr import BaseHTR
 import os
 import glob
@@ -36,6 +41,12 @@ class KrakenHTRTask(BaseHTR):
         self.model = load_any(model_path)
         self.to_device()
     
+    def _get_file_extensions(self):
+        """
+        HTR travaille sur des fichiers ALTO XML (pas des images directement).
+        """
+        return ['*.xml']
+
     def _parse_points(self, points_str):
         """
         Parse points string that can be in two formats:
@@ -211,40 +222,36 @@ class KrakenHTRTask(BaseHTR):
         
         tree.write(output_path, pretty_print=True, 
                   xml_declaration=True, encoding="UTF-8")
-    
-    def predict(self, data_path, output_dir, save_image=True):
+        
+    def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
-        Perform HTR on ALTO files with line segmentation.
+        Process a batch of ALTO files for HTR.
+        
+        Cette méthode contient toute la logique spécifique de Kraken HTR.
+        Elle est appelée automatiquement par predict() de BaseTask.
         
         Args:
-            data_path: Directory containing images and ALTO files
+            file_paths: List of ALTO XML file paths to process
+            source_dir: Source directory (pour trouver les images)
             output_dir: Directory to save ALTO XML files with text
-            save_image: Whether to copy images to output directory
+            save_image: Whether to copy images to output
             
         Returns:
             List of prediction results
         """
-        if not self.model:
-            self.load()
-        
-        alto_files = sorted(glob.glob(os.path.join(data_path, "*.xml")))
-        
-        if not alto_files:
-            raise ValueError(f"No ALTO XML files found in {data_path}")
-        
-        print(f"Processing {len(alto_files)} ALTO files...")
+        print(f"  Processing {len(file_paths)} ALTO files...")
         
         results = []
-        for alto_path in tqdm(alto_files, desc="Recognizing text", unit="page"):
+        for alto_path in tqdm(file_paths, desc="  Recognizing text", unit="page"):
             try:
                 image_path, lines, _ = extract_lines_from_alto(alto_path)
                 
                 if not os.path.exists(image_path):
-                    print(f"Warning: Image {image_path} not found")
+                    print(f"  Warning: Image {image_path} not found")
                     continue
                 
                 if not lines:
-                    print(f"Warning: No lines found in {alto_path}")
+                    print(f"  Warning: No lines found in {alto_path}")
                     continue
                 
                 recognized_texts = self._recognize_text(image_path, alto_path)
@@ -267,7 +274,7 @@ class KrakenHTRTask(BaseHTR):
                         shutil.copy2(image_path, image_output)
                 
             except Exception as e:
-                print(f"Error processing {alto_path}: {e}")
+                print(f"  Error processing {alto_path}: {e}")
                 import traceback
                 traceback.print_exc()
         

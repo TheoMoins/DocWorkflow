@@ -1,0 +1,24 @@
+run_name: "catmus_pipeline_print_16"
+output_dir: "results"
+device: "cpu"
+use_wandb: false
+
+data:
+  test: "../data/corpus_roman_16_part_1_minitest"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      model_path: "src/tasks/layout/LA-training/catmus_seg_s_16_10/weights/best.pt"
+      img_size: 640
+
+  line:
+    type: KrakenLine
+    config:
+      model_path: "src/tasks/line/models/baseline_ms_medieval.mlmodel"
+      text_direction: "horizontal-lr"
+  htr:
+    type: KrakenHTR
+    config:
+      model_path: "src/tasks/htr/models/catmus-print-fondue-large.mlmodel"

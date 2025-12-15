@@ -7,6 +7,7 @@ from pathlib import Path
 import os
 
 from src.utils.visualisation import visualize_folder
+from src.utils.dataset_structure import discover_dataset_structure
 
 class BaseTask(ABC):
     """
@@ -19,7 +20,6 @@ class BaseTask(ABC):
         
         Args:
             config: Model configuration dictionary
-            models_dir: Directory containing model weights
         """
         self.config = config
         self.name = config.get('run_name', "unknown")
@@ -55,7 +55,6 @@ class BaseTask(ABC):
                 with open(api_key_file, 'r') as f:
                     api_key = f.read().strip()
                     if api_key:
-                        # Login to wandb with the API key
                         wandb.login(key=api_key, relogin=True)
             except Exception as e:
                 print(f"Warning: Could not load wandb API key from {api_key_file}: {e}")
@@ -90,7 +89,7 @@ class BaseTask(ABC):
             run.finish()
         else:
             wandb.finish()
-    
+
     @abstractmethod
     def load(self):
         """Load the model from a weights file."""
@@ -113,84 +112,206 @@ class BaseTask(ABC):
         Args:
             metrics: Dictionary of evaluation metrics
         """
-        # Create a formatted table for display
         table = [["Metric", "Value"]]
         
-        # Add each metric to the table with proper formatting
         for key, value in metrics.items():
-            # Format numeric values to 4 decimal places
             if isinstance(value, (int, float)):
                 formatted_value = round(value, 4)
             else:
                 formatted_value = value
             
-            # Add to table
             table.append([key, formatted_value])
         
-        # Display the table
         print("\nEvaluation Results:")
         print(tabulate.tabulate(table, tablefmt="grid", headers="firstrow"))
     
 
     @abstractmethod
-    def predict(self, data_path, output_dir, save_image=False):
+    def _process_batch(self, file_paths, source_dir, output_dir, **kwargs):
         """
-        Perform prediction on the corpus path.
+        Process a batch of files (images or ALTO XMLs).
+        
+        This is the method that each task must implement with its specific logic.
         
         Args:
-            data_path: Path to folder with the elements that we want to predict on
-            output_dir: Directory to save predictions
-            save_image: boolean whether to save the image with the prediction or not
+            file_paths: List of file paths to process
+            source_dir: Source directory (for finding related files like XML)
+            output_dir: Output directory for results
+            **kwargs: Additional task-specific arguments
             
         Returns:
-            Prediction results
-        """
-        pass
-
-    @abstractmethod
-    def train(self, train_path=None, **kwargs):
-        """
-        Train model using a given dataset
-        
-        Args:
-            train_path: Path to a training/validation set.
+            Results from processing (task-specific format)
         """
         pass
     
     @abstractmethod
     def score(self, pred_path, gt_path):
         """
-        Calculate scores between prediction ALTO files and ground truth ALTO files.
+        Calculate scores between predictions and ground truth.
         
         Args:
-            pred_path: Path to directory containing prediction ALTO files
-            gt_path: Path to directory containing ground truth ALTO files
+            pred_path: Path to directory containing predictions
+            gt_path: Path to directory containing ground truth
             
         Returns:
             Dictionary of evaluation metrics
         """
         pass
-
+    
+       
+    def predict(self, data_path, output_dir, save_image=True, **kwargs):
+        """
+        Perform prediction on a dataset.
+        
+        Automatically detects dataset structure (flat or hierarchical) and
+        processes accordingly. Preserves directory structure in output.
+        
+        Args:
+            data_path: Path to dataset (can be flat or hierarchical)
+            output_dir: Directory to save results
+            save_image: Whether to copy source files to output
+            **kwargs: Additional task-specific arguments
+            
+        Returns:
+            List of results from processing
+        """
+        # Ensure model is loaded
+        if not self.model:
+            self.load()
+        
+        # Discover dataset structure
+        file_extensions = self._get_file_extensions()
+        structure_info = discover_dataset_structure(data_path, file_extensions)
+        
+        if structure_info['type'] == 'empty':
+            raise ValueError(f"No files found in {data_path}")
+        
+        # Display structure information
+        self._display_structure_info(structure_info)
+        
+        # Process according to structure
+        if structure_info['type'] == 'flat':
+            # Flat structure: process all files together
+            file_paths = structure_info['images']
+            return self._process_batch(
+                file_paths=file_paths,
+                source_dir=data_path,
+                output_dir=output_dir,
+                save_image=save_image,
+                **kwargs
+            )
+        
+        else:
+            # Hierarchical structure: process by subdirectory
+            return self._process_hierarchical(
+                structure_info=structure_info,
+                output_dir=output_dir,
+                save_image=save_image,
+                **kwargs
+            )
+    
+    def _display_structure_info(self, structure_info):
+        """Display information about the dataset structure."""
+        print(f"\n📊 Dataset structure: {structure_info['type']}")
+        print(f"📷 Total files: {len(structure_info['images'])}")
+        
+        if structure_info['type'] == 'hierarchical':
+            print(f"📁 Subdirectories: {len(structure_info['subdirs'])}")
+            print("\n⚙️  Processing hierarchical structure (preserving folders)...")
+    
+    def _process_hierarchical(self, structure_info, output_dir, save_image=True, **kwargs):
+        """
+        Process a hierarchical dataset structure.
+        
+        Args:
+            structure_info: Structure information from discover_dataset_structure
+            output_dir: Base output directory
+            save_image: Whether to copy source files
+            **kwargs: Additional arguments for _process_batch
+            
+        Returns:
+            List of all results
+        """
+        all_results = []
+        
+        for subdir_path, files in structure_info['structure'].items():
+            subdir_name = Path(subdir_path).name
+            print(f"\n📁 Processing: {subdir_name} ({len(files)} files)")
+            
+            # Create corresponding output subdirectory
+            subdir_output = Path(output_dir) / subdir_name
+            subdir_output.mkdir(parents=True, exist_ok=True)
+            
+            # Process this subdirectory
+            try:
+                results = self._process_batch(
+                    file_paths=files,
+                    source_dir=subdir_path,
+                    output_dir=str(subdir_output),
+                    save_image=save_image,
+                    **kwargs
+                )
+                
+                if results:
+                    all_results.extend(results if isinstance(results, list) else [results])
+                    
+            except Exception as e:
+                print(f"  ❌ Error processing {subdir_name}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        print(f"\n✓ Processed {len(structure_info['subdirs'])} subdirectories")
+        return all_results
     
     def visualize(self, task_name, data_path, xml_path=None, output_dir=None):
         """
         Visualisation tool from xml object.
         
         Args:
-            corpus_path: Path to images
-            xml_path: path to xml files (if different from corpus_path)
+            task_name: Name of the task for visualization type
+            data_path: Path to images
+            xml_path: path to xml files (if different from data_path)
             output_dir: Path where to save visualisations
             
         Returns:
-            Nombre de visualisations réussies
+            Number of successful visualizations
         """
         print(f"Visualizing results in {data_path}...")
         
-        
-        # Utiliser l'utilitaire de visualisation
         return visualize_folder(
             img_dir=data_path,
             xml_dir=xml_path,
             output_dir=output_dir,
             visualization_type=task_name
         )
+    
+    def _get_file_extensions(self):
+        """
+        Get the file extensions to look for.
+        
+        Override this in subclasses if needed.
+        
+        Returns:
+            List of file extensions (e.g., ['*.jpg', '*.png'])
+        """
+        return ['*.jpg', '*.jpeg', '*.png']
+    
+    def _should_save_source_files(self):
+        """
+        Whether to copy source files to output directory.
+        
+        Override in subclasses if different behavior needed.
+        
+        Returns:
+            Boolean
+        """
+        return True
+    
+    def _get_progress_description(self):
+        """
+        Get the description for progress bar.
+        
+        Returns:
+            String for tqdm description
+        """
+        return "Processing"

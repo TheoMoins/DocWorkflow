@@ -31,21 +31,6 @@ class BaseHTR(BaseTask):
         """Load the model. Must be implemented by subclasses."""
         pass
     
-    @abstractmethod
-    def predict(self, data_path, output_dir, save_image=True):
-        """
-        Perform HTR prediction. Must be implemented by subclasses.
-        
-        Args:
-            data_path: Directory containing input data
-            output_dir: Directory to save predictions
-            save_image: Whether to copy images to output directory
-            
-        Returns:
-            List of prediction results
-        """
-        pass
-    
     def train(self, data_path=None, **kwargs):
         """
         Train the HTR model. Default implementation prints a message.

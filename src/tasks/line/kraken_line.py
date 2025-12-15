@@ -10,7 +10,6 @@ from pathlib import Path
 import gc
 import shutil
 import tempfile
-
 import threading
 
 from kraken.lib.vgsl import TorchVGSLModel
@@ -66,16 +65,13 @@ class KrakenLineTask(BaseTask):
             file_name: Path to ALTO file containing layout segmentation
             
         Returns:
-            Numpy array of prediction boxes
+            List of predicted lines
         """
-        # Utilisez une liste pour stocker le résultat du thread principal
         result = [None]
-        # Flag pour indiquer si un timeout s'est produit
         is_timeout = [False]
         
         def process_image():
             try:
-                # Extract regions from ALTO file
                 _, _, all_regions = extract_lines_from_alto(file_name)
 
                 # Only keep mainzones
@@ -83,7 +79,7 @@ class KrakenLineTask(BaseTask):
                     region_type: polygons 
                     for region_type, polygons in all_regions.items() 
                     if region_type not in IGNORED_ZONE_TYPES
-}                
+                }                
                 if not alto_regions:
                     raise ValueError(f"No regions available in ALTO file {file_name}")
                 
@@ -101,11 +97,10 @@ class KrakenLineTask(BaseTask):
                 lines = [{'baseline': line.baseline, 'boundary': line.boundary, 'id': line.id}
                         for line in segmentation_result.lines]
                 
-                # Stocker le résultat seulement si aucun timeout ne s'est produit
                 if not is_timeout[0]:
                     result[0] = lines
             except Exception as e:
-                print(f"Error during line segmentation: {e}")
+                print(f"  Error during line segmentation: {e}")
                 if not is_timeout[0]:
                     result[0] = []
         
@@ -114,18 +109,13 @@ class KrakenLineTask(BaseTask):
         thread = threading.Thread(target=process_image)
         thread.daemon = True
         thread.start()
-        
-        # Attendre que le thread se termine, avec un timeout
         thread.join(timeout=180)
         
-        # Si le thread est toujours en vie après le timeout
         if thread.is_alive():
             is_timeout[0] = True
-            print(f"\nTimeout for {file_name}: Interruption after 180 seconds")
-            # Le thread continuera à s'exécuter en arrière-plan, mais nous ignorons son résultat
+            print(f"  Timeout for {file_name}: Interruption after 180 seconds")
             return []
         
-        # Retourner le résultat (vide en cas d'erreur)
         return result[0] if result[0] is not None else []
 
 
@@ -152,7 +142,6 @@ class KrakenLineTask(BaseTask):
         
         # Process files
         for gt_file in tqdm(gt_files, desc="Scoring pages", unit="page"):
-            # Extract base name for matching prediction file
             base_name = os.path.basename(gt_file)
             pred_file = os.path.join(pred_path, base_name)
             
@@ -160,13 +149,11 @@ class KrakenLineTask(BaseTask):
                 print(f"Warning: No prediction file found for {base_name}")
                 continue
             
-            # Extract ground truth lines and image path
             image_path, gt_lines, _ = extract_lines_from_alto(gt_file)
             if not gt_lines:
                 print(f"Warning: No lines found in {gt_file}")
                 continue
             
-            # Extract predicted lines
             _, pred_lines, _ = extract_lines_from_alto(pred_file)
             if not pred_lines:
                 print(f"Warning: No predicted lines found in {pred_file}")
@@ -179,7 +166,6 @@ class KrakenLineTask(BaseTask):
                 print(f"Error opening image {image_path}: {e}")
                 continue
             
-            # Convert ground truth and predictions to the format expected by MAP
             gt_boxes = convert_lines_to_boxes(gt_lines, image_size, is_gt=True)
             pred_boxes = convert_lines_to_boxes(pred_lines, image_size, is_gt=False)
             
@@ -210,36 +196,27 @@ class KrakenLineTask(BaseTask):
         self._finish_wandb(wandb_run)
 
         return metrics_dict
-
     
-    def predict(self, data_path, output_dir, save_image=True):
+    def _process_batch(self, file_paths, source_dir, output_dir, save_image=True):
         """
-        Perform prediction on an image.
+        Process a batch of images for line segmentation.
         
         Args:
-            output_dir: Directory to save ALTO XML files       
-            save_image: if True: copy the image in the output_dir
+            file_paths: List of image paths to process
+            source_dir: Source directory (pour trouver les ALTO XML correspondants)
+            output_dir: Directory to save ALTO XML files with lines
+            save_image: Whether to copy images to output
+            
         Returns:
-            Prediction results
+            List of prediction results
         """
-        if not self.model:
-            self.load()
-
-        image_extensions = ['*.jpg', '*.jpeg', '*.png']
-        image_paths = []
-        for ext in image_extensions:
-            image_paths.extend(glob.glob(os.path.join(data_path, ext)))
-        
-        if not image_paths:
-            raise ValueError(f"No images found in {data_path}")
-        
-        print(f"Processing {len(image_paths)} images...")
+        print(f"  Processing {len(file_paths)} images...")
 
         results = []
-        for image_path in tqdm(image_paths, desc="Predicting lines", unit="image"):
+        for image_path in tqdm(file_paths, desc="  Predicting lines", unit="image"):
             try:
                 # Check for corresponding ALTO XML file with layout regions
-                alto_path = os.path.join(data_path, Path(image_path).with_suffix('.xml').name)
+                alto_path = os.path.join(source_dir, Path(image_path).with_suffix('.xml').name)
                 
                 # Check if ALTO file exists and contains layout regions
                 has_layout = False
@@ -248,7 +225,7 @@ class KrakenLineTask(BaseTask):
                     has_layout = bool(regions)
                 
                 if not has_layout:
-                    print(f"Warning: No layout regions found for {image_path}. Results may be suboptimal.")
+                    print(f"  Warning: No layout regions found for {image_path}. Results may be suboptimal.")
                 
                 image = Image.open(image_path)
                 
@@ -286,7 +263,7 @@ class KrakenLineTask(BaseTask):
                 image.close()
                 
             except Exception as e:
-                print(f"Error processing {image_path}: {e}")
+                print(f"  Error processing {image_path}: {e}")
                 import traceback
                 traceback.print_exc()
         
