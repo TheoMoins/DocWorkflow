@@ -16,7 +16,7 @@ tasks:
   line:
     type: KrakenLine
     config:
-      model_path: "src/tasks/line/models/baseline_ms_medieval.mlmodel"
+      model_path: "src/tasks/line/models/blla.mlmodel"
       text_direction: "horizontal-lr"
   htr:
     type: KrakenHTR

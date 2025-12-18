@@ -9,7 +9,6 @@ from mean_average_precision import MetricBuilder
 from pathlib import Path
 import gc
 import shutil
-import tempfile
 import threading
 
 from kraken.lib.vgsl import TorchVGSLModel
@@ -18,6 +17,7 @@ from kraken.lib.xml import XMLPage
 from yaltai.models.krakn import segment as line_segment
 
 from src.utils.utils import IGNORED_ZONE_TYPES
+from src.utils.memory_monitor import check_memory_safe, force_garbage_collection, get_memory_usage_percent
 from src.alto.alto_lines import extract_lines_from_alto, convert_lines_to_boxes, add_lines_to_alto
 
 class KrakenLineTask(BaseTask):
@@ -109,11 +109,11 @@ class KrakenLineTask(BaseTask):
         thread = threading.Thread(target=process_image)
         thread.daemon = True
         thread.start()
-        thread.join(timeout=180)
+        thread.join(timeout=60)
         
         if thread.is_alive():
             is_timeout[0] = True
-            print(f"  Timeout for {file_name}: Interruption after 180 seconds")
+            print(f"  Timeout for {file_name}: Interruption after 60 seconds")
             return []
         
         return result[0] if result[0] is not None else []
@@ -214,6 +214,19 @@ class KrakenLineTask(BaseTask):
 
         results = []
         for image_path in tqdm(file_paths, desc="  Predicting lines", unit="image"):
+            # Check memory before processing each image
+            is_safe, mem_msg = check_memory_safe(min_available_gb=2.0, max_usage_percent=85)
+            if not is_safe:
+                print(f"\nWarning: {mem_msg}")
+                print("Forcing garbage collection...")
+                force_garbage_collection()
+                
+                # Re-check after GC
+                is_safe, mem_msg = check_memory_safe(min_available_gb=1.0, max_usage_percent=95)
+                if not is_safe:
+                    print(f"Memory still critical after GC: {mem_msg}")
+                    print("Skipping remaining images to prevent system crash.")
+                    break
             try:
                 # Check for corresponding ALTO XML file with layout regions
                 alto_path = os.path.join(source_dir, Path(image_path).with_suffix('.xml').name)
