@@ -252,17 +252,17 @@ class BaseTask(ABC):
         all_results = []
         
         for subdir_path, files in structure_info['structure'].items():
+            # Create corresponding output subdirectory
             subdir_name = Path(subdir_path).name
+            subdir_output = Path(output_dir) / subdir_name
+            subdir_output.mkdir(parents=True, exist_ok=True)
+
             files_to_process = self._filter_already_processed(files, str(subdir_output))
             if not files_to_process:
                 print(f"  ✓ All files already processed")
                 continue
             print(f"  Processing {len(files_to_process)}/{len(files)} files (skipping {len(files) - len(files_to_process)})")
 
-            
-            # Create corresponding output subdirectory
-            subdir_output = Path(output_dir) / subdir_name
-            subdir_output.mkdir(parents=True, exist_ok=True)
             
             # Process this subdirectory
             try:
