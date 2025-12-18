@@ -158,6 +158,18 @@ class BaseTask(ABC):
         """
         pass
     
+
+    def _filter_already_processed(self, file_paths, output_dir):
+        """
+        Filter files already predicted.
+        """
+        to_process = []
+        for file_path in file_paths:
+            output_name = Path(file_path).stem + '.xml'
+            output_path = Path(output_dir) / output_name
+            if not output_path.exists():
+                to_process.append(file_path)
+        return to_process
        
     def predict(self, data_path, output_dir, save_image=True, **kwargs):
         """
@@ -191,8 +203,13 @@ class BaseTask(ABC):
         
         # Process according to structure
         if structure_info['type'] == 'flat':
-            # Flat structure: process all files together
-            file_paths = structure_info['images']
+            file_paths = self._filter_already_processed(structure_info['images'], output_dir)
+            if not file_paths:
+                print("✓ All files already processed")
+                return []
+            if len(structure_info['images']) - len(file_paths) > 0:
+                print(f"  Skipping {len(structure_info['images']) - len(file_paths)} already processed files")
+
             return self._process_batch(
                 file_paths=file_paths,
                 source_dir=data_path,
@@ -236,7 +253,12 @@ class BaseTask(ABC):
         
         for subdir_path, files in structure_info['structure'].items():
             subdir_name = Path(subdir_path).name
-            print(f"\n📁 Processing: {subdir_name} ({len(files)} files)")
+            files_to_process = self._filter_already_processed(files, str(subdir_output))
+            if not files_to_process:
+                print(f"  ✓ All files already processed")
+                continue
+            print(f"  Processing {len(files_to_process)}/{len(files)} files (skipping {len(files) - len(files_to_process)})")
+
             
             # Create corresponding output subdirectory
             subdir_output = Path(output_dir) / subdir_name
@@ -245,7 +267,7 @@ class BaseTask(ABC):
             # Process this subdirectory
             try:
                 results = self._process_batch(
-                    file_paths=files,
+                    file_paths=files_to_process,
                     source_dir=subdir_path,
                     output_dir=str(subdir_output),
                     save_image=save_image,
