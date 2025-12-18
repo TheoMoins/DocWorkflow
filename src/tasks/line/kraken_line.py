@@ -279,5 +279,18 @@ class KrakenLineTask(BaseTask):
                 print(f"  Error processing {image_path}: {e}")
                 import traceback
                 traceback.print_exc()
+
+            finally:
+                # Aggressive memory cleanup after each image
+                if 'image' in locals() and image is not None:
+                    image.close()
+                    del image
+                
+                # Force garbage collection every image
+                gc.collect()
+                
+                # Clear PyTorch cache if using GPU
+                if self.device == 'cuda':
+                    torch.cuda.empty_cache()
         
         return results
