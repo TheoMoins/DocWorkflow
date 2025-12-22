@@ -7,6 +7,7 @@ from src.cli.score import score
 from src.cli.train import train
 from src.cli.predict import predict
 from src.cli.print import visualize
+import shutil
 
 
 @click.group
@@ -40,8 +41,9 @@ def test_installation():
 )
 @click.option("-o", "--output", required=False, default="", type=click.Path(), help="Save results")
 @click.option("--save_image", is_flag=True, help="Save the image with the prediction.")
+@click.option("--cleanup_intermediate", is_flag=True, help="Delete intermediate results in full pipeline to save space.")
 @click.pass_obj
-def predict_command(config: Config, task: str, dataset: str, output: str, save_image: bool):
+def predict_command(config: Config, task: str, dataset: str, output: str, save_image: bool, cleanup_intermediate: bool):
 
     data_path = config.data[dataset]    
     if output == "":
@@ -68,8 +70,9 @@ def predict_command(config: Config, task: str, dataset: str, output: str, save_i
         
         # Chaîner les prédictions : sortie de chaque étape = entrée de la suivante
         current_input = data_path
+        previous_output = None  # Pour garder trace du dossier précédent
         
-        for task_name in tasks_list:
+        for idx, task_name in enumerate(tasks_list):
             task_obj = getattr(config, f"{task_name}_task")
             task_output = Path(base_output) / task_name
             task_output.mkdir(parents=True, exist_ok=True)
@@ -82,10 +85,18 @@ def predict_command(config: Config, task: str, dataset: str, output: str, save_i
                 save_image=True
             )
             
-            # La sortie de cette étape devient l'entrée de la suivante
-            current_input = task_output
-            
             click.echo(f"{task_name} completed")
+            
+            # Nettoyer les résultats intermédiaires si demandé
+            if cleanup_intermediate and previous_output is not None and idx < len(tasks_list) - 1:
+                # Ne pas supprimer le dernier output et ne pas supprimer si c'est les données originales
+                if previous_output != data_path:
+                    click.echo(f"Cleaning up intermediate results: {previous_output}")
+                    shutil.rmtree(previous_output)
+            
+            # La sortie de cette étape devient l'entrée de la suivante
+            previous_output = current_input
+            current_input = task_output
         
         click.echo(f"Full pipeline complete!")
         click.echo(f"Final output: {current_input}")
