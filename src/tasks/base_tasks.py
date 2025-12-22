@@ -250,19 +250,25 @@ class BaseTask(ABC):
             List of all results
         """
         all_results = []
+        total_subdirs = len(structure_info['subdirs'])
         
-        for subdir_path, files in structure_info['structure'].items():
+        for idx, (subdir_path, files) in enumerate(structure_info['structure'].items(), start=1):
             # Create corresponding output subdirectory
             subdir_name = Path(subdir_path).name
             subdir_output = Path(output_dir) / subdir_name
             subdir_output.mkdir(parents=True, exist_ok=True)
 
             files_to_process = self._filter_already_processed(files, str(subdir_output))
+            
             if not files_to_process:
-                print(f"  ✓ All files already processed")
+                print(f"[{idx:02d}/{total_subdirs:02d}] ✓ {subdir_name}: All files already processed")
                 continue
-            print(f"  Processing {len(files_to_process)}/{len(files)} files (skipping {len(files) - len(files_to_process)})")
-
+            
+            skipped = len(files) - len(files_to_process)
+            if skipped > 0:
+                print(f"[{idx:02d}/{total_subdirs:02d}] 📁 {subdir_name}: Processing {len(files_to_process)}/{len(files)} files (skipping {skipped})")
+            else:
+                print(f"[{idx:02d}/{total_subdirs:02d}] 📁 {subdir_name}: Processing {len(files_to_process)} files")
             
             # Process this subdirectory
             try:
@@ -273,16 +279,14 @@ class BaseTask(ABC):
                     save_image=save_image,
                     **kwargs
                 )
-                
                 if results:
                     all_results.extend(results if isinstance(results, list) else [results])
-                    
             except Exception as e:
                 print(f"  ❌ Error processing {subdir_name}: {e}")
                 import traceback
                 traceback.print_exc()
         
-        print(f"\n✓ Processed {len(structure_info['subdirs'])} subdirectories")
+        print(f"\n✓ Processed {total_subdirs} subdirectories")
         return all_results
     
     def visualize(self, task_name, data_path, xml_path=None, output_dir=None):
