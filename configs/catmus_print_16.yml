@@ -1,10 +1,10 @@
-run_name: "catmus_pipeline_print_16"
+run_name: "catmus_pipeline_roman_16_2"
 output_dir: "results"
 device: "cpu"
 use_wandb: false
 
 data:
-  test: "../data/corpus_roman_16_part_1"
+  test: "../data/corpus_roman_16_part_2"
 
 tasks:
   layout: 
