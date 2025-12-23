@@ -304,12 +304,68 @@ class BaseTask(ABC):
         """
         print(f"Visualizing results in {data_path}...")
         
-        return visualize_folder(
-            img_dir=data_path,
-            xml_dir=xml_path,
-            output_dir=output_dir,
-            visualization_type=task_name
-        )
+        # Use xml_path if provided, otherwise same as data_path
+        if xml_path is None:
+            xml_path = data_path
+        
+        # Discover dataset structure
+        file_extensions = self._get_file_extensions()
+        structure_info = discover_dataset_structure(data_path, file_extensions)
+        
+        if structure_info['type'] == 'empty':
+            print("No files found for visualization")
+            return 0
+        
+        # Process according to structure
+        if structure_info['type'] == 'flat':
+            # Flat structure: use existing function
+            return visualize_folder(
+                img_dir=data_path,
+                xml_dir=xml_path,
+                output_dir=output_dir,
+                visualization_type=task_name
+            )
+        else:
+            # Hierarchical structure: process each subdirectory
+            print(f"📁 Processing {len(structure_info['subdirs'])} subdirectories...")
+            
+            total_success = 0
+            total_subdirs = len(structure_info['subdirs'])
+            
+            for idx, subdir_path in enumerate(structure_info['subdirs'], start=1):
+                subdir_name = Path(subdir_path).name
+                
+                # Determine XML path for this subdirectory
+                if xml_path != data_path:
+                    subdir_xml = Path(xml_path) / subdir_name
+                else:
+                    subdir_xml = subdir_path
+                
+                # Determine output path for this subdirectory
+                if output_dir:
+                    subdir_output = Path(output_dir) / subdir_name
+                    subdir_output.mkdir(parents=True, exist_ok=True)
+                else:
+                    subdir_output = None
+                
+                try:
+                    print(f"[{idx:02d}/{total_subdirs:02d}] 📁 {subdir_name}:")
+                    
+                    success_count = visualize_folder(
+                        img_dir=str(subdir_path),
+                        xml_dir=str(subdir_xml),
+                        output_dir=str(subdir_output) if subdir_output else None,
+                        visualization_type=task_name
+                    )
+                    
+                    total_success += success_count
+                    print(f"  ✓ Generated {success_count} visualizations")
+                    
+                except Exception as e:
+                    print(f"  ❌ Error: {e}")
+            
+            print(f"\n✓ Total: {total_success} visualizations across {total_subdirs} subdirectories")
+            return total_success
     
     def _get_file_extensions(self):
         """
