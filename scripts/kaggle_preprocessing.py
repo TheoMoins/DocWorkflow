@@ -3,73 +3,111 @@ import pandas as pd
 from pathlib import Path
 from lxml import etree as ET
 import jiwer
-
+import os
 
 def extract_text_from_alto(alto_path):
-    """Extract full page text from ALTO."""
+    """
+    Extract transcribed text from ALTO XML file.
+    
+    Args:
+        alto_path: Path to ALTO XML file
+        
+    Returns:
+        String containing the full transcription
+    """
     tree = ET.parse(alto_path)
     root = tree.getroot()
-    ns = {'alto': 
-          'http://www.loc.gov/standards/alto/ns-v4#'}
+    ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
     
+    # Extract all String elements with CONTENT
     strings = root.findall('.//alto:String', ns)
     texts = [s.get('CONTENT', '') for s in strings if s.get('CONTENT')]
     
-    return ' '.join(texts)
+    # Join with spaces to preserve word boundaries
+    return ' '.join(texts) if texts else ''
 
-def create_submission_csv(data_dir, output_csv):
-    """Create CSV format: image_id, text"""
-    xml_files = sorted(glob.glob(f"{data_dir}/*.xml"))
+def create_solution_csv(data_dir, output_csv):
+    """
+    Create solution CSV from ALTO files.
+    
+    Args:
+        data_dir: Directory containing ALTO XML files
+        output_csv: Path to save the solution CSV
+    """
+    xml_files = sorted(glob.glob(os.path.join(data_dir, "*.xml")))
+    
+    if not xml_files:
+        raise ValueError(f"No XML files found in {data_dir}")
     
     data = []
+    empty_files = []
+    
     for xml_path in xml_files:
         image_id = Path(xml_path).stem
         text = extract_text_from_alto(xml_path)
-        data.append({'image_id': image_id, 'text': text})
+        
+        if not text.strip():
+            empty_files.append(image_id)
+            continue
+        
+        data.append({
+            'image_id': image_id,
+            'transcription': text
+        })
+    
+    if empty_files:
+        print(f"⚠️  Warning: {len(empty_files)} files with empty transcriptions:")
+        for f in empty_files[:5]:
+            print(f"  - {f}")
+        if len(empty_files) > 5:
+            print(f"  ... and {len(empty_files) - 5} more")
     
     df = pd.DataFrame(data)
     df.to_csv(output_csv, index=False)
-    print(f"Created {output_csv} with {len(df)} entries")
+    
+    print(f"\n✓ Created solution CSV: {output_csv}")
+    print(f"  - {len(df)} valid transcriptions")
+    print(f"  - Columns: {list(df.columns)}")
+    print(f"\nFirst few rows:")
+    print(df.head())
 
-def score(solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: str) -> float:
+def create_submission_template(data_dir, output_csv):
     """
-    Kaggle evaluation function.
+    Create empty submission template from images.
     
     Args:
-        solution: DataFrame with columns [image_id, text]
-        submission: DataFrame with columns [image_id, text]
-        row_id_column_name: Name of ID column ('image_id')
-    
-    Returns:
-        Score (lower is better for CER)
+        data_dir: Directory containing images
+        output_csv: Path to save the template CSV
     """
+    # Find all images
+    image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff']
+    images = []
     
-    # Vérifier que toutes les images sont présentes
-    if not set(submission[row_id_column_name]) == set(solution[row_id_column_name]):
-        missing = set(solution[row_id_column_name]) - set(submission[row_id_column_name])
-        raise ValueError(f"Missing predictions for images: {missing}")
+    for ext in image_extensions:
+        images.extend(glob.glob(os.path.join(data_dir, ext)))
     
-    # Aligner les DataFrames
-    solution = solution.sort_values(row_id_column_name).reset_index(drop=True)
-    submission = submission.sort_values(row_id_column_name).reset_index(drop=True)
+    if not images:
+        raise ValueError(f"No images found in {data_dir}")
     
-    # Extraire les textes
-    ground_truth = solution['text'].tolist()
-    predictions = submission['text'].tolist()
+    images = sorted(images)
     
-    # Calculer CER (Character Error Rate)
-    cer_score = jiwer.cer(ground_truth, predictions)
+    # Create template
+    data = []
+    for img_path in images:
+        image_id = Path(img_path).stem
+        data.append({
+            'image_id': image_id,
+            'transcription': ''  # To be filled
+        })
     
-    # Optionnel : calculer d'autres métriques pour le leaderboard détaillé
-    wer_score = jiwer.wer(ground_truth, predictions)
+    df = pd.DataFrame(data)
+    df.to_csv(output_csv, index=False)
     
-    print(f"CER: {cer_score:.4f}")
-    print(f"WER: {wer_score:.4f}")
-    
-    # Retourner le score principal (CER)
-    return cer_score
+    print(f"✓ Created submission template: {output_csv}")
+    print(f"  - {len(df)} images")
+
 
 if __name__ == "__main__":
     # Créer le fichier solution (secret)
-    create_submission_csv("../data/HTRomance-french/data/test", "public_test.csv")
+    create_solution_csv("results/catmus_pipeline_htromance/htr", "sandbox_submission.csv")
     
