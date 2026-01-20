@@ -7,9 +7,10 @@ from PIL import Image
 from pathlib import Path
 from lxml import etree as ET
 
-import jiwer
-from jiwer import cer, wer, mer, wil, wip
+from jiwer import cer, wer
 
+from src.utils.metrics import calculate_htr_metrics
+from src.utils.alto_text import extract_text_from_alto, extract_lines_text_from_alto
 
 class BaseHTR(BaseTask):
     """
@@ -38,58 +39,6 @@ class BaseHTR(BaseTask):
         """
         print(f"Training for {self.name} is not yet implemented.")
     
-    def _extract_text_from_alto(self, alto_path):
-        """
-        Extract transcribed text from ALTO XML file.
-        
-        Args:
-            alto_path: Path to ALTO XML file
-            
-        Returns:
-            Concatenated text from all String elements
-        """
-        tree = ET.parse(alto_path)
-        root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-        
-        # Extract all String elements
-        strings = root.findall('.//alto:String', ns)
-        texts = [s.get('CONTENT', '') for s in strings if s.get('CONTENT')]
-        
-        return ' '.join(texts) if texts else ''
-    
-    def _extract_lines_text_from_alto(self, alto_path):
-        """
-        Extract text line by line from ALTO XML file.
-        
-        Args:
-            alto_path: Path to ALTO XML file
-            
-        Returns:
-            List of dictionaries with line_id and text content
-        """
-        tree = ET.parse(alto_path)
-        root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-        
-        lines_text = []
-        
-        for textline in root.findall('.//alto:TextLine', ns):
-            line_id = textline.get('ID', '')
-            
-            # Extract text from String elements in this line
-            strings = textline.findall('.//alto:String', ns)
-            if strings:
-                text = ' '.join([s.get('CONTENT', '') for s in strings if s.get('CONTENT')])
-            else:
-                text = ''
-            
-            lines_text.append({
-                'id': line_id,
-                'text': text
-            })
-        
-        return lines_text
     
     def _create_simple_alto_with_text(self, image_path, text, output_path):
         """
@@ -177,58 +126,24 @@ class BaseHTR(BaseTask):
         tree = ET.ElementTree(alto)
         tree.write(output_path, pretty_print=True, 
                   xml_declaration=True, encoding="UTF-8")
+        
     
-    def score(self, pred_path, gt_path):
+    def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):
         """
-        Compute HTR metrics by comparing predictions to ground truth.
-        Uses standard metrics: CER, WER, MER, WIL, WIP.
-        
-        Args:
-            pred_path: Path to directory containing prediction ALTO files
-            gt_path: Path to directory containing ground truth ALTO files
-            
-        Returns:
-            Dictionary of evaluation metrics
+        Score a batch of HTR predictions.
         """
-        wandb_run = self._init_wandb()
-
-        # Find all ground truth files
-        gt_files = sorted(glob.glob(os.path.join(gt_path, "*.xml")))
-        if not gt_files:
-            raise ValueError(f"No ground truth ALTO files found in {gt_path}")
-        
         all_gt_texts = []
         all_pred_texts = []
-        
-        total_files = 0
-        matched_files = 0
-        total_lines = 0
-        perfect_lines = 0
-        
-        # Track per-page scores
         page_scores = []
         
-        # Process each file
-        for gt_file in tqdm(gt_files, desc="Scoring HTR", unit="page"):
-            base_name = os.path.basename(gt_file)
-            pred_file = os.path.join(pred_path, base_name)
-            
-            total_files += 1
-            
-            if not os.path.exists(pred_file):
-                print(f"Warning: No prediction file found for {base_name}")
-                continue
-            
+        for pred_file, gt_file in tqdm(zip(pred_files, gt_files), total=len(pred_files), desc="  Scoring", unit="page"):
             try:
-                # Store page-specific texts for individual scoring
+                gt_lines = extract_lines_text_from_alto(gt_file)
+                pred_lines = extract_lines_text_from_alto(pred_file)
+                
                 page_gt_texts = []
                 page_pred_texts = []
                 
-                # Try line-by-line comparison first
-                gt_lines = self._extract_lines_text_from_alto(gt_file)
-                pred_lines = self._extract_lines_text_from_alto(pred_file)
-                
-                # Check if prediction has only one line (CHURRO-style)
                 if len(pred_lines) == 1 and len(gt_lines) > 1:
                     # Fallback: split prediction by line breaks
                     single_text = pred_lines[0]['text']
@@ -239,110 +154,37 @@ class BaseHTR(BaseTask):
                         for gt_line, pred_text in zip(gt_lines, pred_texts_split):
                             gt_text = gt_line['text']
                             if gt_text.strip():
-                                total_lines += 1
-                                all_gt_texts.append(gt_text)
-                                all_pred_texts.append(pred_text)
                                 page_gt_texts.append(gt_text)
                                 page_pred_texts.append(pred_text)
-                                if pred_text == gt_text:
-                                    perfect_lines += 1
+
                     else:
-                        # Can't match lines: compare full page
                         full_gt = ' '.join(line['text'] for line in gt_lines if line['text'].strip())
                         full_pred = ' '.join(pred_texts_split)
                         if full_gt.strip():
-                            all_gt_texts.append(full_gt)
-                            all_pred_texts.append(full_pred)
                             page_gt_texts.append(full_gt)
                             page_pred_texts.append(full_pred)
                 else:
-                    # Fallback: compare full text
-                    gt_text = self._extract_text_from_alto(gt_file)
-                    pred_text = self._extract_text_from_alto(pred_file)
-                    
+                    gt_text = extract_text_from_alto(gt_file)
+                    pred_text = extract_text_from_alto(pred_file)
                     if gt_text.strip():
-                        all_gt_texts.append(gt_text)
-                        all_pred_texts.append(pred_text)
                         page_gt_texts.append(gt_text)
                         page_pred_texts.append(pred_text)
                 
-                # Calculate per-page CER and WER
                 if page_gt_texts and page_pred_texts:
-                    page_cer = cer(page_gt_texts, page_pred_texts)
-                    page_wer = wer(page_gt_texts, page_pred_texts)
+                    all_gt_texts.extend(page_gt_texts)
+                    all_pred_texts.extend(page_pred_texts)
                     
                     page_scores.append({
-                        'file': base_name,
-                        'path': gt_file,
-                        'cer': page_cer,
-                        'wer': page_wer
+                        'page': Path(gt_file).stem,
+                        'cer': cer(page_gt_texts, page_pred_texts),
+                        'wer': wer(page_gt_texts, page_pred_texts),
+                        'char_count': sum(len(t) for t in page_gt_texts),
+                        'word_count': sum(len(t.split()) for t in page_gt_texts)
                     })
-                
-                matched_files += 1
-                
             except Exception as e:
-                print(f"Error processing {gt_file}: {e}")
-                import traceback
-                traceback.print_exc()
-                continue
+                print(f"  Error on {Path(gt_file).name}: {e}")
         
-        if not all_gt_texts:
-            print("Warning: No valid text found for evaluation")
-            return {}
+        # Calculate global metrics
+        metrics_dict = calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores)
         
-        # Calculate metrics using jiwer
-        try:
-            cer_score = cer(all_gt_texts, all_pred_texts)
-            wer_score = wer(all_gt_texts, all_pred_texts)
-            mer_score = mer(all_gt_texts, all_pred_texts)
-            wil_score = wil(all_gt_texts, all_pred_texts)
-            # wip_score = wip(all_gt_texts, all_pred_texts)
-            
-            char_accuracy = 1.0 - cer_score
-            word_accuracy = 1.0 - wer_score
-            line_accuracy = perfect_lines / total_lines if total_lines > 0 else 0.0
-            
-            # Get detailed error counts
-            cer_output = jiwer.process_characters(all_gt_texts, all_pred_texts)
-            wer_output = jiwer.process_words(all_gt_texts, all_pred_texts)
-            
-            metrics_dict = {
-                "score/cer": cer_score,
-                "score/wer": wer_score,
-                "score/mer": mer_score,
-                "score/wil": wil_score,
-                # "score/wip": wip_score,
-                "accuracy/char_accuracy": char_accuracy,
-                "accuracy/word_accuracy": word_accuracy,
-                "accuracy/line_accuracy": line_accuracy,
-                "total/total_chars": sum(len(text) for text in all_pred_texts),
-                "total/total_words": sum(len(text.split()) for text in all_pred_texts),
-                "total/total_lines": total_lines,
-                "total/perfect_lines": perfect_lines,
-                "total/files_processed": matched_files,
-                "detailed/char_insertions": cer_output.insertions,
-                "detailed/char_deletions": cer_output.deletions,
-                "detailed/char_substitutions": cer_output.substitutions,
-                "detailed/word_insertions": wer_output.insertions,
-                "detailed/word_deletions": wer_output.deletions,
-                "detailed/word_substitutions": wer_output.substitutions,
-            }
-
-            # Identify 5 worst pages by CER
-            worst_pages_cer = sorted(page_scores, key=lambda x: x['cer'], reverse=True)[:5]
-            
-            # Add worst pages to metrics (flat structure for CSV)
-            for i, page in enumerate(worst_pages_cer, 1):
-                metrics_dict[f"worst/top{i}_file"] = page['file']
-                metrics_dict[f"worst/top{i}_cer"] = page['cer']
-
-            self._log_to_wandb(metrics_dict, wandb_run)
-            self._display_metrics(metrics_dict)
-            self._finish_wandb(wandb_run)
-            return metrics_dict
-            
-        except Exception as e:
-            print(f"Error calculating metrics: {e}")
-            import traceback
-            traceback.print_exc()
-            return {}
+        return metrics_dict, page_scores

@@ -8,6 +8,7 @@ import os
 
 from src.utils.visualisation import visualize_folder
 from src.utils.dataset_structure import discover_dataset_structure
+from src.utils.metrics import aggregate_metrics, save_score_csvs
 
 class BaseTask(ABC):
     """
@@ -143,20 +144,139 @@ class BaseTask(ABC):
             Results from processing (task-specific format)
         """
         pass
-    
+
     @abstractmethod
-    def score(self, pred_path, gt_path):
+    def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):
         """
-        Calculate scores between predictions and ground truth.
+        Score a batch of predictions against ground truth.
+        Must be implemented by subclasses.
         
         Args:
-            pred_path: Path to directory containing predictions
-            gt_path: Path to directory containing ground truth
+            pred_files: List of prediction file paths
+            gt_files: List of ground truth file paths (same order)
+            pred_dir: Prediction directory (for context)
+            gt_dir: Ground truth directory (for context)
             
         Returns:
-            Dictionary of evaluation metrics
+            Tuple of (metrics_dict, page_scores_list)
         """
         pass
+
+    def _score_hierarchical(self, pred_path, gt_path):
+        """
+        Score a hierarchical dataset structure.
+        Calls _score_batch for each subdirectory.
+        """        
+        structure_info = discover_dataset_structure(gt_path, self._get_score_file_extensions())
+        
+        all_page_scores = []
+        document_scores = []
+        all_metrics_for_aggregation = []
+        
+        total_subdirs = len(structure_info['subdirs'])
+        
+        for idx, (subdir_path, gt_files) in enumerate(structure_info['structure'].items(), start=1):
+            subdir_name = Path(subdir_path).name
+            pred_subdir = Path(pred_path) / subdir_name
+            
+            print(f"[{idx:02d}/{total_subdirs:02d}] 📊 {subdir_name}")
+            
+            if not pred_subdir.exists():
+                print(f"  ⚠️  No predictions found")
+                continue
+            
+            # Find matching prediction files
+            pred_files = []
+            matched_gt_files = []
+            for gt_file in gt_files:
+                pred_file = pred_subdir / Path(gt_file).name
+                if pred_file.exists():
+                    pred_files.append(str(pred_file))
+                    matched_gt_files.append(gt_file)
+            
+            if not pred_files:
+                print(f"  ⚠️  No matching predictions")
+                continue
+            
+            # Score this subdirectory
+            doc_metrics, doc_page_scores = self._score_batch(
+                pred_files, matched_gt_files,
+                str(pred_subdir), str(subdir_path)
+            )
+            
+            # Add document info to page scores
+            for score in doc_page_scores:
+                score['document'] = subdir_name
+            
+            all_page_scores.extend(doc_page_scores)
+            all_metrics_for_aggregation.append(doc_metrics)
+            
+            # Document summary: just add document name and page count to metrics
+            doc_summary = {
+                'document': subdir_name,
+                'pages': len(doc_page_scores),
+                **doc_metrics  # Copier toutes les métriques
+            }
+            
+            document_scores.append(doc_summary)
+            
+            print(f"  ✓ {len(doc_page_scores)} pages scored")
+
+        
+        # Aggregate metrics
+        global_metrics = aggregate_metrics(all_metrics_for_aggregation)
+        
+        return global_metrics, all_page_scores, document_scores
+
+    def score(self, pred_path, gt_path):
+        """
+        Score predictions. 
+        Auto-detects flat/hierarchical structure.
+        """
+        wandb_run = self._init_wandb()
+        
+        structure_info = discover_dataset_structure(gt_path, self._get_score_file_extensions())
+        
+        if structure_info['type'] == 'empty':
+            raise ValueError(f"No files found in {gt_path}")
+        
+        print(f"\n📊 Scoring: {structure_info['type']} structure")
+        
+        if structure_info['type'] == 'flat':
+            # Find matching files
+            gt_files = structure_info['images']
+            pred_files = []
+            matched_gt = []
+            for gt_file in gt_files:
+                pred_file = Path(pred_path) / Path(gt_file).name
+                if pred_file.exists():
+                    pred_files.append(str(pred_file))
+                    matched_gt.append(gt_file)
+            
+            metrics_dict, page_scores = self._score_batch(pred_files, matched_gt, pred_path, gt_path)
+            document_scores = None
+            structure_type = 'flat'
+        else:
+            metrics_dict, page_scores, document_scores = self._score_hierarchical(pred_path, gt_path)
+            structure_type = 'hierarchical'
+        
+        self._log_to_wandb(metrics_dict, wandb_run)
+        self._display_metrics(metrics_dict)
+        self._finish_wandb(wandb_run)
+        
+        # Return all data for CSV export
+        return {
+                'metrics': metrics_dict,
+                'page_scores': page_scores,
+                'document_scores': document_scores,
+                'structure_type': structure_type
+                }
+
+    def _get_score_file_extensions(self):
+        """
+        File extensions for scoring. Default: same as prediction.
+        """
+        return self._get_file_extensions()
     
 
     def _filter_already_processed(self, file_paths, output_dir):

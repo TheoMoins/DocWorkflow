@@ -119,58 +119,58 @@ class KrakenLineTask(BaseTask):
         return result[0] if result[0] is not None else []
 
 
-    def score(self, pred_path, gt_path):
+    def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):
         """
-        Calculate scores between prediction ALTO files and ground truth ALTO files.
+        Score line predictions for a batch of files.
         
         Args:
-            pred_path: Path to directory containing prediction ALTO files
-            gt_path: Path to directory containing ground truth ALTO files
+            pred_files: List of prediction ALTO file paths
+            gt_files: List of ground truth ALTO file paths
+            pred_dir: Prediction directory
+            gt_dir: Ground truth directory
             
         Returns:
-            Dictionary of evaluation metrics
+            Tuple of (metrics_dict, page_scores)
         """
-        wandb_run = self._init_wandb()
-
+        
         # Initialize metrics builder
         builder = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
         
-        # Process ground truth data
-        gt_files = sorted(glob.glob(os.path.join(gt_path, "*.xml")))
-        if not gt_files:
-            raise ValueError(f"No ground truth ALTO files found in {gt_path}")
+        page_scores = []
         
         # Process files
-        for gt_file in tqdm(gt_files, desc="Scoring pages", unit="page"):
-            base_name = os.path.basename(gt_file)
-            pred_file = os.path.join(pred_path, base_name)
-            
-            if not os.path.exists(pred_file):
-                print(f"Warning: No prediction file found for {base_name}")
-                continue
-            
+        for pred_file, gt_file in tqdm(zip(pred_files, gt_files), total=len(pred_files),
+                                        desc="  Scoring", unit="page"):
             image_path, gt_lines, _ = extract_lines_from_alto(gt_file)
             if not gt_lines:
-                print(f"Warning: No lines found in {gt_file}")
+                print(f"  Warning: No lines in {Path(gt_file).name}")
                 continue
             
             _, pred_lines, _ = extract_lines_from_alto(pred_file)
             if not pred_lines:
-                print(f"Warning: No predicted lines found in {pred_file}")
+                print(f"  Warning: No predictions in {Path(pred_file).name}")
                 continue
             
             try:
                 image = Image.open(image_path)
                 image_size = image.size
             except Exception as e:
-                print(f"Error opening image {image_path}: {e}")
+                print(f"  Error opening image {image_path}: {e}")
                 continue
             
+            # Convert to boxes
             gt_boxes = convert_lines_to_boxes(gt_lines, image_size, is_gt=True)
             pred_boxes = convert_lines_to_boxes(pred_lines, image_size, is_gt=False)
             
             if gt_boxes.shape[0] > 0 and pred_boxes.shape[0] > 0:
                 builder.add(pred_boxes, gt_boxes)
+                
+                # Store per-page info
+                page_scores.append({
+                    'page': Path(gt_file).stem,
+                    'gt_lines': len(gt_lines),
+                    'pred_lines': len(pred_lines),
+                })
             
             if image:
                 image.close()
@@ -178,11 +178,9 @@ class KrakenLineTask(BaseTask):
             
             gc.collect()
         
-        # Calculate metrics
+        # Calculate global metrics
         metrics = builder.value(iou_thresholds=[round(x, 2) for x in np.arange(0.5, 1.0, 0.05)])
         
-        # Extract metrics
-        # TODO : ADD mAP/precision/recall for MainZone
         metrics_dict = {
             "dataset_test/map50-95": metrics["mAP"],
             "dataset_test/map50": metrics[0.5][0]["ap"],
@@ -190,12 +188,12 @@ class KrakenLineTask(BaseTask):
             "dataset_test/precision": metrics[0.75][0]["precision"].mean(),
             "dataset_test/recall": metrics[0.75][0]["recall"].mean()
         }
+        
+        return metrics_dict, page_scores
 
-        self._log_to_wandb(metrics_dict, wandb_run)
-        self._display_metrics(metrics_dict)
-        self._finish_wandb(wandb_run)
-
-        return metrics_dict
+    def _get_score_file_extensions(self):
+        """Line scores XML files."""
+        return ['*.xml']
     
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True):
         """
