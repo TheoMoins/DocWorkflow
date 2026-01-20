@@ -375,36 +375,24 @@ class VLMHTRTask(BaseHTR):
         return alto_path
 
 
-    def predict(self, data_path, output_dir, save_image=True):
+    def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
-        Run CHURRO HTR on images.
+        Process a batch of images for VLM HTR.
         
         Args:
-            data_path: Directory containing images
+            file_paths: List of image paths to process
+            source_dir: Source directory (for finding ALTO if exists)
             output_dir: Directory to save ALTO XML files
-            save_image: Whether to copy images to output directory
+            save_image: Whether to copy images to output
             
         Returns:
-            List of results
+            List of prediction results
         """
-        if not self.model:
-            self.load()
-        
-        # Find all images
-        image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff']
-        image_paths = []
-        for ext in image_extensions:
-            image_paths.extend(glob.glob(os.path.join(data_path, ext)))
-        
-        if not image_paths:
-            raise ValueError(f"No images found in {data_path}")
-        
-        print(f"Found {len(image_paths)} images")
+        print(f"  Processing {len(file_paths)} images...")
         
         results = []
         
-        # Process images
-        for image_path in tqdm(image_paths, desc="Recognizing text", unit="image"):
+        for image_path in tqdm(file_paths, desc="  Recognizing text", unit="image"):
             try:
                 # Recognize text
                 text = self._recognize_single_image(image_path)
@@ -414,7 +402,7 @@ class VLMHTRTask(BaseHTR):
                 output_path = os.path.join(output_dir, f"{base_name}.xml")
                 
                 # Check if there's an existing ALTO with layout/lines
-                existing_alto = os.path.join(data_path, f"{base_name}.xml")
+                existing_alto = os.path.join(source_dir, f"{base_name}.xml")
                 if os.path.exists(existing_alto):
                     # Copy existing structure
                     shutil.copy2(existing_alto, output_path)
@@ -422,7 +410,7 @@ class VLMHTRTask(BaseHTR):
                     # Create simple ALTO
                     self._create_simple_alto_with_text(image_path, text, output_path)
                 
-                # Split CHURRO output into lines
+                # Split VLM output into lines
                 self._split_output_into_lines(output_path, text, image_path)
                 
                 results.append({
@@ -443,7 +431,7 @@ class VLMHTRTask(BaseHTR):
                         torch.cuda.empty_cache()
                 
             except Exception as e:
-                print(f"Error processing {image_path}: {e}")
+                print(f"  Error processing {image_path}: {e}")
                 import traceback
                 traceback.print_exc()
                 continue

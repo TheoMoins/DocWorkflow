@@ -109,7 +109,7 @@ class KrakenLineTask(BaseTask):
         thread = threading.Thread(target=process_image)
         thread.daemon = True
         thread.start()
-        thread.join(timeout=60)
+        thread.join(timeout=90)
         
         if thread.is_alive():
             is_timeout[0] = True
