@@ -69,64 +69,64 @@ def create_metadata_stats(document_scores, results_path):
     Create aggregated statistics by metadata features.
     
     Args:
-        document_scores: List of document scores with metadata
+        document_scores: List of document scores with metadata (prefixed with 'metadata/')
         results_path: Path to save CSV files
         
     Returns:
         List of created CSV filenames
-    """    
-    # Detect if there's metadata (columns beyond standard ones)
+    """
     if not document_scores:
         return []
     
     df = pd.DataFrame(document_scores)
-    standard_cols = {'document', 'pages'}
     
-    # Find metric columns (those starting with known prefixes)
-    metric_prefixes = ['score/', 'dataset_test/', 'accuracy/', 'total/', 'detailed/']
-    metric_cols = [col for col in df.columns 
-                   if any(col.startswith(prefix) for prefix in metric_prefixes)]
-    
-    # Extract just the metric name (e.g., 'score/cer' -> 'cer')
-    simple_metric_names = []
-    for col in metric_cols:
-        for prefix in metric_prefixes:
-            if col.startswith(prefix):
-                simple_name = col[len(prefix):]
-                simple_metric_names.append(simple_name)
-                break
-    
-    # Find metadata columns
-    metadata_cols = [col for col in df.columns 
-                     if col not in standard_cols and col not in metric_cols]
+    # Find metadata columns (those starting with 'metadata/')
+    metadata_cols = [col for col in df.columns if col.startswith('metadata/')]
     
     if not metadata_cols:
         return []
     
-    print(f"\n📊 Creating metadata statistics for: {', '.join(metadata_cols)}")
+    # Extract feature names (remove 'metadata/' prefix)
+    features = {col: col.replace('metadata/', '') for col in metadata_cols}
+    
+    print(f"\n📊 Creating metadata statistics for: {', '.join(features.values())}")
+    
+    # Find CER and WER columns
+    cer_col = 'score/cer' if 'score/cer' in df.columns else None
+    wer_col = 'score/wer' if 'score/wer' in df.columns else None
+    
+    if not cer_col and not wer_col:
+        print("  ⚠️  No CER/WER metrics found")
+        return []
     
     csv_files = []
     
-    # For each metadata feature, create aggregated stats
-    for feature in metadata_cols:
-        # Group by this feature
-        feature_df = df.groupby(feature).agg({
-            'pages': 'sum',  # Total pages per group
-            **{col: ['mean', 'std', 'count'] for col in metric_cols}
-        })
+    # For each metadata feature
+    for metadata_col, feature_name in features.items():
+        agg_dict = {'pages': 'sum'}
         
-        # Flatten multi-index columns
-        feature_df.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col 
-                              for col in feature_df.columns.values]
-        feature_df = feature_df.reset_index()
+        if cer_col:
+            agg_dict[cer_col] = ['mean', 'std', 'count']
+        if wer_col:
+            agg_dict[wer_col] = ['mean', 'std', 'count']
         
-        # Save to CSV
-        csv_filename = f"scores_by_{feature}.csv"
-        csv_path = results_path / csv_filename
-        feature_df.to_csv(csv_path, index=False)
-        csv_files.append(csv_filename)
+        # Group by this metadata feature
+        grouped = df.groupby(metadata_col).agg(agg_dict)
         
-        # Display summary
-        print(f"  • {feature}: {len(feature_df)} groups")
+        # Flatten column names
+        grouped.columns = ['_'.join(col).strip('_') if isinstance(col, tuple) else col 
+                            for col in grouped.columns.values]
+        grouped = grouped.reset_index()
+        
+        # Rename the metadata column to just the feature name
+        grouped = grouped.rename(columns={metadata_col: feature_name})
+        
+        # Save
+        csv_path = results_path / f"scores_by_{feature_name}.csv"
+        grouped.to_csv(csv_path, index=False)
+        csv_files.append(f"scores_by_{feature_name}.csv")
+        
+        print(f"  • {feature_name}: {len(grouped)} groups")
+            
     
     return csv_files

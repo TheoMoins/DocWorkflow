@@ -221,14 +221,16 @@ class BaseTask(ABC):
                 'pages': len(doc_page_scores),
                 **doc_metrics
             }
-            
+
             # Load and add metadata if requested
             if use_metadata:
                 metadata = load_metadata(subdir_path)
                 if metadata:
-                    doc_summary.update(metadata)
+                    # Prefix metadata with 'metadata/'
+                    for key, value in metadata.items():
+                        doc_summary[f'metadata/{key}'] = value
                     print(f"  📋 Metadata: {metadata}")
-            
+
             document_scores.append(doc_summary)
             
             print(f"  ✓ {len(doc_page_scores)} pages scored")
