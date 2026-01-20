@@ -8,7 +8,8 @@ import os
 
 from src.utils.visualisation import visualize_folder
 from src.utils.dataset_structure import discover_dataset_structure
-from src.utils.metrics import aggregate_metrics, save_score_csvs
+from src.utils.metadata import load_metadata
+from src.utils.metrics import aggregate_metrics
 
 class BaseTask(ABC):
     """
@@ -173,6 +174,9 @@ class BaseTask(ABC):
         document_scores = []
         all_metrics_for_aggregation = []
         
+        # Check if we should use metadata
+        use_metadata = self.config.get('use_metadata', False)
+        
         total_subdirs = len(structure_info['subdirs'])
         
         for idx, (subdir_path, gt_files) in enumerate(structure_info['structure'].items(), start=1):
@@ -211,12 +215,19 @@ class BaseTask(ABC):
             all_page_scores.extend(doc_page_scores)
             all_metrics_for_aggregation.append(doc_metrics)
             
-            # Document summary: just add document name and page count to metrics
+            # Document summary
             doc_summary = {
                 'document': subdir_name,
                 'pages': len(doc_page_scores),
-                **doc_metrics  # Copier toutes les métriques
+                **doc_metrics
             }
+            
+            # Load and add metadata if requested
+            if use_metadata:
+                metadata = load_metadata(subdir_path)
+                if metadata:
+                    doc_summary.update(metadata)
+                    print(f"  📋 Metadata: {metadata}")
             
             document_scores.append(doc_summary)
             

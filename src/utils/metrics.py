@@ -1,8 +1,9 @@
 import pandas as pd
-from pathlib import Path
-
 import jiwer
 from jiwer import cer, wer
+from pathlib import Path
+
+from src.utils.metadata import create_metadata_stats
 
 
 def aggregate_metrics(metrics_list):
@@ -119,14 +120,22 @@ def save_score_csvs(results_dir, page_scores, document_scores=None, structure_ty
             df.to_csv(doc_path / "scores_per_page.csv", index=False)
         
         # Global CSVs
+        csv_files = []
+        
         if document_scores:
-            pd.DataFrame(document_scores).to_csv(
-                results_path / "scores_per_document.csv", index=False
-            )
+            doc_df = pd.DataFrame(document_scores)
+            doc_csv = results_path / "scores_per_document.csv"
+            doc_df.to_csv(doc_csv, index=False)
+            csv_files.append("scores_per_document.csv")
+            
+            # Check if metadata is present and create aggregated stats
+            metadata_stats = create_metadata_stats(document_scores, results_path)
+            if metadata_stats:
+                csv_files.extend(metadata_stats)
         
-        pd.DataFrame(page_scores).to_csv(
-            results_path / "scores_all_pages.csv", index=False
-        )
+        all_csv = results_path / "scores_all_pages.csv"
+        pd.DataFrame(page_scores).to_csv(all_csv, index=False)
+        csv_files.append("scores_all_pages.csv")
         
-        print(f"\n✓ Saved: scores_per_document.csv, scores_all_pages.csv, "
+        print(f"\n✓ Saved: {', '.join(csv_files)}, "
               f"and {len(documents)} per-document CSVs")
