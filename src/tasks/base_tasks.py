@@ -10,6 +10,7 @@ from src.utils.visualisation import visualize_folder
 from src.utils.dataset_structure import discover_dataset_structure
 from src.utils.metadata import load_metadata
 from src.utils.metrics import aggregate_metrics
+from src.utils.wandb import prepare_wandb_data
 
 class BaseTask(ABC):
     """
@@ -43,15 +44,22 @@ class BaseTask(ABC):
             self.model.to(self.device)
     
     
-    def _init_wandb(self):
+    def _init_wandb(self, run_type="eval"):
         """
         Initialize a Weights & Biases session.
+        
+        Args:
+            run_type: Type of run ('train' or 'eval')
+            dataset_name: Name of the dataset being evaluated
         """
         if not self.use_wandb:
             return None
         
         # Load API key from file if it exists
-        api_key_file = Path("wandb_api_key.txt")
+        if self.wandb_project == "icdar-htr-competition-2026":
+            api_key_file = Path("wandb_api_key_icdar.txt")
+        else:
+            api_key_file = Path("wandb_api_key.txt")
         if api_key_file.exists():
             try:
                 with open(api_key_file, 'r') as f:
@@ -61,25 +69,82 @@ class BaseTask(ABC):
             except Exception as e:
                 print(f"Warning: Could not load wandb API key from {api_key_file}: {e}")
         
+        # Create run name
+        dataset_name = Path(self.config.get('data', {}).get('test', 'unknown')).name
 
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if run_type == "eval":
+            run_name = f"{self.config.get('run_name', 'eval')}"
+            if dataset_name:
+                run_name += f"_{dataset_name}"
+            run_name += f"_{timestamp}"
+        else:
+            run_name = f"train_{self.config.get('run_name', 'model')}_{timestamp}"
+
+        # Prepare config for wandb
+        wandb_config = {
+            'run_name': run_name,
+            'dataset': dataset_name,
+            'run_type': run_type,
+            **{k: v for k, v in self.config.items() 
+            if k not in ['device', 'use_wandb', 'wandb_project']}
+        }        
         return wandb.init(
-            project=self.wandb_project, 
-            name=f"eval-{self.model_name}-{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            config=self.config
+            project=self.wandb_project,
+            name=run_name,
+            config=wandb_config,
+            tags=[run_type, dataset_name]
         )
     
-    def _log_to_wandb(self, metrics, run=None):
+    def _log_to_wandb(self, metrics, run=None, tables=None, files=None):
         """
-        Log metrics to Weights & Biases.
+        Log metrics, tables, and files to Weights & Biases.
+        
+        Args:
+            metrics: Dictionary of scalar metrics
+            run: Wandb run object (optional)
+            tables: Dictionary of wandb.Table objects to log
+            files: Dictionary of file paths to log as artifacts
         """
         if not self.use_wandb:
             return
-    
+
+        # Log scalar metrics
         if run:
             run.log(metrics)
+            
+            # Log tables
+            if tables:
+                for table_name, table in tables.items():
+                    run.log({table_name: table})
+            
+            # Log files as artifacts
+            if files:
+                artifact = wandb.Artifact(
+                    name=f"results_{run.id}",
+                    type="evaluation_results"
+                )
+                for file_name, file_path in files.items():
+                    if Path(file_path).exists():
+                        artifact.add_file(file_path, name=file_name)
+                run.log_artifact(artifact)
         else:
             wandb.log(metrics)
-    
+            
+            if tables:
+                for table_name, table in tables.items():
+                    wandb.log({table_name: table})
+            
+            if files:
+                artifact = wandb.Artifact(
+                    name=f"results_{wandb.run.id}",
+                    type="evaluation_results"
+                )
+                for file_name, file_path in files.items():
+                    if Path(file_path).exists():
+                        artifact.add_file(file_path, name=file_name)
+                wandb.log_artifact(artifact)
+
     def _finish_wandb(self, run=None):
         """
         Finish a wandb session.
@@ -246,7 +311,12 @@ class BaseTask(ABC):
         Score predictions. 
         Auto-detects flat/hierarchical structure.
         """
-        wandb_run = self._init_wandb()
+        
+        wandb_run = self._init_wandb(
+            run_type="eval",
+            task_name=self.name.split()[0].lower() if hasattr(self, 'name') else 'htr',
+            dataset_name=dataset_name or Path(gt_path).name
+        )
         
         structure_info = discover_dataset_structure(gt_path, self._get_score_file_extensions())
         
@@ -273,7 +343,15 @@ class BaseTask(ABC):
             metrics_dict, page_scores, document_scores = self._score_hierarchical(pred_path, gt_path)
             structure_type = 'hierarchical'
         
-        self._log_to_wandb(metrics_dict, wandb_run)
+        # Prepare wandb tables and files
+        wandb_tables, wandb_files, metadata_metrics = prepare_wandb_data(
+            page_scores, document_scores, structure_type, Path(pred_path).parent
+        )
+        
+        # Merge metadata metrics into main metrics
+        metrics_dict.update(metadata_metrics)
+        
+        self._log_to_wandb(metrics_dict, wandb_run, tables=wandb_tables, files=wandb_files)
         self._display_metrics(metrics_dict)
         self._finish_wandb(wandb_run)
         

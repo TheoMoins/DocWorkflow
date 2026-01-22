@@ -33,34 +33,69 @@ def aggregate_scores_by_metadata(document_scores, metric_keys=['cer', 'wer']):
     Aggregate scores by metadata features.
     
     Args:
-        document_scores: List of document score dicts with metadata
+        document_scores: List of document score dicts with metadata (prefixed with 'metadata/')
         metric_keys: List of metric keys to aggregate (e.g., ['cer', 'wer'])
         
     Returns:
-        Dictionary mapping feature_name -> feature_value -> aggregated_metrics
+        Dictionary mapping feature_name -> {
+            'aggregated': list of dicts with mean/std/count per value,
+            'summary_metrics': dict with overall metrics by feature value
+        }
     """
+    if not document_scores:
+        return {}
     
     # Convert to DataFrame for easier grouping
     df = pd.DataFrame(document_scores)
     
-    # Find metadata columns (exclude standard columns)
-    standard_cols = {'document', 'pages'} | set(metric_keys)
-    metadata_cols = [col for col in df.columns if col not in standard_cols]
+    # Find metadata columns (those starting with 'metadata/')
+    metadata_cols = [col for col in df.columns if col.startswith('metadata/')]
     
     if not metadata_cols:
         return {}
     
+    # Find metric columns with the score/ prefix
+    score_cols = [f'score/{key}' for key in metric_keys if f'score/{key}' in df.columns]
+    
+    if not score_cols:
+        return {}
+    
     aggregated = {}
     
-    for feature in metadata_cols:
-        # Group by this feature and calculate means
-        grouped = df.groupby(feature)[metric_keys].agg(['mean', 'std', 'count'])
+    for metadata_col in metadata_cols:
+        feature_name = metadata_col.replace('metadata/', '')
+        
+        # Group by this feature and calculate statistics
+        grouped = df.groupby(metadata_col)[score_cols].agg(['mean', 'std', 'count'])
+        
+        # Also get page counts
+        page_counts = df.groupby(metadata_col)['pages'].sum()
         
         # Flatten multi-index columns
         grouped.columns = ['_'.join(col).strip() for col in grouped.columns.values]
         grouped = grouped.reset_index()
         
-        aggregated[feature] = grouped.to_dict('records')
+        # Add page counts
+        grouped['total_pages'] = page_counts.values
+        
+        # Rename metadata column
+        grouped = grouped.rename(columns={metadata_col: feature_name})
+        
+        # Create summary metrics dict for wandb logging
+        summary_metrics = {}
+        for _, row in grouped.iterrows():
+            feature_value = row[feature_name]
+            prefix = f"by_{feature_name}/{feature_value}"
+            
+            for metric_key in metric_keys:
+                mean_col = f'score/{metric_key}_mean'
+                if mean_col in row:
+                    summary_metrics[f"{prefix}/{metric_key}"] = row[mean_col]
+        
+        aggregated[feature_name] = {
+            'aggregated': grouped.to_dict('records'),
+            'summary_metrics': summary_metrics
+        }
     
     return aggregated
 

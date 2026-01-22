@@ -25,6 +25,7 @@ class Config(object):
         config["use_wandb"] = self.yaml.get("use_wandb", False)
         config["wandb_project"] = self.yaml.get("wandb_project", None)
         config["run_name"] = self.yaml.get("run_name", "unknown")
+        config["data"] = self.yaml.get("data", {})
         return config
 
     def get_tasks(self) -> list:

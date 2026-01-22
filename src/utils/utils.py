@@ -8,18 +8,6 @@ from sklearn.cluster import DBSCAN
 
 IGNORED_ZONE_TYPES = {'DigitizationArtefactZone', 'MarginTextZone', 'NumberingZone', 'DropCapitalZone'}
 
-def setup_wandb(key=None):
-    """
-    Configure Weights & Biases for logging.
-    
-    Args:
-        key: Optional WandB API key
-    """
-    if key:
-        wandb.login(key=key)
-    else:
-        wandb.login()
-
 def get_device():
     """
     Determine the device to use (CUDA or CPU).

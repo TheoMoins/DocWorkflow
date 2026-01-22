@@ -6,7 +6,7 @@ configs/pipeline
 configs/vlm
 
 /wandb/
-wandb_api_key.txt
+wandb_api_key*
 *.pyc
 .ipynb_checkpoints
 

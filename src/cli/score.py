@@ -26,7 +26,7 @@ def score(
 
     # Save main metrics CSV
     results_df = pd.DataFrame([results['metrics']])
-    output_file = dir / "results.csv"  # ou un autre nom
+    output_file = dir / "results.csv"
     results_df.to_csv(output_file, index=False)
     print(f"\nResults saved to {output_file}")
 

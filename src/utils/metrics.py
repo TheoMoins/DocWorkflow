@@ -71,15 +71,18 @@ def calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores):
         "detailed/word_substitutions": wer_output.substitutions,
     }
     
-    # Add worst pages
+    # Add worst pages (always add 5 entries, use None for missing)
     if page_scores:
         worst_pages = sorted(page_scores, key=lambda x: x['cer'], reverse=True)[:5]
-        for i, page in enumerate(worst_pages, 1):
-            metrics_dict[f"worst/top{i}_file"] = page['page']
-            metrics_dict[f"worst/top{i}_cer"] = page['cer']
+        for i in range(1, 6):  # Top 5
+            if i <= len(worst_pages):
+                metrics_dict[f"worst/top{i}_file"] = worst_pages[i-1]['page']
+                metrics_dict[f"worst/top{i}_cer"] = worst_pages[i-1]['cer']
+            else:
+                metrics_dict[f"worst/top{i}_file"] = None
+                metrics_dict[f"worst/top{i}_cer"] = None
     
     return metrics_dict
-
 
 def save_score_csvs(results_dir, page_scores, document_scores=None, structure_type='flat'):
     """
