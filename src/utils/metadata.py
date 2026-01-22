@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import tabulate
 
 from pathlib import Path
 from typing import Dict, Optional
@@ -165,3 +166,51 @@ def create_metadata_stats(document_scores, results_path):
             
     
     return csv_files
+
+def display_metadata_metrics(metadata_metrics):
+    """
+    Display metadata-aggregated metrics in a formatted way.
+    
+    Args:
+        metadata_metrics: Dictionary of metadata-aggregated metrics
+    """
+    if not metadata_metrics:
+        return
+    
+    print("\n📊 Metrics by Metadata:")
+    print("=" * 70)
+    
+    # Group metrics by feature
+    by_feature = {}
+    for key, value in metadata_metrics.items():
+        # key format: "by_{feature}/{value}/{metric}"
+        parts = key.split('/')
+        if len(parts) == 3 and parts[0].startswith('by_'):
+            feature = parts[0].replace('by_', '')
+            feature_value = parts[1]
+            metric = parts[2]
+            
+            if feature not in by_feature:
+                by_feature[feature] = {}
+            if feature_value not in by_feature[feature]:
+                by_feature[feature][feature_value] = {}
+            
+            by_feature[feature][feature_value][metric] = value
+    
+    # Display by feature
+    for feature, values in sorted(by_feature.items()):
+        print(f"\n  {feature.upper()}:")
+        
+        table_data = [["Value", "CER", "WER"]]
+        for value_name, metrics in sorted(values.items()):
+            cer = metrics.get('cer', 'N/A')
+            wer = metrics.get('wer', 'N/A')
+            
+            if isinstance(cer, float):
+                cer = f"{cer:.4f}"
+            if isinstance(wer, float):
+                wer = f"{wer:.4f}"
+            
+            table_data.append([value_name, cer, wer])
+        
+        print(tabulate.tabulate(table_data, headers="firstrow", tablefmt="simple"))

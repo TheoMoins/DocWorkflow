@@ -8,7 +8,7 @@ import os
 
 from src.utils.visualisation import visualize_folder
 from src.utils.dataset_structure import discover_dataset_structure
-from src.utils.metadata import load_metadata
+from src.utils.metadata import load_metadata, display_metadata_metrics
 from src.utils.metrics import aggregate_metrics
 from src.utils.wandb import prepare_wandb_data
 
@@ -50,7 +50,6 @@ class BaseTask(ABC):
         
         Args:
             run_type: Type of run ('train' or 'eval')
-            dataset_name: Name of the dataset being evaluated
         """
         if not self.use_wandb:
             return None
@@ -310,13 +309,13 @@ class BaseTask(ABC):
         """
         Score predictions. 
         Auto-detects flat/hierarchical structure.
+
+        Args:
+            pred_path: Path to predictions
+            gt_path: Path to ground truth
         """
         
-        wandb_run = self._init_wandb(
-            run_type="eval",
-            task_name=self.name.split()[0].lower() if hasattr(self, 'name') else 'htr',
-            dataset_name=dataset_name or Path(gt_path).name
-        )
+        wandb_run = self._init_wandb(run_type="eval")
         
         structure_info = discover_dataset_structure(gt_path, self._get_score_file_extensions())
         
@@ -353,6 +352,8 @@ class BaseTask(ABC):
         
         self._log_to_wandb(metrics_dict, wandb_run, tables=wandb_tables, files=wandb_files)
         self._display_metrics(metrics_dict)
+        if metadata_metrics:
+            display_metadata_metrics(metadata_metrics)
         self._finish_wandb(wandb_run)
         
         # Return all data for CSV export
