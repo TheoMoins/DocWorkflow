@@ -40,7 +40,8 @@ def aggregate_scores_by_metadata(document_scores, metric_keys=['cer', 'wer']):
     Returns:
         Dictionary mapping feature_name -> {
             'aggregated': list of dicts with mean/std/count per value,
-            'summary_metrics': dict with overall metrics by feature value
+            'summary_metrics': dict with per-value metrics in by_{feature}/ category,
+            'unweighted_averages': dict with unweighted average across all values
         }
     """
     if not document_scores:
@@ -84,18 +85,36 @@ def aggregate_scores_by_metadata(document_scores, metric_keys=['cer', 'wer']):
         
         # Create summary metrics dict for wandb logging
         summary_metrics = {}
+        per_value_means = {metric: [] for metric in metric_keys}
+        
         for _, row in grouped.iterrows():
             feature_value = row[feature_name]
-            prefix = f"by_{feature_name}/{feature_value}"
+            # Sanitize feature_value for use in metric names
+            safe_value = str(feature_value).replace(' ', '_').replace('/', '_').replace('-', '_')
             
             for metric_key in metric_keys:
                 mean_col = f'score/{metric_key}_mean'
-                if mean_col in row:
-                    summary_metrics[f"{prefix}/{metric_key}"] = row[mean_col]
+                if mean_col in row and pd.notna(row[mean_col]):
+                    mean_value = row[mean_col]
+                    # Per-value metric in by_{feature}/ category
+                    summary_metrics[f"by_{feature_name}/{safe_value}/{metric_key}"] = mean_value
+                    # Collect for unweighted average
+                    per_value_means[metric_key].append(mean_value)
+        
+        # Calculate unweighted averages across all values of this feature
+        # Put these in score/ category
+        unweighted_averages = {}
+        for metric_key in metric_keys:
+            if per_value_means[metric_key]:
+                unweighted_avg = sum(per_value_means[metric_key]) / len(per_value_means[metric_key])
+                unweighted_averages[metric_key] = unweighted_avg
+                # Add to summary metrics in score/ with clear naming
+                summary_metrics[f"score/avg_{feature_name}_{metric_key}"] = unweighted_avg
         
         aggregated[feature_name] = {
             'aggregated': grouped.to_dict('records'),
-            'summary_metrics': summary_metrics
+            'summary_metrics': summary_metrics,
+            'unweighted_averages': unweighted_averages
         }
     
     return aggregated
@@ -182,23 +201,40 @@ def display_metadata_metrics(metadata_metrics):
     
     # Group metrics by feature
     by_feature = {}
+    avg_by_feature = {}
+    
     for key, value in metadata_metrics.items():
-        # key format: "by_{feature}/{value}/{metric}"
-        parts = key.split('/')
-        if len(parts) == 3 and parts[0].startswith('by_'):
-            feature = parts[0].replace('by_', '')
-            feature_value = parts[1]
-            metric = parts[2]
+        # Handle averages in score/
+        if key.startswith('score/avg_'):
+            # Format: "score/avg_{feature}_{metric}"
+            key_without_prefix = key[10:]  # Remove 'score/avg_'
+            parts = key_without_prefix.rsplit('_', 1)  # Split on last underscore
             
-            if feature not in by_feature:
-                by_feature[feature] = {}
-            if feature_value not in by_feature[feature]:
-                by_feature[feature][feature_value] = {}
+            if len(parts) == 2:
+                feature, metric = parts
+                if feature not in avg_by_feature:
+                    avg_by_feature[feature] = {}
+                avg_by_feature[feature][metric] = value
+        
+        # Handle per-value metrics in by_{feature}/
+        elif key.startswith('by_'):
+            # Format: "by_{feature}/{value}/{metric}"
+            key_without_prefix = key[3:]  # Remove 'by_'
+            parts = key_without_prefix.split('/')
             
-            by_feature[feature][feature_value][metric] = value
+            if len(parts) == 3:
+                feature, feature_value, metric = parts
+                
+                if feature not in by_feature:
+                    by_feature[feature] = {}
+                if feature_value not in by_feature[feature]:
+                    by_feature[feature][feature_value] = {}
+                
+                by_feature[feature][feature_value][metric] = value
     
     # Display by feature
-    for feature, values in sorted(by_feature.items()):
+    for feature in sorted(by_feature.keys()):
+        values = by_feature[feature]
         print(f"\n  {feature.upper()}:")
         
         table_data = [["Value", "CER", "WER"]]
@@ -212,5 +248,20 @@ def display_metadata_metrics(metadata_metrics):
                 wer = f"{wer:.4f}"
             
             table_data.append([value_name, cer, wer])
+        
+        # Add unweighted average row
+        if feature in avg_by_feature:
+            avg_metrics = avg_by_feature[feature]
+            avg_cer = avg_metrics.get('cer', 'N/A')
+            avg_wer = avg_metrics.get('wer', 'N/A')
+            
+            if isinstance(avg_cer, float):
+                avg_cer = f"{avg_cer:.4f}"
+            if isinstance(avg_wer, float):
+                avg_wer = f"{avg_wer:.4f}"
+            
+            # Add separator
+            table_data.append(["---", "---", "---"])
+            table_data.append([f"Avg (unweighted)", avg_cer, avg_wer])
         
         print(tabulate.tabulate(table_data, headers="firstrow", tablefmt="simple"))
