@@ -224,6 +224,7 @@ def _add_line_to_element(parent_element, line, line_id=None, tag_id="LT1"):
 def add_lines_to_alto(lines, output_path, alto_path):
     """
     Ajoute des lignes à un fichier ALTO XML existant ou crée un nouveau fichier avec ces lignes.
+    Les lignes sont triées dans l'ordre de lecture au sein de chaque bloc.
     
     Args:
         lines: Liste de dictionnaires contenant les informations des lignes (boundary, baseline)
@@ -273,10 +274,11 @@ def add_lines_to_alto(lines, output_path, alto_path):
             h = int(float(block.get('HEIGHT', 0)))
             block_boxes.append({
                 'block': block,
-                'bbox': [x, y, x+w, y+h]
+                'bbox': [x, y, x+w, y+h],
+                'lines': []
             })
 
-            # Remove existing lines ?
+            # Remove existing lines
             for line in block.findall('.//alto:TextLine', ns):
                 block.remove(line)
 
@@ -291,21 +293,33 @@ def add_lines_to_alto(lines, output_path, alto_path):
                 
                 # Trouver le bloc avec le meilleur IoU
                 best_iou = 0
-                best_block = None
+                best_block_info = None
                 
                 for block_info in block_boxes:
                     iou = calculate_iou(line_bbox, block_info['bbox'])
                     if iou > best_iou:
                         best_iou = iou
-                        best_block = block_info['block']
+                        best_block_info = block_info
                 
                 # Si aucun bloc approprié n'est trouvé, utiliser le premier bloc
-                if best_block is None and block_boxes:
-                    best_block = block_boxes[0]['block']
+                if best_block_info is None and block_boxes:
+                    best_block_info = block_boxes[0]
                 
-                # Ajouter la ligne au bloc trouvé
-                if best_block is not None:
-                    _add_line_to_element(best_block, line)
+                # Ajouter la ligne à la liste du bloc
+                if best_block_info is not None:
+                    best_block_info['lines'].append(line)
+        
+        # Pour chaque bloc, trier les lignes et les ajouter dans l'ordre
+        for block_info in block_boxes:
+            if not block_info['lines']:
+                continue
+            
+            # Trier les lignes dans l'ordre de lecture (top-to-bottom, puis left-to-right)
+            sorted_lines = _sort_lines_reading_order(block_info['lines'])
+            
+            # Ajouter les lignes triées au bloc XML
+            for line in sorted_lines:
+                _add_line_to_element(block_info['block'], line)
         
         # Sauvegarder le fichier XML modifié
         tree.write(output_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
@@ -316,3 +330,50 @@ def add_lines_to_alto(lines, output_path, alto_path):
         import traceback
         traceback.print_exc()
         return False
+
+
+def _sort_lines_reading_order(lines):
+    """
+    Trie les lignes dans l'ordre de lecture (top-to-bottom, puis left-to-right).
+    
+    Args:
+        lines: Liste de dictionnaires de lignes avec 'boundary' ou 'baseline'
+        
+    Returns:
+        Liste triée de lignes
+    """
+    if not lines:
+        return lines
+    
+    # Calculer la position verticale et horizontale de chaque ligne
+    lines_with_pos = []
+    for line in lines:
+        if 'boundary' in line and line['boundary']:
+            boundary = np.array(line['boundary'])
+            y_pos = boundary[:, 1].min()  # Top edge
+            x_pos = boundary[:, 0].min()  # Left edge
+        elif 'baseline' in line and line['baseline']:
+            baseline = np.array(line['baseline'])
+            y_pos = baseline[:, 1].mean()  # Middle of baseline
+            x_pos = baseline[:, 0].min()   # Start of baseline
+        else:
+            # Pas de position, mettre à la fin
+            y_pos = float('inf')
+            x_pos = float('inf')
+        
+        lines_with_pos.append({
+            'line': line,
+            'y': y_pos,
+            'x': x_pos
+        })
+    
+    # Trier par Y d'abord (top-to-bottom), puis par X (left-to-right)
+    # On utilise une tolérance pour les lignes "sur la même ligne"
+    y_tolerance = 10  # pixels - lignes dans cette marge sont considérées alignées
+    
+    lines_with_pos.sort(key=lambda item: (
+        round(item['y'] / y_tolerance) * y_tolerance,  # Grouper les Y proches
+        item['x']  # Puis trier par X
+    ))
+    
+    return [item['line'] for item in lines_with_pos]

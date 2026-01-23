@@ -180,7 +180,8 @@ class BaseTask(ABC):
         """
         table = [["Metric", "Value"]]
         
-        for key, value in metrics.items():
+        for key in sorted(metrics.keys()):
+            value = metrics[key]
             if isinstance(value, (int, float)):
                 formatted_value = round(value, 4)
             else:
