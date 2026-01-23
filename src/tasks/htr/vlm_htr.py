@@ -369,8 +369,8 @@ class VLMHTRTask(BaseHTR):
 
         indent_xml(root)
 
-        # Save updated ALTO
-        tree.write(alto_path, xml_declaration=True, encoding="UTF-8")
+        ET.cleanup_namespaces(root)
+        tree.write(alto_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
         return alto_path
 
 
