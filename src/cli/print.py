@@ -9,7 +9,8 @@ def visualize(
     task: BaseTask,
     task_name: str,
     pred_path: str,
-    results_dir: str
+    results_dir: str,
+    source_data_path: str = None  # Nouveau paramètre
 ):
 
     console = Console()
@@ -20,10 +21,11 @@ def visualize(
     dir.mkdir(exist_ok=True)
 
     console.rule(task.name)
+    
+    img_dir = source_data_path if source_data_path else pred_path
 
-    results = task.visualize(task_name=task_name, data_path=pred_path, output_dir=dir)
+    results = task.visualize(task_name=task_name, data_path=img_dir, xml_path=pred_path, output_dir=dir)
 
     print(f"\nDone!")
 
     return results
-

@@ -40,10 +40,18 @@ def test_installation():
     help="Dataset to predict (default: test set)"
 )
 @click.option("-o", "--output", required=False, default="", type=click.Path(), help="Save results")
-@click.option("--save_image", is_flag=True, help="Save the image with the prediction.")
+@click.option("--save_image", is_flag=True, default=None, help="Save the image with the prediction.")  # Changé
+@click.option("--no_save_image", is_flag=True, help="Do not save images with prediction.")  # Nouveau
 @click.option("--cleanup_intermediate", is_flag=True, help="Delete intermediate results in full pipeline to save space.")
 @click.pass_obj
-def predict_command(config: Config, task: str, dataset: str, output: str, save_image: bool, cleanup_intermediate: bool):
+def predict_command(config: Config, task: str, dataset: str, output: str, save_image: bool, no_save_image: bool, cleanup_intermediate: bool):
+    
+    if no_save_image:
+        final_save_image = False
+    elif save_image:
+        final_save_image = True
+    else:
+        final_save_image = config.yaml.get('save_image', True)
 
     data_path = config.data[dataset]    
     if output == "":
@@ -77,12 +85,15 @@ def predict_command(config: Config, task: str, dataset: str, output: str, save_i
             task_output = Path(base_output) / task_name
             task_output.mkdir(parents=True, exist_ok=True)
             
+            is_final_task = (idx == len(tasks_list) - 1)
+            task_save_image = final_save_image if is_final_task else task_obj.config.get('save_image', True)
+            
             # Prédire
             predict(
                 task=task_obj, 
                 data_path=current_input, 
                 output=task_output,
-                save_image=True
+                save_image=task_save_image
             )
             
             click.echo(f"{task_name} completed")
@@ -115,7 +126,7 @@ def predict_command(config: Config, task: str, dataset: str, output: str, save_i
             task=task_obj, 
             data_path=data_path, 
             output=task_output,
-            save_image=save_image
+            save_image=final_save_image
         )
 
 

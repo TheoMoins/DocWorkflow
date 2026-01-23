@@ -3,6 +3,7 @@ output_dir: "results"
 device: "cuda"
 use_wandb: true
 wandb_project: "icdar-htr-competition-2026"
+save_image: true
 
 data:
   test: "../data/cmmhwr26_minitest"

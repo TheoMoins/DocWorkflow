@@ -20,6 +20,9 @@ def predict(
 
     console.rule(task.name)
 
+    if save_image is None:
+        save_image = task.config.get('save_image', True)
+
     _ = task.predict(data_path=data_path, output_dir=dir, save_image=save_image)
 
     print(f"\nResults saved to {dir}")
