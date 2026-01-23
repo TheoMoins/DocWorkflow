@@ -15,7 +15,6 @@ from tqdm import tqdm
 from src.alto.alto_zones import extract_zones_from_alto, convert_zones_to_boxes
 from src.tasks.base_tasks import BaseTask
 
-
 from src.alto.yolalto import (
     parse_yolo_results, remove_duplicates, 
     create_alto_xml, save_alto_xml

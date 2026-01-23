@@ -11,6 +11,7 @@ tasks:
   htr:
     type: VLMHTR
     config:
+      use_metadata: true
       model_name: 'stanford-oval/churro-3B'
       max_new_tokens: 3000       
       batch_size: 10

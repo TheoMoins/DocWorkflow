@@ -3,7 +3,6 @@ import torch
 import os
 from tqdm import tqdm
 from PIL import Image
-import glob
 import numpy as np
 from mean_average_precision import MetricBuilder
 from pathlib import Path
@@ -16,11 +15,12 @@ from kraken.kraken import SEGMENTATION_DEFAULT_MODEL
 from kraken.lib.xml import XMLPage
 from yaltai.models.krakn import segment as line_segment
 
+from src.tasks.line.base_line import BaseLine
 from src.utils.utils import IGNORED_ZONE_TYPES
 from src.utils.memory_monitor import check_memory_safe, force_garbage_collection, get_memory_usage_percent
 from src.alto.alto_lines import extract_lines_from_alto, convert_lines_to_boxes, add_lines_to_alto
 
-class KrakenLineTask(BaseTask):
+class KrakenLineTask(BaseLine):
     """
     Class for line segmentation models.
     """
@@ -119,82 +119,6 @@ class KrakenLineTask(BaseTask):
         return result[0] if result[0] is not None else []
 
 
-    def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):
-        """
-        Score line predictions for a batch of files.
-        
-        Args:
-            pred_files: List of prediction ALTO file paths
-            gt_files: List of ground truth ALTO file paths
-            pred_dir: Prediction directory
-            gt_dir: Ground truth directory
-            
-        Returns:
-            Tuple of (metrics_dict, page_scores)
-        """
-        
-        # Initialize metrics builder
-        builder = MetricBuilder.build_evaluation_metric("map_2d", async_mode=False, num_classes=1)
-        
-        page_scores = []
-        
-        # Process files
-        for pred_file, gt_file in tqdm(zip(pred_files, gt_files), total=len(pred_files),
-                                        desc="  Scoring", unit="page"):
-            image_path, gt_lines, _ = extract_lines_from_alto(gt_file)
-            if not gt_lines:
-                print(f"  Warning: No lines in {Path(gt_file).name}")
-                continue
-            
-            _, pred_lines, _ = extract_lines_from_alto(pred_file)
-            if not pred_lines:
-                print(f"  Warning: No predictions in {Path(pred_file).name}")
-                continue
-            
-            try:
-                image = Image.open(image_path)
-                image_size = image.size
-            except Exception as e:
-                print(f"  Error opening image {image_path}: {e}")
-                continue
-            
-            # Convert to boxes
-            gt_boxes = convert_lines_to_boxes(gt_lines, image_size, is_gt=True)
-            pred_boxes = convert_lines_to_boxes(pred_lines, image_size, is_gt=False)
-            
-            if gt_boxes.shape[0] > 0 and pred_boxes.shape[0] > 0:
-                builder.add(pred_boxes, gt_boxes)
-                
-                # Store per-page info
-                page_scores.append({
-                    'page': Path(gt_file).stem,
-                    'gt_lines': len(gt_lines),
-                    'pred_lines': len(pred_lines),
-                })
-            
-            if image:
-                image.close()
-                del image
-            
-            gc.collect()
-        
-        # Calculate global metrics
-        metrics = builder.value(iou_thresholds=[round(x, 2) for x in np.arange(0.5, 1.0, 0.05)])
-        
-        metrics_dict = {
-            "dataset_test/map50-95": metrics["mAP"],
-            "dataset_test/map50": metrics[0.5][0]["ap"],
-            "dataset_test/map75": metrics[0.75][0]["ap"],
-            "dataset_test/precision": metrics[0.75][0]["precision"].mean(),
-            "dataset_test/recall": metrics[0.75][0]["recall"].mean()
-        }
-        
-        return metrics_dict, page_scores
-
-    def _get_score_file_extensions(self):
-        """Line scores XML files."""
-        return ['*.xml']
-    
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True):
         """
         Process a batch of images for line segmentation.

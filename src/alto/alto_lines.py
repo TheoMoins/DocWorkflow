@@ -267,10 +267,10 @@ def add_lines_to_alto(lines, output_path, alto_path):
             if block_label in IGNORED_ZONE_TYPES:
                 continue
             
-            x = int(block.get('HPOS', 0))
-            y = int(block.get('VPOS', 0))
-            w = int(block.get('WIDTH', 0))
-            h = int(block.get('HEIGHT', 0))
+            x = int(float(block.get('HPOS', 0)))
+            y = int(float(block.get('VPOS', 0)))
+            w = int(float(block.get('WIDTH', 0)))
+            h = int(float(block.get('HEIGHT', 0)))
             block_boxes.append({
                 'block': block,
                 'bbox': [x, y, x+w, y+h]

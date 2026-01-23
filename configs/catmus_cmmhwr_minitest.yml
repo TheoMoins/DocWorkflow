@@ -1,4 +1,4 @@
-run_name: "catmus_cheater"
+run_name: "catmus_cheater_yolo_line"
 output_dir: "results"
 device: "cpu"
 use_wandb: true
@@ -15,10 +15,12 @@ tasks:
       img_size: 640
 
   line:
-    type: KrakenLine
+    type: YoloLine
     config:
-      model_path: "src/tasks/line/models/blla.mlmodel"
+      model_path: "src/tasks/line/models/LINES-bbox_YOLOv11n.pt"
       text_direction: "horizontal-lr"
+      batch_size: 4
+      img_size: 640
   htr:
     type: KrakenHTR
     config:
