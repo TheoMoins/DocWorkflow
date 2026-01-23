@@ -313,7 +313,7 @@ class VLMHTRTask(BaseHTR):
                     line_elem.remove(string_elem)
                 
                 # Add new String with CHURRO text
-                string_elem = ET.SubElement(line_elem, f"{{{ns['alto']}}}String")
+                string_elem = ET.SubElement(line_elem, ET.QName(ns['alto'], 'String'))
                 string_elem.set('CONTENT', line_text)
                 string_elem.set('WC', '1.0')
         
@@ -338,7 +338,7 @@ class VLMHTRTask(BaseHTR):
                 
                 for idx, line_text in enumerate(lines_text):
                     y_pos = idx * line_height + margin
-                    line_elem = ET.SubElement(text_block, f"{{{ns['alto']}}}TextLine")
+                    line_elem = ET.SubElement(text_block, ET.QName(ns['alto'], 'TextLine'))
                     line_elem.set('ID', f'line_{idx}')
                     line_elem.set('HPOS', str(margin))
                     line_elem.set('VPOS', str(y_pos))
@@ -348,8 +348,7 @@ class VLMHTRTask(BaseHTR):
                     baseline_y = y_pos + line_height // 2
                     line_elem.set('BASELINE', f"{margin} {baseline_y} {width - margin} {baseline_y}")
                     
-                    # Add String
-                    string_elem = ET.SubElement(line_elem, f"{{{ns['alto']}}}String")
+                    string_elem = ET.SubElement(line_elem, ET.QName(ns['alto'], 'String'))
                     string_elem.set('CONTENT', line_text)
                     string_elem.set('WC', '1.0')
         

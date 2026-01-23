@@ -188,3 +188,7 @@ class BaseHTR(BaseTask):
         metrics_dict = calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores)
         
         return metrics_dict, page_scores
+    
+    def _get_score_file_extensions(self):
+        """HTR scoring works with XML files, not images."""
+        return ['*.xml']
