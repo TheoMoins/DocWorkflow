@@ -13,6 +13,7 @@ import yaml
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from src.utils.transformers_models import is_supported_by_auto_image_text
 from qwen_vl_utils import process_vision_info
+from src.utils.alto_text import copy_and_fix_alto_namespaces
 
 class VLMHTRTask(BaseHTR):
     """
@@ -403,8 +404,8 @@ class VLMHTRTask(BaseHTR):
                 # Check if there's an existing ALTO with layout/lines
                 existing_alto = os.path.join(source_dir, f"{base_name}.xml")
                 if os.path.exists(existing_alto):
-                    # Copy existing structure
-                    shutil.copy2(existing_alto, output_path)
+                    # Copy existing structure AND clean namespaces
+                    copy_and_fix_alto_namespaces(existing_alto, output_path)
                 else:
                     # Create simple ALTO
                     self._create_simple_alto_with_text(image_path, text, output_path)
