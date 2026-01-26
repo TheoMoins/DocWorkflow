@@ -7,6 +7,10 @@ from src.cli.score import score
 from src.cli.train import train
 from src.cli.predict import predict
 from src.cli.print import visualize
+
+from src.alto.alto_lines_to_yolo import convert_alto_lines_to_yolo, discover_line_classes
+
+
 import shutil
 
 
@@ -18,7 +22,8 @@ import shutil
 )
 @click.pass_context
 def cli(ctx, config):
-    ctx.obj = Config(config)
+    if config:
+        ctx.obj = Config(config)
 
 
 @click.command
@@ -241,6 +246,68 @@ def print_command(config: Config, task: str, pred_path: str, output: str):
               task_name = task,
               pred_path=pred_path, 
               results_dir=output)
+
+
+@cli.command("prepare-yolo-lines")
+@click.option("-i", "--input", "input_dir", required=True, type=click.Path(exists=True),
+              help="Directory containing ALTO XML files with line annotations")
+@click.option("-o", "--output", "output_dir", required=True, type=click.Path(),
+              help="Output directory for YOLO dataset")
+@click.option("--train-ratio", default=0.8, type=float,
+              help="Ratio for training set (default: 0.8, ignored if existing split detected)")
+@click.option("--val-ratio", default=0.1, type=float,
+              help="Ratio for validation set (default: 0.1, ignored if existing split detected)")
+@click.option("--test-ratio", default=0.1, type=float,
+              help="Ratio for test set (default: 0.1, ignored if existing split detected)")
+@click.option("--seed", default=42, type=int,
+              help="Random seed for reproducible splits (default: 42, ignored if existing split detected)")
+@click.option("--no-preserve-split", is_flag=True,
+              help="Force random split even if train/val/test directories exist")
+@click.option("--discover-classes", is_flag=True,
+              help="Discover and map line types to classes")
+def prepare_yolo_lines_command(input_dir, output_dir, train_ratio, val_ratio, test_ratio, seed, no_preserve_split, discover_classes):
+    """
+    Convert ALTO TextLines to YOLO format for training line segmentation models.
+    
+    This command prepares a YOLO dataset from ALTO XML files containing line annotations.
+    The output can be used directly with 'docworkflow train -t line'.
+    
+    SPLIT DETECTION:
+    If your input directory contains train/, val/, and test/ subdirectories,
+    the tool will automatically preserve your existing split. Use --no-preserve-split
+    to force a random split instead.
+    """    
+    class_mapping = None
+    if discover_classes:
+        class_mapping = discover_line_classes(input_dir)
+        
+        if class_mapping:
+            click.echo("\nUsing the following class mapping:")
+            for tag, class_id in class_mapping.items():
+                click.echo(f"  {class_id}: {tag}")
+            
+            if not click.confirm("\nProceed with this mapping?", default=True):
+                click.echo("Aborted.")
+                return
+    
+    try:
+        stats = convert_alto_lines_to_yolo(
+            alto_dir=input_dir,
+            output_dir=output_dir,
+            train_ratio=train_ratio,
+            val_ratio=val_ratio,
+            test_ratio=test_ratio,
+            seed=seed,
+            class_mapping=class_mapping,
+            preserve_split=not no_preserve_split
+        )
+        
+        click.echo(f"\n✓ Success! Dataset ready at {output_dir}")
+        
+    except Exception as e:
+        click.echo(f"\n✗ Error: {e}", err=True)
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     cli()
