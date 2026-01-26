@@ -8,7 +8,7 @@ from src.cli.train import train
 from src.cli.predict import predict
 from src.cli.print import visualize
 
-from src.alto.alto_lines_to_yolo import convert_alto_lines_to_yolo, discover_line_classes
+from src.alto.alto_lines_to_yolo import convert_alto_lines_to_yolo
 
 
 import shutil
@@ -249,65 +249,38 @@ def print_command(config: Config, task: str, pred_path: str, output: str):
 
 
 @cli.command("prepare-yolo-lines")
-@click.option("-i", "--input", "input_dir", required=True, type=click.Path(exists=True),
-              help="Directory containing ALTO XML files with line annotations")
-@click.option("-o", "--output", "output_dir", required=True, type=click.Path(),
-              help="Output directory for YOLO dataset")
-@click.option("--train-ratio", default=0.8, type=float,
-              help="Ratio for training set (default: 0.8, ignored if existing split detected)")
-@click.option("--val-ratio", default=0.1, type=float,
-              help="Ratio for validation set (default: 0.1, ignored if existing split detected)")
-@click.option("--test-ratio", default=0.1, type=float,
-              help="Ratio for test set (default: 0.1, ignored if existing split detected)")
-@click.option("--seed", default=42, type=int,
-              help="Random seed for reproducible splits (default: 42, ignored if existing split detected)")
-@click.option("--no-preserve-split", is_flag=True,
-              help="Force random split even if train/val/test directories exist")
-@click.option("--discover-classes", is_flag=True,
-              help="Discover and map line types to classes")
-def prepare_yolo_lines_command(input_dir, output_dir, train_ratio, val_ratio, test_ratio, seed, no_preserve_split, discover_classes):
+@click.option(
+    "-i", "--input",
+    required=True,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True),
+    help="Input directory containing ALTO XML files with train/val/test structure"
+)
+@click.option(
+    "-o", "--output",
+    required=True,
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Output directory for YOLO format dataset"
+)
+def prepare_yolo_lines_command(input: str, output: str):
     """
-    Convert ALTO TextLines to YOLO format for training line segmentation models.
+    Convert ALTO line annotations to YOLO format for line detection training.
     
-    This command prepares a YOLO dataset from ALTO XML files containing line annotations.
-    The output can be used directly with 'docworkflow train -t line'.
+    This command preserves the existing train/val/test split structure and
+    handles different line types (CustomLine, DefaultLine, DropCapitalLine, etc.).
     
-    SPLIT DETECTION:
-    If your input directory contains train/, val/, and test/ subdirectories,
-    the tool will automatically preserve your existing split. Use --no-preserve-split
-    to force a random split instead.
-    """    
-    class_mapping = None
-    if discover_classes:
-        class_mapping = discover_line_classes(input_dir)
-        
-        if class_mapping:
-            click.echo("\nUsing the following class mapping:")
-            for tag, class_id in class_mapping.items():
-                click.echo(f"  {class_id}: {tag}")
-            
-            if not click.confirm("\nProceed with this mapping?", default=True):
-                click.echo("Aborted.")
-                return
+    Segmonto Line types
+    """
     
     try:
-        stats = convert_alto_lines_to_yolo(
-            alto_dir=input_dir,
-            output_dir=output_dir,
-            train_ratio=train_ratio,
-            val_ratio=val_ratio,
-            test_ratio=test_ratio,
-            seed=seed,
-            class_mapping=class_mapping,
-            preserve_split=not no_preserve_split
-        )
-        
-        click.echo(f"\n✓ Success! Dataset ready at {output_dir}")
-        
+        convert_alto_lines_to_yolo(input, output)
+        click.echo("\n✓ Conversion successful!")
+        click.echo(f"\nNext steps:")
+        click.echo(f"  1. Verify the output in: {output}")
+        click.echo(f"  2. Train YOLO model:")
+        click.echo(f"     yolo detect train data={output}/data.yaml model=yolo11n.pt epochs=100")
     except Exception as e:
         click.echo(f"\n✗ Error: {e}", err=True)
-        import traceback
-        traceback.print_exc()
+        raise click.Abort()
 
 if __name__ == "__main__":
     cli()

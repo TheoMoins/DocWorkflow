@@ -1,0 +1,18 @@
+run_name: "yolo26_layout"
+output_dir: "results"
+device: "cuda"
+use_wandb: true
+wandbproject: "LA-comparison"
+
+data:
+  train: "../data/data_yolo/medieval-segmentation-yolo/config.yaml"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      pretrained_w: "src/tasks/layout/models/yolo26n.pt"
+      img_size: 640
+      batch_size: 16
+      epochs: 10
+
