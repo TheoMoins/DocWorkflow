@@ -10,7 +10,7 @@ from lxml import etree as ET
 from jiwer import cer, wer
 
 from src.utils.metrics import calculate_htr_metrics
-from alto.alto_text import extract_text_from_alto, extract_lines_text_from_alto
+from src.alto.alto_text import extract_text_from_alto, extract_lines_text_from_alto
 
 class BaseHTR(BaseTask):
     """

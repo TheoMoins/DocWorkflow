@@ -13,7 +13,7 @@ import yaml
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from src.utils.transformers_models import is_supported_by_auto_image_text
 from qwen_vl_utils import process_vision_info
-from alto.alto_text import copy_and_fix_alto_namespaces
+from src.alto.alto_text import copy_and_fix_alto_namespaces
 
 class VLMHTRTask(BaseHTR):
     """
