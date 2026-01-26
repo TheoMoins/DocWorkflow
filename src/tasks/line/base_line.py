@@ -113,8 +113,8 @@ class BaseLine(BaseTask):
             "dataset_test/map50-95": metrics["mAP"],
             "dataset_test/map50": metrics[0.5][0]["ap"],
             "dataset_test/map75": metrics[0.75][0]["ap"],
-            "dataset_test/precision": metrics[0.75][0]["precision"].mean(),
-            "dataset_test/recall": metrics[0.75][0]["recall"].mean()
+            "dataset_test/precision": metrics[0.75][0]["precision"].mean() if len(metrics[0.75][0]["precision"]) > 0 else 0.0,
+            "dataset_test/recall": metrics[0.75][0]["recall"].mean() if len(metrics[0.75][0]["recall"]) > 0 else 0.0
         }
         
         return metrics_dict, page_scores

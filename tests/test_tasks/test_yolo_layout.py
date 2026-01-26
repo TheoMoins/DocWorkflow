@@ -23,7 +23,7 @@ def test_yolo_layout_initialization(yolo_config):
     """Teste l'initialisation de YoloLayoutTask."""
     task = YoloLayoutTask(yolo_config)
     
-    assert task.name == "Layout Segmentation (YOLO)"
+    assert task.name == "Layout_Segmentation_YOLO"
     assert task.config == yolo_config
     assert task.device == "cpu"
 

@@ -29,7 +29,7 @@ class YoloLineTask(BaseLine):
         super().__init__(config)
         settings.update({"wandb": config.get('use_wandb', True)})
         
-        self.name = "Line Segmentation (YOLO)"
+        self.name = "Line_Segmentation_YOLO"
         self.wandb_project = "LS-comparison"
         
         self.model_loaded = None

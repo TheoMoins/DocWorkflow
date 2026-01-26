@@ -1,0 +1,26 @@
+run_name: "catmus_pipeline_roman_17_1"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+
+data:
+  test: "../data/corpus_roman_17/corpus_roman_17_part_1"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      model_path: "src/tasks/layout/LA-training/catmus_seg_s_16_10/weights/best.pt"
+      img_size: 640
+
+  line:
+    type: YoloLine
+    config:
+      model_path: "src/tasks/line/models/yolo26s_line_640px_16bs_50e"
+      img_size: 640
+      batch_size: 4
+      text_direction: "horizontal-lr"
+  htr:
+    type: KrakenHTR
+    config:
+      model_path: "src/tasks/htr/models/catmus-print-fondue-large.mlmodel"

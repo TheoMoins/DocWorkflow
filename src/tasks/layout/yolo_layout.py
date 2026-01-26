@@ -36,7 +36,7 @@ class YoloLayoutTask(BaseTask):
         super().__init__(config)
         settings.update({"wandb": config.get('use_wandb', True)})
 
-        self.name = "Layout Segmentation (YOLO)"
+        self.name = "Layout_Segmentation_YOLO"
 
         self.model_loaded = None
         self.model = None
