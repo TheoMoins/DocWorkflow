@@ -15,7 +15,7 @@ tasks:
       pretrained_w: "src/tasks/line/models/yolo26n-seg.pt"
       img_size: 640
       batch_size: 16
-      epochs: 50
+      epochs: 10
 
       text_direction: "horizontal-lr"
 
