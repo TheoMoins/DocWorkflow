@@ -5,7 +5,7 @@ use_wandb: true
 wandb_project: "LS-comparison"
 
 data:
-  train: "../data/data_yolo/medieval-segmentation-yolo_lines/config_serveur.yaml"
+  train: "../data/data_yolo/medieval-segmentation-yolo_lines_polygon/config_serveur.yaml"
   test: "../data/manifests_test_french/alto"
 
 tasks:

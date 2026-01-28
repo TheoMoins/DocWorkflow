@@ -261,23 +261,22 @@ def print_command(config: Config, task: str, pred_path: str, output: str):
     type=click.Path(file_okay=False, dir_okay=True),
     help="Output directory for YOLO format dataset"
 )
-def prepare_yolo_lines_command(input: str, output: str):
+@click.option(
+    "--polygon",
+    is_flag=True,
+    help="Generate YOLO segmentation format (polygons) instead of detection format (bounding boxes)"
+)
+def prepare_yolo_lines_command(input: str, output: str, polygon: bool):
     """
-    Convert ALTO line annotations to YOLO format for line detection training.
+    Convert ALTO line annotations to YOLO format for line detection or segmentation training.
     
     This command preserves the existing train/val/test split structure and
     handles different line types (CustomLine, DefaultLine, DropCapitalLine, etc.).
-    
-    Segmonto Line types
-    """
-    
+    """    
     try:
-        convert_alto_lines_to_yolo(input, output)
+        convert_alto_lines_to_yolo(input, output, polygon)
+        
         click.echo("\n✓ Conversion successful!")
-        click.echo(f"\nNext steps:")
-        click.echo(f"  1. Verify the output in: {output}")
-        click.echo(f"  2. Train YOLO model:")
-        click.echo(f"     yolo detect train data={output}/data.yaml model=yolo11n.pt epochs=100")
     except Exception as e:
         click.echo(f"\n✗ Error: {e}", err=True)
         raise click.Abort()

@@ -131,15 +131,17 @@ def load_existing_split(input_dir: str) -> Dict[str, List[str]]:
 
 
 def line_to_yolo_format(line: Dict, image_width: int, image_height: int, 
-                        line_types_map: Dict[str, int]) -> Optional[str]:
+                        line_types_map: Dict[str, int], use_polygon: bool = False) -> Optional[str]:
     """
-    Convertit une ligne ALTO en format YOLO.
+    Convertit une ligne ALTO en format YOLO (détection ou segmentation).
     
     Args:
         line: Dictionnaire de ligne avec boundary/baseline et tags
         image_width: Largeur de l'image
         image_height: Hauteur de l'image
         line_types_map: Mapping type -> class_id
+        use_polygon: Si True, génère format segmentation (polygone complet)
+                     Si False, génère format détection (bounding box)
         
     Returns:
         Ligne YOLO formatée ou None si conversion impossible
@@ -173,28 +175,41 @@ def line_to_yolo_format(line: Dict, image_width: int, image_height: int,
     else:
         return None
     
-    # Calculer bounding box depuis boundary
-    xs = [p[0] for p in boundary]
-    ys = [p[1] for p in boundary]
+    if use_polygon:
+        # Format YOLO segmentation : class_id x1 y1 x2 y2 x3 y3 ... xn yn
+        # Tous les points du polygone normalisés
+        normalized_points = []
+        for point in boundary:
+            x_norm = max(0, min(1, point[0] / image_width))
+            y_norm = max(0, min(1, point[1] / image_height))
+            normalized_points.append(f"{x_norm:.6f} {y_norm:.6f}")
+        
+        return f"{class_id} {' '.join(normalized_points)}"
     
-    min_x = min(xs)
-    max_x = max(xs)
-    min_y = min(ys)
-    max_y = max(ys)
-    
-    # Convertir en format YOLO (centre x, centre y, largeur, hauteur, normalisés)
-    center_x = (min_x + max_x) / 2 / image_width
-    center_y = (min_y + max_y) / 2 / image_height
-    width = (max_x - min_x) / image_width
-    height = (max_y - min_y) / image_height
-    
-    # Limiter aux valeurs valides [0, 1]
-    center_x = max(0, min(1, center_x))
-    center_y = max(0, min(1, center_y))
-    width = max(0, min(1, width))
-    height = max(0, min(1, height))
-    
-    return f"{class_id} {center_x:.6f} {center_y:.6f} {width:.6f} {height:.6f}"
+    else:
+        # Format YOLO détection : class_id center_x center_y width height
+        # Calculer bounding box depuis boundary
+        xs = [p[0] for p in boundary]
+        ys = [p[1] for p in boundary]
+        
+        min_x = min(xs)
+        max_x = max(xs)
+        min_y = min(ys)
+        max_y = max(ys)
+        
+        # Convertir en format YOLO (centre x, centre y, largeur, hauteur, normalisés)
+        center_x = (min_x + max_x) / 2 / image_width
+        center_y = (min_y + max_y) / 2 / image_height
+        width = (max_x - min_x) / image_width
+        height = (max_y - min_y) / image_height
+        
+        # Limiter aux valeurs valides [0, 1]
+        center_x = max(0, min(1, center_x))
+        center_y = max(0, min(1, center_y))
+        width = max(0, min(1, width))
+        height = max(0, min(1, height))
+        
+        return f"{class_id} {center_x:.6f} {center_y:.6f} {width:.6f} {height:.6f}"
 
 
 def find_image_for_xml(xml_path: str) -> Optional[str]:
@@ -235,7 +250,7 @@ def find_image_for_xml(xml_path: str) -> Optional[str]:
 
 
 def process_split(xml_files: List[str], output_dir: Path, split_name: str,
-                  line_types_map: Dict[str, int]) -> Tuple[int, int]:
+                  line_types_map: Dict[str, int], use_polygon: bool = False) -> Tuple[int, int]:
     """
     Traite un split (train/val/test) et génère les fichiers YOLO.
     
@@ -244,6 +259,7 @@ def process_split(xml_files: List[str], output_dir: Path, split_name: str,
         output_dir: Répertoire de sortie YOLO
         split_name: Nom du split (train/val/test)
         line_types_map: Mapping type -> class_id
+        use_polygon: Si True, génère format segmentation (polygones)
         
     Returns:
         Tuple (nb_images_traitées, nb_lignes_totales)
@@ -278,7 +294,8 @@ def process_split(xml_files: List[str], output_dir: Path, split_name: str,
             # Convertir lignes en format YOLO
             yolo_lines = []
             for line in lines:
-                yolo_line = line_to_yolo_format(line, img_width, img_height, line_types_map)
+                yolo_line = line_to_yolo_format(line, img_width, img_height, 
+                                               line_types_map, use_polygon)
                 if yolo_line:
                     yolo_lines.append(yolo_line)
             
@@ -335,7 +352,7 @@ def create_yolo_config(output_dir: Path, splits: Dict[str, int],
     print(f"\n✓ Configuration saved: {config_path}")
 
 
-def convert_alto_lines_to_yolo(input_dir: str, output_dir: str) -> None:
+def convert_alto_lines_to_yolo(input_dir: str, output_dir: str, use_polygon: bool = False) -> None:
     """
     Convertit un dataset ALTO (lignes) vers format YOLO.
     Préserve la structure train/val/test existante.
@@ -343,6 +360,8 @@ def convert_alto_lines_to_yolo(input_dir: str, output_dir: str) -> None:
     Args:
         input_dir: Répertoire contenant les fichiers ALTO avec structure train/val/test
         output_dir: Répertoire de sortie pour le dataset YOLO
+        use_polygon: Si True, génère format segmentation (polygones)
+                     Si False, génère format détection (bounding boxes)
     """
     input_path = Path(input_dir)
     output_path = Path(output_dir)
@@ -350,7 +369,9 @@ def convert_alto_lines_to_yolo(input_dir: str, output_dir: str) -> None:
     if not input_path.exists():
         raise ValueError(f"Input directory does not exist: {input_dir}")
     
+    format_type = "SEGMENTATION (polygons)" if use_polygon else "DETECTION (bounding boxes)"
     print(f"Converting ALTO lines to YOLO format...")
+    print(f"Format: {format_type}")
     print(f"Input:  {input_dir}")
     print(f"Output: {output_dir}")
     print()
@@ -384,7 +405,7 @@ def convert_alto_lines_to_yolo(input_dir: str, output_dir: str) -> None:
     for split_name, xml_files in splits.items():
         print(f"\n  {split_name.upper()} split:")
         n_images, n_lines = process_split(xml_files, output_path, split_name, 
-                                          LINE_TYPE_MAPPING)
+                                          LINE_TYPE_MAPPING, use_polygon)
         split_stats[split_name] = n_images
         print(f"    ✓ {n_images} images, {n_lines} lines")
     
@@ -395,6 +416,7 @@ def convert_alto_lines_to_yolo(input_dir: str, output_dir: str) -> None:
     print(f"\n{'='*60}")
     print("CONVERSION COMPLETE")
     print(f"{'='*60}")
+    print(f"Format: {format_type}")
     print(f"Output directory: {output_dir}")
     print(f"Total images: {sum(split_stats.values())}")
     print(f"Line types: {len(LINE_TYPE_MAPPING)}")
@@ -402,14 +424,32 @@ def convert_alto_lines_to_yolo(input_dir: str, output_dir: str) -> None:
     print("Line type mapping:")
     for line_type, class_id in sorted(LINE_TYPE_MAPPING.items(), key=lambda x: x[1]):
         print(f"  {class_id}: {line_type}")
+    
+    if use_polygon:
+        print(f"\nTraining command (SEGMENTATION):")
+        print(f"  yolo segment train data={output_dir}/data.yaml model=yolo11n-seg.pt epochs=100")
+    else:
+        print(f"\nTraining command (DETECTION):")
+        print(f"  yolo detect train data={output_dir}/data.yaml model=yolo11n.pt epochs=100")
+    
     print(f"\n{'='*60}")
 
 
 if __name__ == "__main__":
     import sys
+    import argparse
     
-    if len(sys.argv) != 3:
-        print("Usage: python alto_lines_to_yolo.py <input_dir> <output_dir>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Convert ALTO line annotations to YOLO format"
+    )
+    parser.add_argument("input_dir", help="Input directory with train/val/test structure")
+    parser.add_argument("output_dir", help="Output directory for YOLO dataset")
+    parser.add_argument(
+        "--polygon", 
+        action="store_true",
+        help="Generate YOLO segmentation format (polygons) instead of detection format (bboxes)"
+    )
     
-    convert_alto_lines_to_yolo(sys.argv[1], sys.argv[2])
+    args = parser.parse_args()
+    
+    convert_alto_lines_to_yolo(args.input_dir, args.output_dir, args.polygon)
