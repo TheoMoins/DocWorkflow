@@ -1,6 +1,6 @@
 from src.tasks.line.base_line import BaseLine
 import os
-import glob
+import cv2
 import gc
 import shutil
 import numpy as np
@@ -93,12 +93,13 @@ class YoloLineTask(BaseLine):
             seed=seed
         )
     
-    def _yolo_box_to_line(self, box, image_width, image_height):
+    def _yolo_box_to_line(self, box, mask=None, image_width=None, image_height=None):
         """
         Convert YOLO detection box to line format (baseline + boundary).
         
         Args:
             box: YOLO box coordinates [x1, y1, x2, y2]
+            mask: Optional segmentation mask (numpy array)
             image_width: Image width
             image_height: Image height
             
@@ -107,11 +108,60 @@ class YoloLineTask(BaseLine):
         """
         x1, y1, x2, y2 = map(int, box)
         
-        # Create baseline at middle of box (horizontal line)
+        # If we have a segmentation mask, extract the polygon
+        if mask is not None:
+            
+            # Convert mask to numpy array if needed
+            if hasattr(mask, 'cpu'):
+                mask_np = mask.cpu().numpy()
+            else:
+                mask_np = np.array(mask)
+            
+            # Find contours in the mask
+            mask_uint8 = (mask_np * 255).astype(np.uint8)
+            contours, _ = cv2.findContours(
+                mask_uint8, 
+                cv2.RETR_EXTERNAL, 
+                cv2.CHAIN_APPROX_SIMPLE
+            )
+            
+            if contours:
+                # Take the largest contour
+                largest_contour = max(contours, key=cv2.contourArea)
+                
+                # Simplify the contour to reduce points
+                epsilon = 0.005 * cv2.arcLength(largest_contour, True)
+                approx_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+                
+                # Convert to list of [x, y] points
+                boundary = [[int(pt[0][0]), int(pt[0][1])] for pt in approx_contour]
+                
+                # Create baseline from the bottom of the polygon
+                boundary_array = np.array(boundary)
+                
+                # Find the lowest points (highest y values) for baseline
+                sorted_by_y = sorted(boundary, key=lambda p: p[1], reverse=True)
+                bottom_points = sorted_by_y[:max(2, len(sorted_by_y)//4)]
+                bottom_points = sorted(bottom_points, key=lambda p: p[0])
+                
+                # Create baseline from leftmost to rightmost bottom points
+                if len(bottom_points) >= 2:
+                    baseline = [bottom_points[0], bottom_points[-1]]
+                else:
+                    # Fallback to middle of bounding box
+                    baseline_y = (y1 + y2) // 2
+                    baseline = [[x1, baseline_y], [x2, baseline_y]]
+                
+                return {
+                    'baseline': baseline,
+                    'boundary': boundary,
+                    'id': f'line_{id(box)}'
+                }
+        
+        # Fallback: create rectangle baseline and boundary (detection mode)
         baseline_y = (y1 + y2) // 2
         baseline = [[x1, baseline_y], [x2, baseline_y]]
         
-        # Create boundary (rectangle around the line)
         boundary = [
             [x1, y1],
             [x2, y1],
@@ -163,12 +213,23 @@ class YoloLineTask(BaseLine):
                     
                     # Convert YOLO detections to lines
                     lines = []
-                    for box in result.boxes:
+                    
+                    # Check if segmentation masks are available
+                    has_masks = hasattr(result, 'masks') and result.masks is not None
+                    
+                    for idx, box in enumerate(result.boxes):
                         xyxy = box.xyxy[0].tolist()
+                        
+                        # Get mask if available
+                        mask = None
+                        if has_masks and idx < len(result.masks):
+                            mask = result.masks[idx].data[0]  # Get the mask for this detection
+                        
                         line = self._yolo_box_to_line(
-                            xyxy, 
-                            image_size[0], 
-                            image_size[1]
+                            xyxy,
+                            mask=mask,
+                            image_width=image_size[0],
+                            image_height=image_size[1]
                         )
                         lines.append(line)
                     
