@@ -93,72 +93,58 @@ class YoloLineTask(BaseLine):
             seed=seed
         )
     
-    def _yolo_box_to_line(self, box, mask=None, image_width=None, image_height=None):
+    def _yolo_box_to_line(self, box, mask_xy=None, image_width=None, image_height=None):
         """
-        Convert YOLO detection box to line format (baseline + boundary).
+        Convert YOLO detection to line format (baseline + boundary).
         
         Args:
             box: YOLO box coordinates [x1, y1, x2, y2]
-            mask: Optional segmentation mask (numpy array)
-            image_width: Image width
-            image_height: Image height
+            mask_xy: Optional segmentation polygon coordinates (already in original image space)
+            image_width: Image width (unused, kept for compatibility)
+            image_height: Image height (unused, kept for compatibility)
             
         Returns:
-            Dictionary with baseline and boundary
+            Dictionary with baseline and boundary, or None if line too short
         """
         x1, y1, x2, y2 = map(int, box)
         
-        # If we have a segmentation mask, extract the polygon
-        if mask is not None:
+        # If we have segmentation polygon coordinates
+        if mask_xy is not None and len(mask_xy) > 0:
+            # mask_xy is already in original image coordinates
+            boundary = [[int(pt[0]), int(pt[1])] for pt in mask_xy]
             
-            # Convert mask to numpy array if needed
-            if hasattr(mask, 'cpu'):
-                mask_np = mask.cpu().numpy()
-            else:
-                mask_np = np.array(mask)
+            # Get bounding box of the polygon
+            boundary_array = np.array(boundary)
+            min_x = int(boundary_array[:, 0].min())
+            max_x = int(boundary_array[:, 0].max())
+            min_y = int(boundary_array[:, 1].min())
+            max_y = int(boundary_array[:, 1].max())
             
-            # Find contours in the mask
-            mask_uint8 = (mask_np * 255).astype(np.uint8)
-            contours, _ = cv2.findContours(
-                mask_uint8, 
-                cv2.RETR_EXTERNAL, 
-                cv2.CHAIN_APPROX_SIMPLE
-            )
+            # Calculate baseline width
+            baseline_width = max_x - min_x
             
-            if contours:
-                # Take the largest contour
-                largest_contour = max(contours, key=cv2.contourArea)
-                
-                # Simplify the contour to reduce points
-                epsilon = 0.005 * cv2.arcLength(largest_contour, True)
-                approx_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
-                
-                # Convert to list of [x, y] points
-                boundary = [[int(pt[0][0]), int(pt[0][1])] for pt in approx_contour]
-                
-                # Create baseline from the bottom of the polygon
-                boundary_array = np.array(boundary)
-                
-                # Find the lowest points (highest y values) for baseline
-                sorted_by_y = sorted(boundary, key=lambda p: p[1], reverse=True)
-                bottom_points = sorted_by_y[:max(2, len(sorted_by_y)//4)]
-                bottom_points = sorted(bottom_points, key=lambda p: p[0])
-                
-                # Create baseline from leftmost to rightmost bottom points
-                if len(bottom_points) >= 2:
-                    baseline = [bottom_points[0], bottom_points[-1]]
-                else:
-                    # Fallback to middle of bounding box
-                    baseline_y = (y1 + y2) // 2
-                    baseline = [[x1, baseline_y], [x2, baseline_y]]
+            # Only use polygon if baseline is long enough (>= 10px)
+            if baseline_width >= 10:
+                # Create baseline at 75% height (typical text baseline position)
+                baseline_y = int(min_y + (max_y - min_y) * 0.75)
+                baseline = [[min_x, baseline_y], [max_x, baseline_y]]
                 
                 return {
                     'baseline': baseline,
                     'boundary': boundary,
                     'id': f'line_{id(box)}'
                 }
+            else:
+                # Polygon too small, ignore this detection
+                return None
         
         # Fallback: create rectangle baseline and boundary (detection mode)
+        baseline_width = x2 - x1
+        
+        # Filter out too-small detections
+        if baseline_width < 10:
+            return None
+        
         baseline_y = (y1 + y2) // 2
         baseline = [[x1, baseline_y], [x2, baseline_y]]
         
@@ -213,25 +199,28 @@ class YoloLineTask(BaseLine):
                     
                     # Convert YOLO detections to lines
                     lines = []
-                    
+
                     # Check if segmentation masks are available
                     has_masks = hasattr(result, 'masks') and result.masks is not None
                     
                     for idx, box in enumerate(result.boxes):
                         xyxy = box.xyxy[0].tolist()
                         
-                        # Get mask if available
-                        mask = None
-                        if has_masks and idx < len(result.masks):
-                            mask = result.masks[idx].data[0]  # Get the mask for this detection
+                        # Get polygon coordinates if available
+                        mask_xy = None
+                        if has_masks and idx < len(result.masks.xy):
+                            mask_xy = result.masks.xy[idx]
                         
                         line = self._yolo_box_to_line(
                             xyxy,
-                            mask=mask,
+                            mask_xy=mask_xy,
                             image_width=image_size[0],
                             image_height=image_size[1]
                         )
-                        lines.append(line)
+                        
+                        # Only add valid lines (not None)
+                        if line is not None:
+                            lines.append(line)
                     
                     # Find or create ALTO file
                     base_name = Path(image_path).stem
