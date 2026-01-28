@@ -282,7 +282,8 @@ def add_lines_to_alto(lines, output_path, alto_path):
             for line in block.findall('.//alto:TextLine', ns):
                 block.remove(line)
 
-        # Associer chaque ligne au bloc le plus approprié en utilisant IoU
+        lines_by_block = {} 
+        
         for line in lines:
             if 'boundary' in line and line['boundary']:
                 # Convertir boundary en bbox pour le calcul IoU
@@ -293,33 +294,38 @@ def add_lines_to_alto(lines, output_path, alto_path):
                 
                 # Trouver le bloc avec le meilleur IoU
                 best_iou = 0
-                best_block_info = None
+                best_block = None
                 
                 for block_info in block_boxes:
                     iou = calculate_iou(line_bbox, block_info['bbox'])
                     if iou > best_iou:
                         best_iou = iou
-                        best_block_info = block_info
+                        best_block = block_info['block']
                 
                 # Si aucun bloc approprié n'est trouvé, utiliser le premier bloc
-                if best_block_info is None and block_boxes:
-                    best_block_info = block_boxes[0]
+                if best_block is None and block_boxes:
+                    best_block = block_boxes[0]['block']
                 
-                # Ajouter la ligne à la liste du bloc
-                if best_block_info is not None:
-                    best_block_info['lines'].append(line)
+                # Grouper les lignes par bloc
+                if best_block is not None:
+                    block_id = id(best_block)
+                    if block_id not in lines_by_block:
+                        lines_by_block[block_id] = {'block': best_block, 'lines': []}
+                    
+                    # Stocker la ligne avec sa position Y moyenne pour le tri
+                    line_y = (min_y + max_y) / 2
+                    lines_by_block[block_id]['lines'].append({
+                        'line': line,
+                        'y_pos': line_y
+                    })
         
-        # Pour chaque bloc, trier les lignes et les ajouter dans l'ordre
-        for block_info in block_boxes:
-            if not block_info['lines']:
-                continue
+        for block_id, block_data in lines_by_block.items():
+            # Trier par position Y (top to bottom)
+            block_data['lines'].sort(key=lambda x: x['y_pos'])
             
-            # Trier les lignes dans l'ordre de lecture (top-to-bottom, puis left-to-right)
-            sorted_lines = _sort_lines_reading_order(block_info['lines'])
-            
-            # Ajouter les lignes triées au bloc XML
-            for line in sorted_lines:
-                _add_line_to_element(block_info['block'], line)
+            # Ajouter les lignes triées au bloc
+            for line_data in block_data['lines']:
+                _add_line_to_element(block_data['block'], line_data['line'])
         
         # Sauvegarder le fichier XML modifié
         tree.write(output_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")

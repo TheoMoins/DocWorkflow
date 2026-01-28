@@ -1,4 +1,4 @@
-run_name: "catmus_cheater_yolo_line"
+run_name: "catmus_cheater_yolo_lines_seg_armenian"
 output_dir: "results"
 device: "cpu"
 use_wandb: true
@@ -12,16 +12,16 @@ tasks:
   layout: 
     type: YoloLayout
     config:
-      model_path: "src/tasks/layout/LA-training/catmus_seg_s_16_10/weights/best.pt"
+      model_path: "src/tasks/layout/models/yolo26s_layout_640px_16bs_50e.pt"
       img_size: 640
 
   line:
     type: YoloLine
     config:
-      model_path: "src/tasks/line/models/LINES-bbox_YOLOv11n.pt"
-      text_direction: "horizontal-lr"
-      batch_size: 4
+      model_path: "src/tasks/line/models/LINES-SEG.pt"
       img_size: 640
+      batch_size: 4
+      text_direction: "horizontal-lr"
   htr:
     type: KrakenHTR
     config:
