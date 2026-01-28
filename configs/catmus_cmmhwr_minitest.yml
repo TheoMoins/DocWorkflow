@@ -1,4 +1,4 @@
-run_name: "catmus_cheater_yolo_lines_seg_armenian"
+run_name: "catmus_cheater_yolo26"
 output_dir: "results"
 device: "cpu"
 use_wandb: true
@@ -18,7 +18,7 @@ tasks:
   line:
     type: YoloLine
     config:
-      model_path: "src/tasks/line/models/LINES-SEG.pt"
+      model_path: "src/tasks/line/models/yolo26s_line_640px_16bs_50e.pt"
       img_size: 640
       batch_size: 4
       text_direction: "horizontal-lr"

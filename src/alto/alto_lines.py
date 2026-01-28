@@ -7,6 +7,8 @@ from kraken.lib.xml import XMLPage
 from lxml import etree as ET
 
 from src.utils.utils import IGNORED_ZONE_TYPES
+from src.utils.utils import sort_zones_reading_order
+
 
 def normalize_box(box, width, height, scale=100):
     """
@@ -223,17 +225,9 @@ def _add_line_to_element(parent_element, line, line_id=None, tag_id="LT1"):
 
 def add_lines_to_alto(lines, output_path, alto_path):
     """
-    Ajoute des lignes à un fichier ALTO XML existant ou crée un nouveau fichier avec ces lignes.
-    Les lignes sont triées dans l'ordre de lecture au sein de chaque bloc.
-    
-    Args:
-        lines: Liste de dictionnaires contenant les informations des lignes (boundary, baseline)
-        output_path: Chemin où sauvegarder le fichier ALTO modifié/créé
-        alto_path: Chemin vers un fichier ALTO existant        
-    Returns:
-        True si l'opération a réussi, False sinon
+    Ajoute des lignes à un fichier ALTO XML existant.
+    Les lignes sans zone correspondante (IoU faible) deviennent des zones mono-ligne.
     """
-
     try:
         # Extraire les informations du fichier ALTO existant
         image_file, _, regions = extract_lines_from_alto(alto_path)
@@ -275,59 +269,116 @@ def add_lines_to_alto(lines, output_path, alto_path):
             block_boxes.append({
                 'block': block,
                 'bbox': [x, y, x+w, y+h],
-                'lines': []
+                'is_original': True
             })
 
             # Remove existing lines
             for line in block.findall('.//alto:TextLine', ns):
                 block.remove(line)
-
-        lines_by_block = {} 
+        
+        IOU_THRESHOLD = 0.001  # Seuil minimum d'IoU pour considérer qu'une ligne appartient à une zone
+        
+        lines_with_blocks = []  # Liste de (line, block, y_pos)
+        orphan_lines = []       # Lignes sans zone correspondante
         
         for line in lines:
-            if 'boundary' in line and line['boundary']:
-                # Convertir boundary en bbox pour le calcul IoU
-                boundary = np.array(line['boundary'])
-                min_x, min_y = boundary.min(axis=0)
-                max_x, max_y = boundary.max(axis=0)
-                line_bbox = [min_x, min_y, max_x, max_y]
+            if 'boundary' not in line or not line['boundary']:
+                continue
                 
-                # Trouver le bloc avec le meilleur IoU
-                best_iou = 0
-                best_block = None
-                
-                for block_info in block_boxes:
-                    iou = calculate_iou(line_bbox, block_info['bbox'])
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_block = block_info['block']
-                
-                # Si aucun bloc approprié n'est trouvé, utiliser le premier bloc
-                if best_block is None and block_boxes:
-                    best_block = block_boxes[0]['block']
-                
-                # Grouper les lignes par bloc
-                if best_block is not None:
-                    block_id = id(best_block)
-                    if block_id not in lines_by_block:
-                        lines_by_block[block_id] = {'block': best_block, 'lines': []}
-                    
-                    # Stocker la ligne avec sa position Y moyenne pour le tri
-                    line_y = (min_y + max_y) / 2
-                    lines_by_block[block_id]['lines'].append({
-                        'line': line,
-                        'y_pos': line_y
-                    })
-        
-        for block_id, block_data in lines_by_block.items():
-            # Trier par position Y (top to bottom)
-            block_data['lines'].sort(key=lambda x: x['y_pos'])
+            # Calculer bbox de la ligne
+            boundary = np.array(line['boundary'])
+            min_x, min_y = boundary.min(axis=0)
+            max_x, max_y = boundary.max(axis=0)
+            line_bbox = [min_x, min_y, max_x, max_y]
+            line_y = (min_y + max_y) / 2
             
-            # Ajouter les lignes triées au bloc
-            for line_data in block_data['lines']:
-                _add_line_to_element(block_data['block'], line_data['line'])
+            # Chercher le meilleur bloc
+            best_iou = 0
+            best_block = None
+            
+            for block_info in block_boxes:
+                if not block_info['is_original']:  # Ignorer les pseudo-zones déjà créées
+                    continue
+                iou = calculate_iou(line_bbox, block_info['bbox'])
+                if iou > best_iou:
+                    best_iou = iou
+                    best_block = block_info
+            
+            # Si IoU suffisant, assigner à la zone
+            if best_iou >= IOU_THRESHOLD and best_block is not None:
+                lines_with_blocks.append({
+                    'line': line,
+                    'block': best_block['block'],
+                    'block_bbox': best_block['bbox'],
+                    'y_pos': line_y
+                })
+            else:
+                # Ligne orpheline : créer une pseudo-zone mono-ligne
+                orphan_lines.append({
+                    'line': line,   
+                    'bbox': line_bbox,
+                    'y_pos': line_y
+                })
         
-        # Sauvegarder le fichier XML modifié
+        # === Créer des pseudo-zones pour les lignes orphelines ===
+        
+        print_space = root.find('.//alto:PrintSpace', ns)
+        if print_space is None:
+            print(f"Warning: No PrintSpace found in {alto_path}")
+            return False
+        
+        for idx, orphan in enumerate(orphan_lines):
+            # Créer un nouveau TextBlock pour cette ligne orpheline
+            bbox = orphan['bbox']
+            pseudo_block = ET.SubElement(print_space, f"{{{ns['alto']}}}TextBlock")
+            pseudo_block.set('ID', f'pseudo_block_{idx}')
+            pseudo_block.set('HPOS', str(int(bbox[0])))
+            pseudo_block.set('VPOS', str(int(bbox[1])))
+            pseudo_block.set('WIDTH', str(int(bbox[2] - bbox[0])))
+            pseudo_block.set('HEIGHT', str(int(bbox[3] - bbox[1])))
+            
+            # Ajouter à block_boxes pour le tri global
+            block_boxes.append({
+                'block': pseudo_block,
+                'bbox': bbox,
+                'is_original': False,
+                'lines': [orphan]  # Cette pseudo-zone contient une seule ligne
+            })
+        
+        
+        sorted_blocks = sort_zones_reading_order(block_boxes, eps=300)
+
+        for text_block in list(print_space.findall(f"{{{ns['alto']}}}TextBlock")):
+            print_space.remove(text_block)
+
+        for block_info in sorted_blocks:
+            if block_info['is_original']:
+                # Zone originale : réajouter le bloc au PrintSpace
+                print_space.append(block_info['block'])
+                
+                # Ajouter les lignes triées
+                block_lines = [
+                    item for item in lines_with_blocks 
+                    if item['block'] == block_info['block']
+                ]
+                block_lines.sort(key=lambda x: x['y_pos'])
+                
+                for line_data in block_lines:
+                    _add_line_to_element(block_info['block'], line_data['line'])
+            else:
+                # Pseudo-zone : créer le nouveau bloc et l'ajouter au PrintSpace
+                bbox = block_info['bbox']
+                pseudo_block = ET.SubElement(print_space, f"{{{ns['alto']}}}TextBlock")
+                pseudo_block.set('ID', f"pseudo_block_{id(block_info)}")
+                pseudo_block.set('HPOS', str(int(bbox[0])))
+                pseudo_block.set('VPOS', str(int(bbox[1])))
+                pseudo_block.set('WIDTH', str(int(bbox[2] - bbox[0])))
+                pseudo_block.set('HEIGHT', str(int(bbox[3] - bbox[1])))
+                
+                # Ajouter la ligne unique
+                for orphan in block_info['lines']:
+                    _add_line_to_element(pseudo_block, orphan['line'])
+        
         tree.write(output_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
         return True
         
@@ -336,50 +387,3 @@ def add_lines_to_alto(lines, output_path, alto_path):
         import traceback
         traceback.print_exc()
         return False
-
-
-def _sort_lines_reading_order(lines):
-    """
-    Trie les lignes dans l'ordre de lecture (top-to-bottom, puis left-to-right).
-    
-    Args:
-        lines: Liste de dictionnaires de lignes avec 'boundary' ou 'baseline'
-        
-    Returns:
-        Liste triée de lignes
-    """
-    if not lines:
-        return lines
-    
-    # Calculer la position verticale et horizontale de chaque ligne
-    lines_with_pos = []
-    for line in lines:
-        if 'boundary' in line and line['boundary']:
-            boundary = np.array(line['boundary'])
-            y_pos = boundary[:, 1].min()  # Top edge
-            x_pos = boundary[:, 0].min()  # Left edge
-        elif 'baseline' in line and line['baseline']:
-            baseline = np.array(line['baseline'])
-            y_pos = baseline[:, 1].mean()  # Middle of baseline
-            x_pos = baseline[:, 0].min()   # Start of baseline
-        else:
-            # Pas de position, mettre à la fin
-            y_pos = float('inf')
-            x_pos = float('inf')
-        
-        lines_with_pos.append({
-            'line': line,
-            'y': y_pos,
-            'x': x_pos
-        })
-    
-    # Trier par Y d'abord (top-to-bottom), puis par X (left-to-right)
-    # On utilise une tolérance pour les lignes "sur la même ligne"
-    y_tolerance = 10  # pixels - lignes dans cette marge sont considérées alignées
-    
-    lines_with_pos.sort(key=lambda item: (
-        round(item['y'] / y_tolerance) * y_tolerance,  # Grouper les Y proches
-        item['x']  # Puis trier par X
-    ))
-    
-    return [item['line'] for item in lines_with_pos]
