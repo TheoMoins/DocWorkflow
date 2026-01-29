@@ -328,35 +328,33 @@ def add_lines_to_alto(lines, output_path, alto_path):
             return False
         
         for idx, orphan in enumerate(orphan_lines):
-            # Créer un nouveau TextBlock pour cette ligne orpheline
-            bbox = orphan['bbox']
-            pseudo_block = ET.SubElement(print_space, f"{{{ns['alto']}}}TextBlock")
-            pseudo_block.set('ID', f'pseudo_block_{idx}')
-            pseudo_block.set('HPOS', str(int(bbox[0])))
-            pseudo_block.set('VPOS', str(int(bbox[1])))
-            pseudo_block.set('WIDTH', str(int(bbox[2] - bbox[0])))
-            pseudo_block.set('HEIGHT', str(int(bbox[3] - bbox[1])))
-            
-            # Ajouter à block_boxes pour le tri global
             block_boxes.append({
-                'block': pseudo_block,
-                'bbox': bbox,
+                'block': None,
+                'bbox': orphan['bbox'],
                 'is_original': False,
-                'lines': [orphan]  # Cette pseudo-zone contient une seule ligne
+                'orphan_data': orphan
             })
         
+        sorted_blocks = sort_zones_reading_order(
+            block_boxes, 
+            lines_with_blocks, 
+            eps=200
+        )
         
-        sorted_blocks = sort_zones_reading_order(block_boxes, eps=300)
-
+        # === Réorganiser les TextBlocks dans le XML ===
+        
+        # Supprimer tous les TextBlocks existants
         for text_block in list(print_space.findall(f"{{{ns['alto']}}}TextBlock")):
             print_space.remove(text_block)
-
+        
+        # Recréer dans l'ordre trié
+        pseudo_counter = 0
         for block_info in sorted_blocks:
             if block_info['is_original']:
-                # Zone originale : réajouter le bloc au PrintSpace
+                # Zone originale
                 print_space.append(block_info['block'])
                 
-                # Ajouter les lignes triées
+                # Ajouter lignes triées par Y
                 block_lines = [
                     item for item in lines_with_blocks 
                     if item['block'] == block_info['block']
@@ -366,18 +364,19 @@ def add_lines_to_alto(lines, output_path, alto_path):
                 for line_data in block_lines:
                     _add_line_to_element(block_info['block'], line_data['line'])
             else:
-                # Pseudo-zone : créer le nouveau bloc et l'ajouter au PrintSpace
+                # Pseudo-zone
                 bbox = block_info['bbox']
                 pseudo_block = ET.SubElement(print_space, f"{{{ns['alto']}}}TextBlock")
-                pseudo_block.set('ID', f"pseudo_block_{id(block_info)}")
+                pseudo_block.set('ID', f"pseudo_block_{pseudo_counter}")
                 pseudo_block.set('HPOS', str(int(bbox[0])))
                 pseudo_block.set('VPOS', str(int(bbox[1])))
                 pseudo_block.set('WIDTH', str(int(bbox[2] - bbox[0])))
                 pseudo_block.set('HEIGHT', str(int(bbox[3] - bbox[1])))
                 
-                # Ajouter la ligne unique
-                for orphan in block_info['lines']:
-                    _add_line_to_element(pseudo_block, orphan['line'])
+                orphan_data = block_info['orphan_data']
+                _add_line_to_element(pseudo_block, orphan_data['line'])
+                
+                pseudo_counter += 1
         
         tree.write(output_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
         return True
