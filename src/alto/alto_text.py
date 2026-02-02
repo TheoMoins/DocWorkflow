@@ -23,7 +23,7 @@ def extract_text_from_alto(alto_path):
 
 def extract_lines_text_from_alto(alto_path):
     """
-    Extract text line by line from ALTO XML file.
+    Extract text line by line from ALTO XML file, sorted in reading order.
     
     Args:
         alto_path: Path to ALTO XML file
@@ -39,6 +39,8 @@ def extract_lines_text_from_alto(alto_path):
     
     for textline in root.findall('.//alto:TextLine', ns):
         line_id = textline.get('ID', '')
+        vpos = int(float(textline.get('VPOS', 0)))
+        hpos = int(float(textline.get('HPOS', 0)))
         
         strings = textline.findall('.//alto:String', ns)
         if strings:
@@ -48,10 +50,16 @@ def extract_lines_text_from_alto(alto_path):
         
         lines_text.append({
             'id': line_id,
-            'text': text
+            'text': text,
+            'vpos': vpos,
+            'hpos': hpos
         })
     
-    return lines_text
+    # Sort by reading order: Y first (with tolerance), then X
+    lines_text.sort(key=lambda x: (x['vpos'] // 10, x['hpos']))  # 10px tolerance for same row
+    
+    # Remove position info from output
+    return [{'id': l['id'], 'text': l['text']} for l in lines_text]
 
 def copy_and_fix_alto_namespaces(source_path, dest_path):
     """

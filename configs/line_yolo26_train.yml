@@ -1,6 +1,6 @@
-run_name: "yolo26n_seg_line_640px_16bs_10e"
+run_name: "yolo26_seg_line_chahan"
 output_dir: "results"
-device: "cuda"
+device: "cpu"
 use_wandb: true
 wandb_project: "LS-comparison"
 
@@ -12,7 +12,8 @@ tasks:
   line: 
     type: YoloLine
     config:
-      pretrained_w: "src/tasks/line/models/yolo26n-seg.pt"
+      model_path: "src/tasks/line/models/LINES-SEG.pt"
+      pretrained_w: "src/tasks/line/models/yolo26n.pt"
       img_size: 640
       batch_size: 16
       epochs: 10

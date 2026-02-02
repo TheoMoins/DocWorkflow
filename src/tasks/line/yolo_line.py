@@ -118,32 +118,16 @@ class YoloLineTask(BaseLine):
             min_x = int(boundary_array[:, 0].min())
             max_x = int(boundary_array[:, 0].max())
             min_y = int(boundary_array[:, 1].min())
-            max_y = int(boundary_array[:, 1].max())
+            max_y = int(boundary_array[:, 1].max())      
+
+            baseline_y = (min_y + max_y) // 2
+            baseline = [[min_x, baseline_y], [max_x, baseline_y]]
             
-            # Calculate baseline width
-            baseline_width = max_x - min_x
-            
-            # Only use polygon if baseline is long enough (>= 10px)
-            if baseline_width >= 10:
-                # Create baseline at 75% height (typical text baseline position)
-                baseline_y = int(min_y + (max_y - min_y) * 0.75)
-                baseline = [[min_x, baseline_y], [max_x, baseline_y]]
-                
-                return {
-                    'baseline': baseline,
-                    'boundary': boundary,
-                    'id': f'line_{id(box)}'
-                }
-            else:
-                # Polygon too small, ignore this detection
-                return None
-        
-        # Fallback: create rectangle baseline and boundary (detection mode)
-        baseline_width = x2 - x1
-        
-        # Filter out too-small detections
-        if baseline_width < 10:
-            return None
+            return {
+                'baseline': baseline,
+                'boundary': boundary,
+                'id': f'line_{id(box)}'
+            }
         
         baseline_y = (y1 + y2) // 2
         baseline = [[x1, baseline_y], [x2, baseline_y]]
@@ -202,7 +186,7 @@ class YoloLineTask(BaseLine):
 
                     # Check if segmentation masks are available
                     has_masks = hasattr(result, 'masks') and result.masks is not None
-                    
+
                     for idx, box in enumerate(result.boxes):
                         xyxy = box.xyxy[0].tolist()
                         
