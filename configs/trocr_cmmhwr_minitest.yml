@@ -1,0 +1,29 @@
+run_name: "trocr_cheater"
+output_dir: "results"
+device: "cuda"
+use_wandb: true
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  test: "../data/cmmhwr26_minitest"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      model_path: "src/tasks/layout/models/yolo26s_layout_640px_16bs_50e.pt"
+      img_size: 640
+
+  line:
+    type: YoloLine
+    config:
+      model_path: "src/tasks/line/models/yolo26s_line_640px_16bs_50e.pt"
+      img_size: 640
+      batch_size: 4
+      text_direction: "horizontal-lr"
+  htr:
+    type: TrOCRHTR
+    config:
+      use_metadata: true
+      model_path: "medieval-data/trocr-medieval-base"

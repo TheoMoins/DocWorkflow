@@ -28,7 +28,7 @@ class KrakenHTRTask(BaseHTR):
     
     def __init__(self, config):
         super().__init__(config)
-        self.name = "HTR (Kraken)"
+        self.name = "HTR_Kraken"
     
     def load(self):
         """

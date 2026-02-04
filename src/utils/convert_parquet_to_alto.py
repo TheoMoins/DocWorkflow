@@ -152,9 +152,6 @@ def main(input, output):
             
             # Convertir chaque ligne individuellement
             for idx, row in enumerate(tqdm(dataset, desc="  Converting", unit="line")):
-                # PRENDRE UNIQUEMENT LES CINQ PREMIERES LIGNES DE CHAQUE FICHIER
-                if idx > 5:
-                    break
                 try:
                     create_single_line_alto(row, str(output_path), total_lines + idx)
                 except Exception as e:

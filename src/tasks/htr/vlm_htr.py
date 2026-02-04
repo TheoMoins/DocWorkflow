@@ -24,6 +24,7 @@ class VLMHTRTask(BaseHTR):
     def __init__(self, config):
         super().__init__(config)
 
+        self.name = "HTR_VLM"
         self.model_name = config.get('model_name', 'stanford-oval/churro-3B')
         self.max_new_tokens = config.get('max_new_tokens', 512)
         self.batch_size = config.get('batch_size', 1)
