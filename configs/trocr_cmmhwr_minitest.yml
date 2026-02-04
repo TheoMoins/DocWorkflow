@@ -18,7 +18,7 @@ tasks:
   line:
     type: YoloLine
     config:
-      model_path: "src/tasks/line/models/yolo26s_line_640px_16bs_50e.pt"
+      model_path: "src/tasks/line/models/LINES-SEG.pt"
       img_size: 640
       batch_size: 4
       text_direction: "horizontal-lr"
