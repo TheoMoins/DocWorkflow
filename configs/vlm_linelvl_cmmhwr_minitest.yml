@@ -30,7 +30,6 @@ tasks:
       base_model: "Qwen/Qwen3-VL-2B-Instruct"
       device_map: "auto"
       max_new_tokens: 128
-      line_batch_size: 8
       prompt: "Transcribe the text from this manuscript line. Do not translate, modernize or standardize the text. 
         For example, if the transcription is using 'ſ' instead of 's' or 'а' instead of 'a', keep it that way.
         Do not include any other words or separator in your response."

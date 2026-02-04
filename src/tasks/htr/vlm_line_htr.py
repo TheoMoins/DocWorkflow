@@ -21,7 +21,7 @@ class VLMLineHTRTask(BaseVLMHTR):
     def __init__(self, config):
         super().__init__(config)
         self.name = "HTR (VLM Line-Level)"
-        self.batch_size = config.get('line_batch_size', 4)
+        self.batch_size = config.get('line_batch_size', 1)
     
     def _get_file_extensions(self):
         """VLM Line-Level works with ALTO XML files."""
