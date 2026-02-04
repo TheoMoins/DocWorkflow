@@ -1,340 +1,124 @@
-from src.tasks.htr.base_htr import BaseHTR
-
+from src.tasks.htr.base_vlm_htr import BaseVLMHTR
 import os
 import glob
+import shutil
+import gc
+import torch
 from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
-import shutil
-import torch
-import gc
+from lxml import etree as ET
 import yaml
 
-from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
-from src.utils.transformers_models import is_supported_by_auto_image_text
-from qwen_vl_utils import process_vision_info
 from src.alto.alto_text import copy_and_fix_alto_namespaces
 
-class VLMHTRTask(BaseHTR):
+
+class VLMPageHTRTask(BaseVLMHTR):
     """
-    HTR implementation using CHURRO VLM.
-    Processes images directly without requiring line segmentation.
+    HTR using VLM for page-level transcription.
+    Processes entire page images and splits output into lines.
+    Examples: CHURRO, etc.
     """
     
     def __init__(self, config):
         super().__init__(config)
-
-        self.name = "HTR_VLM"
-        self.model_name = config.get('model_name', 'stanford-oval/churro-3B')
-        self.max_new_tokens = config.get('max_new_tokens', 512)
-        self.batch_size = config.get('batch_size', 1)
-        
-        self.prompt = config.get('prompt',
-                                 "You are an expert in transcription of historical documents from various languages. "
-                                 "Your task is to extract the full text from a given page."
-                                 "Use exactly ONE line break between each line of text."
-                                )
-
-        # Store all hyperparameters in a dictionary
-        self.hyperparams = {
-            # Model loading configuration
-            'use_dtype_param': config.get('use_dtype_param', False),
-            'device_map': config.get('device_map'),
-            'attn_implementation': config.get('attn_implementation'),
-            'model_class': config.get('model_class', None),
-
-            # Training hyperparameters
-            'use_4bit': config.get('use_4bit', False),
-            'lora_r': config.get('lora_r', 16),
-            'lora_dropout': config.get('lora_dropout', 0),
-            'use_rslora': config.get('use_rslora', False),
-            'max_seq_length': config.get('max_seq_length', 4096),
-            'output_dir': config.get('output_dir', f"src/tasks/htr/models"),
-            'train_batch_size': config.get('train_batch_size', 1),
-            'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 4),
-            'warmup_ratio': config.get('warmup_ratio', 0.1),
-            'epochs': config.get('epochs', 3),
-            'learning_rate': config.get('learning_rate', 2e-4),
-            'weight_decay': config.get('weight_decay', 0.01),
-            'dataset_num_proc': config.get('dataset_num_proc', 1)
-        }
-
-        self.processor = None
-        self.model = None
-
-    def load(self):
-        """
-        Load the VLM model from Transformers.
-        Supports both full models and LoRA adapters.
-        """
-        
-        print(f"Loading VLM model: {self.model_name}")
-        print("This may take several minutes on first run...")
-
-        use_lora = self.config.get('use_lora_adapter', False)
-        
-        if use_lora: 
-            from peft import PeftModel
-            
-            base_model_name = self.config.get('base_model_name')
-            if not base_model_name:
-                raise ValueError("base_model_name must be specified when use_lora_adapter=true")
-            
-            print(f"Loading base model: {base_model_name}")
-            print(f"Loading LoRA adapter from: {self.model_name}")
-            
-            # Load processor from adapter directory or base model
-            try:
-                self.processor = AutoProcessor.from_pretrained(
-                    self.model_name,
-                    trust_remote_code=True
-                )
-            except:
-                self.processor = AutoProcessor.from_pretrained(
-                    base_model_name,
-                    trust_remote_code=True
-                )
-
-            # Configuration for base model loading
-            model_kwargs = {
-                "trust_remote_code": True,
-            }
-            
-            if self.device == 'cuda':
-                if self.hyperparams['use_dtype_param']:
-                    model_kwargs['dtype'] = torch.bfloat16
-                else:
-                    model_kwargs['torch_dtype'] = torch.bfloat16
-            else:
-                if self.hyperparams['use_dtype_param']:
-                    model_kwargs['dtype'] = torch.float32
-                else:
-                    model_kwargs['torch_dtype'] = torch.float32
-
-            # Load base model
-            model_class_name = self.hyperparams['model_class']
-            
-            if model_class_name == 'AutoModel':
-                base_model = AutoModel.from_pretrained(base_model_name, **model_kwargs)
-            elif model_class_name == 'AutoModelForImageTextToText':
-                base_model = AutoModelForImageTextToText.from_pretrained(base_model_name, **model_kwargs)
-            else:
-                if is_supported_by_auto_image_text(base_model_name):
-                    base_model = AutoModelForImageTextToText.from_pretrained(base_model_name, **model_kwargs)
-                else:
-                    base_model = AutoModel.from_pretrained(base_model_name, **model_kwargs)
-            
-            # Load LoRA adapter
-            print("Loading LoRA adapter...")
-            self.model = PeftModel.from_pretrained(
-                base_model,
-                self.model_name,
-                is_trainable=False
-            )
-            
-        else:
-            # Load processor
-            self.processor = AutoProcessor.from_pretrained(
-                self.model_name,
-                trust_remote_code=True
-            )
-
-            # Configuration options for model loading
-            model_kwargs = {
-                "trust_remote_code": True,
-            }
-            
-            # Handle torch_dtype vs dtype deprecation
-            if self.device == 'cuda':
-                if self.hyperparams['use_dtype_param']:
-                    model_kwargs['dtype'] = torch.bfloat16
-                else:
-                    model_kwargs['torch_dtype'] = torch.bfloat16
-            else:
-                if self.hyperparams['use_dtype_param']:
-                    model_kwargs['dtype'] = torch.float32
-                else:
-                    model_kwargs['torch_dtype'] = torch.float32
-
-            # Add optional config parameters
-            if self.hyperparams['device_map']:
-                model_kwargs['device_map'] = self.hyperparams['device_map']
-
-            if self.hyperparams['attn_implementation']:
-                model_kwargs['attn_implementation'] = self.hyperparams['attn_implementation']
-
-            # Determine which Auto class to use
-            model_class_name = self.hyperparams['model_class']
-            
-            if model_class_name == 'AutoModel':
-                print("Using AutoModel (explicitly specified)")
-                self.model = AutoModel.from_pretrained(
-                    self.model_name,
-                    **model_kwargs
-                )
-            elif model_class_name == 'AutoModelForImageTextToText':
-                print("Using AutoModelForImageTextToText (explicitly specified)")
-                self.model = AutoModelForImageTextToText.from_pretrained(
-                    self.model_name,
-                    **model_kwargs
-                )
-            else:
-                if is_supported_by_auto_image_text(self.model_name):
-                    print("Using AutoModelForImageTextToText (auto-detected)")
-                    self.model = AutoModelForImageTextToText.from_pretrained(
-                        self.model_name,
-                        **model_kwargs
-                    )
-                else:
-                    print("Model not supported by AutoModelForImageTextToText, using AutoModel")
-                    self.model = AutoModel.from_pretrained(
-                        self.model_name,
-                        **model_kwargs
-                    )
-        
-        # Move to device if not using device_map
-        self.model.to(self.device)
-        
-        self.model.eval()
-        
-        print(f"Model loaded successfully on {self.device}")
+        self.name = "HTR_VLM_Page_Level"
     
-    def _recognize_single_image(self, image_path):
+    def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
-        Recognize text from a single image.
+        Process images for page-level VLM HTR.
         
         Args:
-            image_path: Path to the image file
+            file_paths: List of image paths
+            source_dir: Source directory
+            output_dir: Output directory
+            save_image: Whether to copy images
             
         Returns:
-            Recognized text as string
+            List of results
         """
+        print(f"  Processing {len(file_paths)} images...")
         
-        # Load and prepare image
-        image = Image.open(image_path).convert("RGB")
+        results = []
         
-        # Prepare messages for the model
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image},
-                    {"type": "text", "text": self.prompt},
-                ],
-            }
-        ]
+        for image_path in tqdm(file_paths, desc="  Recognizing text", unit="image"):
+            try:
+                # Recognize full page
+                messages = self._prepare_messages(Image.open(image_path).convert("RGB"))
+                text = self._generate_from_messages(messages)
+                
+                # Create/update ALTO
+                base_name = Path(image_path).stem
+                output_path = os.path.join(output_dir, f"{base_name}.xml")
+                
+                existing_alto = os.path.join(source_dir, f"{base_name}.xml")
+                if os.path.exists(existing_alto):
+                    copy_and_fix_alto_namespaces(existing_alto, output_path)
+                else:
+                    self._create_simple_alto_with_text(image_path, text, output_path)
+                
+                # Split into lines
+                self._split_output_into_lines(output_path, text, image_path)
+                
+                results.append({'file': image_path, 'text': text})
+                
+                if save_image:
+                    image_output = os.path.join(output_dir, os.path.basename(image_path))
+                    if not os.path.exists(image_output):
+                        shutil.copy2(image_path, image_output)
+                
+                # Memory cleanup
+                if len(results) % 10 == 0:
+                    gc.collect()
+                    if self.device == 'cuda':
+                        torch.cuda.empty_cache()
+                
+            except Exception as e:
+                print(f"  Error processing {image_path}: {e}")
+                import traceback
+                traceback.print_exc()
         
-        # Process inputs
-        text = self.processor.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-        
-        try:
-            image_inputs, _ = process_vision_info(messages)
-        except (ImportError, Exception):
-            # Fallback for models that don't need it
-            image_inputs = [image]
-        
-        inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            padding=True,
-            return_tensors="pt",
-        ).to(self.device)
-        
-        # Generate
-        generation_kwargs = {
-            "max_new_tokens": self.max_new_tokens,
-        }
-        
-        with torch.no_grad():
-            generated_ids = self.model.generate(
-                **inputs,
-                **generation_kwargs
-            )
-
-        # Decode
-        generated_ids_trimmed = [
-            output[len(input_ids):]
-            for input_ids, output in zip(inputs["input_ids"], generated_ids)
-        ]
-        
-        output_text = self.processor.batch_decode(
-            generated_ids_trimmed,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False
-        )
-
-        # Cleanup
-        image.close()
-        del inputs, generated_ids, generated_ids_trimmed
-        
-        return output_text[0]
-
+        return results
+    
     def _split_output_into_lines(self, alto_path, text, image_path):
-        """
-        Split single-line output into multiple TextLines based on line breaks.
-        Tries to match with existing layout structure if available.
-        
-        Args:
-            alto_path: Path to the ALTO file (may have layout info)
-            text: Full text from CHURRO
-            image_path: Path to source image
-            
-        Returns:
-            Path to updated ALTO file
-        """
-        from lxml import etree as ET
+        """Split VLM output into TextLines (same as before)."""
         from PIL import Image
         
-        # Split text by line breaks
         lines_text = [line.strip() for line in text.split('\n') if line.strip()]
         
         if not lines_text:
             return alto_path
         
-        # Try to load existing ALTO structure
         tree = ET.parse(alto_path)
         root = tree.getroot()
         ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
         
-        # Get image dimensions
         with Image.open(image_path) as img:
             width, height = img.size
         
-        # Find existing TextLines (from layout/line segmentation)
         existing_lines = root.findall('.//alto:TextLine', ns)
         
         if existing_lines and len(existing_lines) == len(lines_text):
-            # Perfect match: update existing lines with CHURRO text
+            # Perfect match
             for line_elem, line_text in zip(existing_lines, lines_text):
-                # Remove old String elements
                 for string_elem in line_elem.findall('alto:String', ns):
                     line_elem.remove(string_elem)
                 
-                # Add new String with CHURRO text
                 string_elem = ET.SubElement(line_elem, ET.QName(ns['alto'], 'String'))
                 string_elem.set('CONTENT', line_text)
                 string_elem.set('WC', '1.0')
-        
         else:
-            # No match: create new structure with estimated line positions
+            # Create new structure
             text_blocks = root.findall('.//alto:TextBlock', ns)
             
             if text_blocks:
-                # Use first text block
                 text_block = text_blocks[0]
-
                 for extra_block in text_blocks[1:]:
                     extra_block.getparent().remove(extra_block)
                 
-                # Remove existing TextLines
                 for line_elem in text_block.findall('alto:TextLine', ns):
                     text_block.remove(line_elem)
                 
-                # Create new TextLines with estimated positions
                 line_height = height // max(len(lines_text), 1)
                 margin = 10
                 
@@ -368,13 +152,79 @@ class VLMHTRTask(BaseHTR):
             else:
                 if level and (not elem.tail or not elem.tail.strip()):
                     elem.tail = i
-
+        
         indent_xml(root)
-
         ET.cleanup_namespaces(root)
         tree.write(alto_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
         return alto_path
 
+
+
+    def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
+        """
+        Process a batch of images for VLM HTR.
+        
+        Args:
+            file_paths: List of image paths to process
+            source_dir: Source directory (for finding ALTO if exists)
+            output_dir: Directory to save ALTO XML files
+            save_image: Whether to copy images to output
+            
+        Returns:
+            List of prediction results
+        """
+        print(f"  Processing {len(file_paths)} images...")
+        
+        results = []
+        
+        for image_path in tqdm(file_paths, desc="  Recognizing text", unit="image"):
+            try:
+                # Recognize text
+                text = self._recognize_single_image(image_path)
+                
+                # Create basic ALTO file
+                base_name = Path(image_path).stem
+                output_path = os.path.join(output_dir, f"{base_name}.xml")
+                
+                # Check if there's an existing ALTO with layout/lines
+                existing_alto = os.path.join(source_dir, f"{base_name}.xml")
+                if os.path.exists(existing_alto):
+                    # Copy existing structure AND clean namespaces
+                    copy_and_fix_alto_namespaces(existing_alto, output_path)
+                else:
+                    # Create simple ALTO
+                    self._create_simple_alto_with_text(image_path, text, output_path)
+                
+                # Split VLM output into lines
+                self._split_output_into_lines(output_path, text, image_path)
+                
+                results.append({
+                    'file': image_path,
+                    'text': text
+                })
+                
+                # Copy image if requested
+                if save_image:
+                    image_output = os.path.join(output_dir, os.path.basename(image_path))
+                    if not os.path.exists(image_output):
+                        shutil.copy2(image_path, image_output)
+                
+                # Clean up memory periodically
+                if len(results) % 10 == 0:
+                    gc.collect()
+                    if self.device == 'cuda':
+                        torch.cuda.empty_cache()
+                
+            except Exception as e:
+                print(f"  Error processing {image_path}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        return results
+    
+
+    
 
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """

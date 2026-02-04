@@ -11,5 +11,6 @@ class ModelImports(Enum):
     
     # HTR
     KRAKENHTR = ("src.tasks.htr.kraken_htr", "KrakenHTRTask")
-    VLMHTR = ("src.tasks.htr.vlm_htr", "VLMHTRTask")
+    VLMPAGEHTR = ("src.tasks.htr.vlm_page_htr", "VLMPageHTRTask")
+    VLMLINEHTR = ("src.tasks.htr.vlm_line_htr", "VLMLineHTRTask")
     TROCRHTR = ("src.tasks.htr.trocr_htr", "TrOCRHTRTask")
