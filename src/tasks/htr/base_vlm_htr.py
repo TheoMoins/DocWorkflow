@@ -43,63 +43,119 @@ class BaseVLMHTR(BaseHTR):
         
         print(f"Loading VLM model: {self.model_name}")
         
-        # Load processor
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_name,
-            trust_remote_code=True
-        )
+        base_model_name = self.hyperparams.get('base_model')
+        use_lora = base_model_name is not None
         
-        # Model loading configuration
-        model_kwargs = {"trust_remote_code": True}
-        
-        if self.device == 'cuda':
-            if self.hyperparams['use_dtype_param']:
-                model_kwargs['dtype'] = torch.bfloat16
-            else:
+        if use_lora:
+            # LoRA adapter mode: load base model + adapter
+            print(f"Loading base model: {base_model_name}")
+            print(f"Loading LoRA adapter from: {self.model_name}")
+                        
+            # Load processor from base model
+            self.processor = AutoProcessor.from_pretrained(
+                base_model_name,
+                trust_remote_code=True
+            )
+            
+            # Model loading configuration
+            model_kwargs = {"trust_remote_code": True}
+            
+            if self.device == 'cuda':
                 model_kwargs['torch_dtype'] = torch.bfloat16
-        else:
-            if self.hyperparams['use_dtype_param']:
-                model_kwargs['dtype'] = torch.float32
             else:
                 model_kwargs['torch_dtype'] = torch.float32
-        
-        if self.hyperparams['device_map']:
-            model_kwargs['device_map'] = self.hyperparams['device_map']
-        
-        if self.hyperparams['attn_implementation']:
-            model_kwargs['attn_implementation'] = self.hyperparams['attn_implementation']
-        
-        # Determine which Auto class to use
-        model_class_name = self.hyperparams.get('model_class')
-        base_model_name = self.hyperparams.get('base_model')
-
-        # Special handling for explicit model class
-        if base_model_name is not None and "Qwen" in base_model_name:
-            self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-                base_model_name,
-                **model_kwargs
+            
+            if self.hyperparams['device_map']:
+                model_kwargs['device_map'] = self.hyperparams['device_map']
+            else:
+                model_kwargs['device_map'] = 'auto'
+            
+            # Special handling for Qwen-VL models
+            if 'qwen' in base_model_name.lower() and 'vl' in base_model_name.lower():
+                print("Using Qwen3VLForConditionalGeneration for base model")
+                
+                base_model = Qwen3VLForConditionalGeneration.from_pretrained(
+                    base_model_name,
+                    **model_kwargs
+                )
+            else:
+                # Fallback for other models
+                base_model = AutoModelForImageTextToText.from_pretrained(
+                    base_model_name,
+                    **model_kwargs
+                )
+            
+            # Load LoRA adapter
+            print("Loading LoRA adapter...")
+            self.model = PeftModel.from_pretrained(
+                base_model,
+                self.model_name,
+                is_trainable=False
             )
-            self.model = PeftModel.from_pretrained(self.model, self.model_name)
-
-        if model_class_name == 'AutoModel':
-            self.model = AutoModel.from_pretrained(self.model_name, **model_kwargs)
-        elif model_class_name == 'AutoModelForImageTextToText':
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                self.model_name, **model_kwargs
-            )
+            
         else:
-            if is_supported_by_auto_image_text(self.model_name):
+            # Standard loading (no LoRA)
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_name,
+                trust_remote_code=True
+            )
+            
+            # Model loading configuration
+            model_kwargs = {"trust_remote_code": True}
+            
+            if self.device == 'cuda':
+                if self.hyperparams['use_dtype_param']:
+                    model_kwargs['dtype'] = torch.bfloat16
+                else:
+                    model_kwargs['torch_dtype'] = torch.bfloat16
+            else:
+                if self.hyperparams['use_dtype_param']:
+                    model_kwargs['dtype'] = torch.float32
+                else:
+                    model_kwargs['torch_dtype'] = torch.float32
+            
+            if self.hyperparams['device_map']:
+                model_kwargs['device_map'] = self.hyperparams['device_map']
+            
+            if self.hyperparams['attn_implementation']:
+                model_kwargs['attn_implementation'] = self.hyperparams['attn_implementation']
+            
+            # Determine model class
+            model_class_name = self.hyperparams.get('model_class')
+            model_name_lower = self.model_name.lower()
+            
+            # Try to load the appropriate model class
+            if model_class_name == 'Qwen3VL' or ('qwen' in model_name_lower and 'vl' in model_name_lower):
+                print("Using Qwen3VLForConditionalGeneration")
+                from transformers import Qwen3VLForConditionalGeneration
+                self.model = Qwen3VLForConditionalGeneration.from_pretrained(
+                    self.model_name, **model_kwargs
+                )
+            elif model_class_name == 'AutoModel':
+                self.model = AutoModel.from_pretrained(self.model_name, **model_kwargs)
+            elif model_class_name == 'AutoModelForImageTextToText':
                 self.model = AutoModelForImageTextToText.from_pretrained(
                     self.model_name, **model_kwargs
                 )
             else:
-                self.model = AutoModel.from_pretrained(self.model_name, **model_kwargs)
+                # Auto-detection
+                if is_supported_by_auto_image_text(self.model_name):
+                    print("Using AutoModelForImageTextToText (auto-detected)")
+                    self.model = AutoModelForImageTextToText.from_pretrained(
+                        self.model_name, **model_kwargs
+                    )
+                else:
+                    print("Using AutoModel (fallback)")
+                    self.model = AutoModel.from_pretrained(self.model_name, **model_kwargs)
         
-        self.model.to(self.device)
+        # Move to device if not using device_map=auto
+        if not self.hyperparams.get('device_map'):
+            self.model.to(self.device)
+        
         self.model.eval()
         
-        print(f"Model loaded on {self.device}")
-    
+        print(f"Model loaded successfully")
+            
     def _extract_line_image(self, image, boundary):
         """
         Extract a line region from the full page image.
