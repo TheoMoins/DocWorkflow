@@ -4,7 +4,8 @@ import torch
 import numpy as np
 from PIL import Image
 
-from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
+from peft import PeftModel
+from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel, Qwen3VLForConditionalGeneration
 from qwen_vl_utils import process_vision_info
 from src.utils.transformers_models import is_supported_by_auto_image_text
 
@@ -69,8 +70,17 @@ class BaseVLMHTR(BaseHTR):
             model_kwargs['attn_implementation'] = self.hyperparams['attn_implementation']
         
         # Determine which Auto class to use
-        model_class_name = self.hyperparams['model_class']
-        
+        model_class_name = self.hyperparams.get('model_class')
+        base_model_name = self.hyperparams.get('base_model')
+
+        # Special handling for explicit model class
+        if base_model_name is not None and "Qwen" in base_model_name:
+            self.model = Qwen3VLForConditionalGeneration.from_pretrained(
+                base_model_name,
+                **model_kwargs
+            )
+            self.model = PeftModel.from_pretrained(self.model, self.model_name)
+
         if model_class_name == 'AutoModel':
             self.model = AutoModel.from_pretrained(self.model_name, **model_kwargs)
         elif model_class_name == 'AutoModelForImageTextToText':
