@@ -6,6 +6,7 @@ echo "Setting up DocWorkflow environments..."
 echo "Creating main environment..."
 virtualenv -p python3.10 envs/main
 source envs/main/bin/activate
+pip install --no-deps yaltai
 pip install -e ".[dev]"
 deactivate
 
@@ -21,6 +22,8 @@ pip install unsloth qwen-vl-utils
 pip install --no-deps trl peft accelerate bitsandbytes
 pip install transformers datasets pandas pyyaml lxml pillow 
 pip install matplotlib click tabulate jiwer wandb
+pip install --no-deps kraken iso639
+pip install wandb
 
 pip install -e . --no-deps 
 

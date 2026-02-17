@@ -61,9 +61,9 @@ class BaseVLMHTR(BaseHTR):
             model_kwargs = {"trust_remote_code": True}
             
             if self.device == 'cuda':
-                model_kwargs['torch_dtype'] = torch.bfloat16
+                model_kwargs['dtype'] = torch.bfloat16
             else:
-                model_kwargs['torch_dtype'] = torch.float32
+                model_kwargs['dtype'] = torch.float32
             
             if self.hyperparams['device_map']:
                 model_kwargs['device_map'] = self.hyperparams['device_map']
@@ -107,12 +107,12 @@ class BaseVLMHTR(BaseHTR):
                 if self.hyperparams['use_dtype_param']:
                     model_kwargs['dtype'] = torch.bfloat16
                 else:
-                    model_kwargs['torch_dtype'] = torch.bfloat16
+                    model_kwargs['dtype'] = torch.bfloat16
             else:
                 if self.hyperparams['use_dtype_param']:
                     model_kwargs['dtype'] = torch.float32
                 else:
-                    model_kwargs['torch_dtype'] = torch.float32
+                    model_kwargs['dtype'] = torch.float32
             
             if self.hyperparams['device_map']:
                 model_kwargs['device_map'] = self.hyperparams['device_map']

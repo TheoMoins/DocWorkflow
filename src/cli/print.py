@@ -10,7 +10,7 @@ def visualize(
     task_name: str,
     pred_path: str,
     results_dir: str,
-    source_data_path: str = None  # Nouveau paramètre
+    source_data_path: str = None
 ):
 
     console = Console()
