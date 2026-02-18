@@ -126,7 +126,45 @@ class BaseHTR(BaseTask):
         tree = ET.ElementTree(alto)
         tree.write(output_path, pretty_print=True, 
                   xml_declaration=True, encoding="UTF-8")
-        
+    
+
+    def _deduplicate_alto_consecutive_lines(self, alto_path):
+        """
+        Remove consecutive duplicate TextLines from an ALTO XML file in-place.
+        Targets hallucination artifacts where HTR models repeat the same line.
+        """
+        tree = ET.parse(alto_path)
+        root = tree.getroot()
+        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+
+        for text_block in root.findall('.//alto:TextBlock', ns):
+            lines = text_block.findall('alto:TextLine', ns)
+            prev_text = None
+            for line in lines:
+                strings = line.findall('.//alto:String', ns)
+                text = ' '.join(s.get('CONTENT', '') for s in strings).strip()
+                if text and text == prev_text:
+                    text_block.remove(line)
+                else:
+                    prev_text = text
+
+        tree.write(alto_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+
+    def predict(self, data_path, output_dir, save_image=True, **kwargs):
+        """
+        Override predict to apply post-processing deduplication on all output ALTO files.
+        """
+        results = super().predict(data_path=data_path, output_dir=output_dir, save_image=save_image, **kwargs)
+
+        # Deduplicate consecutive lines in all produced ALTO files
+        import glob
+        for alto_path in glob.glob(str(Path(output_dir) / '**' / '*.xml'), recursive=True):
+            try:
+                self._deduplicate_alto_consecutive_lines(alto_path)
+            except Exception as e:
+                print(f"  Warning: deduplication failed on {alto_path}: {e}")
+
+        return results
     
     def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):
         """
@@ -143,6 +181,8 @@ class BaseHTR(BaseTask):
                 
                 page_gt_texts = []
                 page_pred_texts = []
+                competition_preds = {}
+                competition_gt = {}   
                 
                 if len(pred_lines) == 1 and len(gt_lines) > 1:
                     # Fallback: split prediction by line breaks
@@ -166,6 +206,14 @@ class BaseHTR(BaseTask):
                 else:
                     gt_text = extract_text_from_alto(gt_file)
                     pred_text = extract_text_from_alto(pred_file)
+                    page_stem = Path(gt_file).stem
+                    for i, l in enumerate(gt_lines):
+                        if l['text'].strip():
+                            competition_gt[f"{page_stem}/{i}"] = l['text']
+                    for i, l in enumerate(pred_lines):
+                        if i < len(gt_lines) and gt_lines[i]['text'].strip():
+                            competition_preds[f"{page_stem}/{i}"] = l['text']
+
                     if gt_text.strip():
                         page_gt_texts.append(gt_text)
                         page_pred_texts.append(pred_text)
@@ -185,7 +233,11 @@ class BaseHTR(BaseTask):
                 print(f"  Error on {Path(gt_file).name}: {e}")
         
         # Calculate global metrics
-        metrics_dict = calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores)
+        metrics_dict = calculate_htr_metrics(
+            all_gt_texts, all_pred_texts, page_scores,
+            competition_preds=competition_preds,
+            competition_gt=competition_gt
+        )
         
         return metrics_dict, page_scores
     

@@ -116,3 +116,29 @@ def copy_and_fix_alto_namespaces(source_path, dest_path):
     # Sauvegarder
     new_tree = etree.ElementTree(new_root)
     new_tree.write(dest_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+
+def extract_lines_dict_from_alto(alto_path):
+    """
+    Extract text from ALTO XML as a dict of line_id -> text,
+    matching the CMMHWR competition submission format.
+
+    Args:
+        alto_path: Path to ALTO XML file
+
+    Returns:
+        dict of line_id -> text content
+    """
+    tree = ET.parse(alto_path)
+    root = tree.getroot()
+    ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+
+    lines = {}
+    for textline in root.findall('.//alto:TextLine', ns):
+        line_id = textline.get('ID', '')
+        if not line_id:
+            continue
+        strings = textline.findall('.//alto:String', ns)
+        text = ' '.join(s.get('CONTENT', '') for s in strings if s.get('CONTENT'))
+        lines[line_id] = text
+
+    return lines

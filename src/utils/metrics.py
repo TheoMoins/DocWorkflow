@@ -3,6 +3,9 @@ import jiwer
 from jiwer import cer, wer
 from pathlib import Path
 
+from torchmetrics.text import CharErrorRate, WordErrorRate
+import unicodedata
+
 from src.utils.metadata import create_metadata_stats
 
 
@@ -34,7 +37,8 @@ def aggregate_metrics(metrics_list):
 
 
 
-def calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores):
+def calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores,
+                          competition_preds=None, competition_gt=None):
     """
     Calculate HTR-specific metrics from texts.
     
@@ -89,6 +93,26 @@ def calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores):
             else:
                 metrics_dict[f"worst/top{i}_file"] = None
                 metrics_dict[f"worst/top{i}_cer"] = None
+
+    # Competition metrics (CMMHWR: line-level by ID, torchmetrics, NFD)
+    if competition_preds is not None and competition_gt is not None:
+
+        common_ids = set(competition_preds.keys()) & set(competition_gt.keys())
+        if common_ids:
+            comp_cer = CharErrorRate()
+            comp_wer = WordErrorRate()
+            for line_id in common_ids:
+                pred = unicodedata.normalize('NFD', competition_preds[line_id])
+                gt = unicodedata.normalize('NFD', competition_gt[line_id])
+                comp_cer(pred, gt)
+                comp_wer(pred, gt)
+            metrics_dict["competition/cer"] = comp_cer.compute().item()
+            metrics_dict["competition/wer"] = comp_wer.compute().item()
+            metrics_dict["competition/matched_lines"] = len(common_ids)
+        else:
+            metrics_dict["competition/cer"] = None
+            metrics_dict["competition/wer"] = None
+            metrics_dict["competition/matched_lines"] = 0
     
     return metrics_dict
 
