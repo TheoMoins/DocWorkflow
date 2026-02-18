@@ -224,7 +224,9 @@ class VLMPageHTRTask(BaseVLMHTR):
         return results
     
 
-    
+    def _recognize_single_image(self, image):
+        messages = self._prepare_messages(image)
+        return self._generate_from_messages(messages)
 
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
