@@ -10,7 +10,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       use_metadata: true
       model_name: 'stanford-oval/churro-3B'

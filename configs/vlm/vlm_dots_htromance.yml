@@ -9,7 +9,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       model_name: "rednote-hilab/dots.ocr"
       max_new_tokens: 1024    

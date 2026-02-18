@@ -1,0 +1,29 @@
+run_name: "yolo_seg_chahan_line_kraken_htr"
+output_dir: "results"
+device: "cpu"
+use_wandb: true
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  test: "../data/ICDAR_Competition/test"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      model_path: "src/tasks/layout/models/yolo26s_layout_640px_16bs_50e.pt"
+      img_size: 640
+
+  line:
+    type: YoloLine
+    config:
+      model_path: "src/tasks/line/models/LINES-SEG.pt"
+      img_size: 640
+      batch_size: 4
+      text_direction: "horizontal-lr"
+  htr:
+    type: KrakenHTR
+    config:
+      use_metadata: true
+      model_path: "src/tasks/htr/models/catmus-medieval-1.6.0.mlmodel"

@@ -9,7 +9,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       model_name: "deepseek-ai/DeepSeek-OCR"
       max_new_tokens: 1024    

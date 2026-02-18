@@ -77,7 +77,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       model_name: '${MODEL_NAME}'
       max_new_tokens: ${MAX_NEW_TOKENS}

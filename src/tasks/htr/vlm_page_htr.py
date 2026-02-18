@@ -521,7 +521,7 @@ class VLMPageHTRTask(BaseVLMHTR):
             },
             'tasks': {
                 'htr': {
-                    'type': 'VLMHTR',
+                    'type': 'VLMPAGEHTR',
                     'config': {
                         'model_name': output_dir,
                         'base_model_name': self.model_name,

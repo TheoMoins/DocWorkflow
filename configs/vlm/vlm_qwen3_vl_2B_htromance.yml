@@ -9,7 +9,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       model_name: "Qwen/Qwen3-VL-2B-Instruct"
       max_new_tokens: 1024    

@@ -9,7 +9,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       model_name: "datalab-to/chandra"
       max_new_tokens: 1024

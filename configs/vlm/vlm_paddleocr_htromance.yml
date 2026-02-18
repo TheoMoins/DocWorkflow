@@ -9,7 +9,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       model_name: "PaddlePaddle/PaddleOCR-VL"
       max_new_tokens: 1024    

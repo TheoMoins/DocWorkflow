@@ -9,7 +9,7 @@ data:
 
 tasks:
   htr:
-    type: VLMHTR
+    type: VLMPAGEHTR
     config:
       model_name: "nanonets/Nanonets-OCR2-3B"
       max_new_tokens: 1024    
