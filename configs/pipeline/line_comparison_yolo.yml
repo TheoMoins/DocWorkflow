@@ -1,0 +1,20 @@
+run_name: "line_yolo_chahan"
+output_dir: "results"
+device: "cpu"
+use_wandb: true
+wandb_project: "LS-comparison"
+save_image: true
+
+
+data:
+  test: "../data/manifests_test_french/alto"
+
+tasks:
+  line:
+    type: YoloLine
+    config:
+      model_path: "src/tasks/line/models/LINES-bbox_YOLOv11n.pt"
+      
+      batch_size: 4
+      img_size: 640
+      text_direction: "horizontal-lr"

@@ -2,9 +2,6 @@
 /old
 /results
 
-configs/pipeline
-configs/vlm
-
 /wandb/
 wandb_api_key*
 *.pyc

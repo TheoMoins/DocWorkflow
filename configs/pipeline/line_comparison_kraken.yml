@@ -1,0 +1,17 @@
+run_name: "line_kraken_comparison"
+output_dir: "results"
+device: "cpu"
+use_wandb: true
+wandb_project: "LS-comparison"
+save_image: true
+
+
+data:
+  test: "../data/manifests_test_french/alto"
+
+tasks:
+  line:
+    type: KrakenLine
+    config:
+      model_path: "src/tasks/line/models/blla.mlmodel"
+      text_direction: "horizontal-lr"

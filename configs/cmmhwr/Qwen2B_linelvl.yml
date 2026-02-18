@@ -1,4 +1,4 @@
-run_name: "Qwen_2B_line_level_cheater"
+run_name: "Qwen2B_linelvl"
 output_dir: "results"
 device: "cuda"
 use_wandb: true

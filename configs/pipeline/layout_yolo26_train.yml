@@ -1,0 +1,20 @@
+run_name: "yolo26s_layout_640px_16bs_50e"
+output_dir: "results"
+device: "cpu"
+use_wandb: true
+wandb_project: "LA-comparison"
+
+data:
+  train: "../data/data_yolo/medieval-segmentation-yolo/config_serveur.yaml"
+  test: "../data/manifests_test_french/alto"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      model_path: "runs/detect/Layout Segmentation (YOLO)_640px_16bs_50e2/weights/best.pt" 
+      pretrained_w: "src/tasks/layout/models/yolo26n.pt"
+      img_size: 640
+      batch_size: 16
+      epochs: 50
+
