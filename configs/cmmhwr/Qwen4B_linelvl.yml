@@ -13,8 +13,8 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: "small-models-for-glam/Qwen3-VL-2B-catmus"
-      base_model: "Qwen/Qwen3-VL-2B-Instruct"
+      model_name: "small-models-for-glam/Qwen3-VL-4B-catmus"
+      base_model: "Qwen/Qwen3-VL-4B-Instruct"
       device_map: "auto"
       max_new_tokens: 128
       prompt: "Transcribe the text from this manuscript line. Do not translate, modernize or standardize the text. 
