@@ -219,7 +219,7 @@ class YoloLayoutTask(BaseTask):
                     detections = remove_duplicates(detections)
                     
                     # Create ALTO XML and save it
-                    alto = create_alto_xml(detections, image_path, wh)
+                    alto = create_alto_xml(detections, image_path, wh, reading_order=self.reading_order)
                     save_alto_xml(alto, output_path)
                 
                     if save_image:

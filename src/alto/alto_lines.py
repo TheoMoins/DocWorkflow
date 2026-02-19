@@ -7,7 +7,7 @@ from kraken.lib.xml import XMLPage
 from lxml import etree as ET
 
 from src.utils.utils import IGNORED_ZONE_TYPES
-from src.utils.utils import sort_zones_reading_order
+from src.utils.sorting import sort_zones_reading_order
 
 
 def normalize_box(box, width, height, scale=100):
@@ -223,7 +223,7 @@ def _add_line_to_element(parent_element, line, line_id=None, tag_id="LT1"):
     return line_element
 
 
-def add_lines_to_alto(lines, output_path, alto_path):
+def add_lines_to_alto(lines, output_path, alto_path, reading_order="dbscan"):
     """
     Ajoute des lignes à un fichier ALTO XML existant.
     Les lignes sans zone correspondante (IoU faible) deviennent des zones mono-ligne.
@@ -338,11 +338,10 @@ def add_lines_to_alto(lines, output_path, alto_path):
         sorted_blocks = sort_zones_reading_order(
             block_boxes, 
             lines_with_blocks, 
-            eps=200
+            eps=200,
+            method=reading_order
         )
-        
-        # === Réorganiser les TextBlocks dans le XML ===
-        
+                
         # Supprimer tous les TextBlocks existants
         for text_block in list(print_space.findall(f"{{{ns['alto']}}}TextBlock")):
             print_space.remove(text_block)

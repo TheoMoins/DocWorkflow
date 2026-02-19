@@ -10,7 +10,8 @@ import itertools
 import os
 import hashlib
 
-from src.utils.utils import sort_zones_reading_order, IGNORED_ZONE_TYPES
+from src.utils.utils import IGNORED_ZONE_TYPES
+from src.utils.sorting import sort_zones_reading_order
 from src.alto.alto_lines import calculate_iou
 
 
@@ -126,7 +127,7 @@ def assign_zones(detections):
     return [{"idx": idx, **zone} for (idx, zone) in enumerate(zones)]
 
 
-def create_alto_xml(detections, image_path, dimensions):
+def create_alto_xml(detections, image_path, dimensions, reading_order="dbscan"):
     """
     Generate ALTO XML from detections.
     
@@ -152,8 +153,8 @@ def create_alto_xml(detections, image_path, dimensions):
             tags.add((tag_id, label, "block type"))
 
     # Sort detections in reading order
-    detections = sort_zones_reading_order(detections)
-    
+    detections = sort_zones_reading_order(detections, method=reading_order)
+
     NSMAP = {
         None: "http://www.loc.gov/standards/alto/ns-v4#",
         "xsi": "http://www.w3.org/2001/XMLSchema-instance"

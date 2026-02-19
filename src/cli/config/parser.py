@@ -26,6 +26,7 @@ class Config(object):
         config["wandb_project"] = self.yaml.get("wandb_project", None)
         config["run_name"] = self.yaml.get("run_name", "unknown")
         config["data"] = self.yaml.get("data", {})
+        config["reading_order"] = self.yaml.get("reading_order", "dbscan")
         return config
 
     def get_tasks(self) -> list:

@@ -140,16 +140,22 @@ class TrOCRHTRTask(BaseHTR):
         
         for alto_path in tqdm(file_paths, desc="  Recognizing text", unit="page"):
             try:
-                # Extract lines and image path
                 image_path, lines, _ = extract_lines_from_alto(alto_path)
                 
                 if not os.path.exists(image_path):
                     print(f"  Warning: Image {image_path} not found")
                     continue
                 
-                if not lines:
-                    print(f"  Warning: No lines in {Path(alto_path).name}")
+                tree_check = ET.parse(alto_path)
+                ns_check = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+                raw_lines = tree_check.getroot().findall('.//alto:TextLine', ns_check)
+                if not raw_lines:
+                    print(f"  Warning: No TextLines found in {alto_path}")
                     continue
+
+                is_from_gt = Path(alto_path).parent.resolve() == Path(source_dir).resolve()
+                if is_from_gt:
+                    print(f"  [GT] Using ground truth line segmentation ({len(raw_lines)} lines) from {os.path.basename(alto_path)}")
                 
                 # Load page image
                 page_image = Image.open(image_path).convert("RGB")

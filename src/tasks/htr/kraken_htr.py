@@ -149,6 +149,15 @@ class KrakenHTRTask(BaseHTR):
         # Create BaselineLine objects for Kraken
         kraken_lines = []
         for line_data in lines_data:
+            baseline = np.array(line_data['baseline'])
+            
+            # Skip degenerate baselines (duplicate consecutive points cause NaN in Kraken)
+            diffs = np.diff(baseline, axis=0)
+            norms = np.linalg.norm(diffs, axis=1)
+            if np.any(norms == 0):
+                print(f"  Warning: Skipping degenerate baseline (duplicate points) in line {len(kraken_lines)}")
+                continue
+            
             line = BaselineLine(
                 id=f"line_{len(kraken_lines)}",
                 baseline=line_data['baseline'],
@@ -250,10 +259,18 @@ class KrakenHTRTask(BaseHTR):
                     print(f"  Warning: Image {image_path} not found")
                     continue
                 
-                if not lines:
-                    print(f"  Warning: No lines found in {alto_path}")
+                tree_check = ET.parse(alto_path)
+                ns_check = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+                
+                raw_lines = tree_check.getroot().findall('.//alto:TextLine', ns_check)
+                if not raw_lines:
+                    print(f"  Warning: No TextLines found in {alto_path}")
                     continue
                 
+                is_from_gt = Path(alto_path).parent.resolve() == Path(source_dir).resolve()
+                if is_from_gt:
+                    print(f"  [GT] Using ground truth line segmentation ({len(raw_lines)} lines) from {os.path.basename(alto_path)}")
+
                 recognized_texts = self._recognize_text(image_path, alto_path)
                 
                 output_path = os.path.join(output_dir, os.path.basename(alto_path))

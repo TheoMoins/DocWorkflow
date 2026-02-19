@@ -224,7 +224,7 @@ class YoloLineTask(BaseLine):
                             'label': 'MainZone',
                             'bbox': [0, 0, image_size[0], image_size[1]]
                         }]
-                        alto = create_alto_xml(detections, image_path, image_size)
+                        alto = create_alto_xml(detections, image_path, image_size, reading_order=self.reading_order)
                         save_alto_xml(alto, output_path)
                         
                         # Add lines

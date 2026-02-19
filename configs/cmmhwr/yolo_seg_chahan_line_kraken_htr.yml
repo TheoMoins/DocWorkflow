@@ -4,6 +4,7 @@ device: "cpu"
 use_wandb: true
 wandb_project: "icdar-htr-competition-2026"
 save_image: true
+reading_order: dbscan   # none | dbscan | heatmap | hybrid
 
 data:
   test: "../data/ICDAR_Competition/test"

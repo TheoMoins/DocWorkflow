@@ -29,6 +29,7 @@ class BaseTask(ABC):
         self.model = None
         self.device = config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
         self.use_wandb = config.get('use_wandb', True)
+        self.reading_order = config.get('reading_order', "dbscan")
         self.wandb_project = config.get('wandb_project', None)
                
     def to_device(self, device=None):

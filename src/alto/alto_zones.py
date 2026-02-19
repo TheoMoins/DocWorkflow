@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-from src.utils.utils import sort_zones_reading_order
+from src.utils.sorting import sort_zones_reading_order
 from lxml import etree as ET
 
 
@@ -51,7 +51,7 @@ def convert_zones_to_boxes(zones, image_size, is_gt=True):
     return np.array(boxes) if boxes else np.zeros((0, 7 if is_gt else 6))
 
 
-def extract_zones_from_alto(file_path):
+def extract_zones_from_alto(file_path, reading_order="dbscan"):
     """
     Parse ALTO XML file and extract zone (TextBlock) information.
     
@@ -135,7 +135,7 @@ def extract_zones_from_alto(file_path):
         # if label not in IGNORED_ZONE_TYPES:
         zones.append(zone_data)
             
-    zones = sort_zones_reading_order(zones)
+    zones = sort_zones_reading_order(zones, method=reading_order)
     
     return str(image_path) if image_path else None, zones
 
