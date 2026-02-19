@@ -1,0 +1,16 @@
+run_name: "trocr_medieval_base"
+output_dir: "results"
+device: "cuda"
+use_wandb: true
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  test: "../data/ICDAR_Competition/test"
+
+tasks:
+  htr:
+    type: TrOCRHTR
+    config:
+      use_metadata: true
+      model_path: "medieval-data/trocr-medieval-base"

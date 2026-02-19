@@ -7,6 +7,8 @@ wandb_api_key*
 *.pyc
 .ipynb_checkpoints
 
+configs/pipeline/*
+
 src/tasks/layout/models/
 src/tasks/layout/__pycache__/
 src/tasks/layout/LA-training/

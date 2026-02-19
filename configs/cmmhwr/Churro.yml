@@ -6,7 +6,7 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  test: "../data/cmmhwr26_minitest"
+  test: "../data/ICDAR_Competition/test"
 
 tasks:
   htr:

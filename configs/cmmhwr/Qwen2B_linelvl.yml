@@ -6,22 +6,9 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  test: "../data/cmmhwr26_minitest"
+  test: "../data/ICDAR_Competition/test"
 
 tasks:
-  layout: 
-    type: YoloLayout
-    config:
-      model_path: "src/tasks/layout/models/yolo26s_layout_640px_16bs_50e.pt"
-      img_size: 640
-
-  line:
-    type: YoloLine
-    config:
-      model_path: "src/tasks/line/models/LINES-SEG.pt"
-      img_size: 640
-      batch_size: 4
-      text_direction: "horizontal-lr"
   htr:
     type: VLMLineHTR
     config:
