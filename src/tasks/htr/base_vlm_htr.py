@@ -263,11 +263,13 @@ class BaseVLMHTR(BaseHTR):
             Generated text string
         """
         if self.is_minicpm:
-            image = messages[0]['content'][1]  # PIL Image
+            image = messages[0]['content'][0]['image']
+            prompt = messages[0]['content'][1]['text']
+            minicpm_msgs = [{"role": "user", "content": [prompt, image]}]
             with torch.no_grad():
                 result = self.model.chat(
                     image=image,
-                    msgs=messages,
+                    msgs=minicpm_msgs,
                     tokenizer=self.tokenizer,
                     max_new_tokens=self.max_new_tokens
                 )
