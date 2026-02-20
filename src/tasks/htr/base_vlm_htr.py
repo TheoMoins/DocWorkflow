@@ -5,7 +5,8 @@ import numpy as np
 from PIL import Image
 
 from peft import PeftModel
-from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel, Qwen3VLForConditionalGeneration
+from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from qwen_vl_utils import process_vision_info
 from src.utils.transformers_models import is_supported_by_auto_image_text
 
@@ -35,6 +36,8 @@ class BaseVLMHTR(BaseHTR):
         
         self.processor = None
         self.model = None
+        self.is_minicpm = False
+        self.tokenizer = None
     
     def load(self):
         """Load the VLM model (common for both page and line level)."""
@@ -78,6 +81,15 @@ class BaseVLMHTR(BaseHTR):
                     base_model_name,
                     **model_kwargs
                 )
+            elif model_class_name == 'MiniCPM' or 'minicpm' in model_name_lower:
+                print("Using MiniCPM (AutoModelForCausalLM + model.chat())")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_name, trust_remote_code=True
+                )
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name, **model_kwargs
+                )
+                self.is_minicpm = True
             else:
                 # Fallback for other models
                 base_model = AutoModelForImageTextToText.from_pretrained(
@@ -137,6 +149,18 @@ class BaseVLMHTR(BaseHTR):
                 self.model = AutoModelForImageTextToText.from_pretrained(
                     self.model_name, **model_kwargs
                 )
+            elif model_class_name == 'MiniCPM' or 'minicpm' in base_model_name.lower():
+                print("Using MiniCPM base model with LoRA adapter")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    base_model_name, trust_remote_code=True
+                )
+                base_model = AutoModelForCausalLM.from_pretrained(
+                    base_model_name, **model_kwargs
+                )
+                self.model = PeftModel.from_pretrained(
+                    base_model, self.model_name, is_trainable=False
+                )
+                self.is_minicpm = True
             else:
                 # Auto-detection
                 if is_supported_by_auto_image_text(self.model_name):
@@ -219,6 +243,17 @@ class BaseVLMHTR(BaseHTR):
         Returns:
             Generated text string
         """
+        if self.is_minicpm:
+            image = messages[0]['content'][1]  # PIL Image
+            with torch.no_grad():
+                result = self.model.chat(
+                    image=image,
+                    msgs=messages,
+                    tokenizer=self.tokenizer,
+                    max_new_tokens=self.max_new_tokens
+                )
+            return result.strip()
+
         # Apply chat template
         text = self.processor.apply_chat_template(
             messages,
