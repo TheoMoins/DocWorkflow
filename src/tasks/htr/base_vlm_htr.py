@@ -77,7 +77,11 @@ class BaseVLMHTR(BaseHTR):
                     base_model_name, trust_remote_code=True
                 )
                 base_model = AutoModelForCausalLM.from_pretrained(
-                    base_model_name, **model_kwargs
+                    base_model_name,
+                    trust_remote_code=True,
+                    attn_implementation='sdpa',
+                    torch_dtype=torch.bfloat16,
+                    device_map='auto' if self.device == 'cuda' else None
                 )
                 self.is_minicpm = True
             elif 'qwen' in base_model_lower and 'vl' in base_model_lower:
