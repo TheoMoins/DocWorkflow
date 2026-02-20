@@ -32,6 +32,7 @@ class BaseVLMHTR(BaseHTR):
             'attn_implementation': config.get('attn_implementation'),
             'model_class': config.get('model_class', None),
             'use_4bit': config.get('use_4bit', False),
+            'base_model': config.get('base_model', None)
         }
         
         self.processor = None
