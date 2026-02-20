@@ -76,7 +76,7 @@ class BaseVLMHTR(BaseHTR):
                 print("Using MiniCPM base model with LoRA adapter")
 
                 _resampler_files = glob.glob(
-                    os.path.expanduser("/mnt/cache/huggingface/modules/transformers_modules/**/resampler.py"),
+                    os.path.expanduser("/mnt/theo/cache/huggingface/modules/transformers_modules/**/resampler.py"),
                     recursive=True
                 )
                 for _f in _resampler_files:
