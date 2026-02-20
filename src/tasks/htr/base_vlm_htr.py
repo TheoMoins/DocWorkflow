@@ -54,13 +54,7 @@ class BaseVLMHTR(BaseHTR):
             # LoRA adapter mode: load base model + adapter
             print(f"Loading base model: {base_model_name}")
             print(f"Loading LoRA adapter from: {self.model_name}")
-                        
-            # Load processor from base model
-            self.processor = AutoProcessor.from_pretrained(
-                base_model_name,
-                trust_remote_code=True
-            )
-            
+
             # Model loading configuration
             model_kwargs = {"trust_remote_code": True}
             
@@ -73,29 +67,34 @@ class BaseVLMHTR(BaseHTR):
                 model_kwargs['device_map'] = self.hyperparams['device_map']
             else:
                 model_kwargs['device_map'] = 'auto'
-            
-            # Special handling for Qwen-VL models
-            if 'qwen' in base_model_name.lower() and 'vl' in base_model_name.lower():
-                print("Using Qwen3VLForConditionalGeneration for base model")
-                
-                base_model = Qwen3VLForConditionalGeneration.from_pretrained(
-                    base_model_name,
-                    **model_kwargs
-                )
-            elif model_class_name == 'MiniCPM' or 'minicpm' in model_name_lower:
-                print("Using MiniCPM (AutoModelForCausalLM + model.chat())")
+
+            model_class_name = self.hyperparams.get('model_class')
+            base_model_lower = base_model_name.lower()
+
+            if model_class_name == 'MiniCPM' or 'minicpm' in base_model_lower:
+                print("Using MiniCPM base model with LoRA adapter")
                 self.tokenizer = AutoTokenizer.from_pretrained(
-                    self.model_name, trust_remote_code=True
+                    base_model_name, trust_remote_code=True
                 )
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name, **model_kwargs
+                base_model = AutoModelForCausalLM.from_pretrained(
+                    base_model_name, **model_kwargs
                 )
                 self.is_minicpm = True
+            elif 'qwen' in base_model_lower and 'vl' in base_model_lower:
+                print("Using Qwen3VLForConditionalGeneration for base model")
+                from transformers import Qwen3VLForConditionalGeneration
+                self.processor = AutoProcessor.from_pretrained(
+                    base_model_name, trust_remote_code=True
+                )
+                base_model = Qwen3VLForConditionalGeneration.from_pretrained(
+                    base_model_name, **model_kwargs
+                )
             else:
-                # Fallback for other models
+                self.processor = AutoProcessor.from_pretrained(
+                    base_model_name, trust_remote_code=True
+                )
                 base_model = AutoModelForImageTextToText.from_pretrained(
-                    base_model_name,
-                    **model_kwargs
+                    base_model_name, **model_kwargs
                 )
             
             # Load LoRA adapter
