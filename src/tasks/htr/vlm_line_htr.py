@@ -37,6 +37,16 @@ class VLMLineHTRTask(BaseVLMHTR):
         Returns:
             List of recognition results
         """
+        if self.is_minicpm:
+            results = [{'text': '', 'confidence': 0.0} for _ in line_images]
+            for i, img in enumerate(line_images):
+                if img is None:
+                    continue
+                messages = self._prepare_messages(img)
+                text = self._generate_from_messages(messages)
+                results[i] = {'text': text, 'confidence': 1.0}
+            return results
+
         # Filter valid images
         valid_images = [(i, img) for i, img in enumerate(line_images) if img is not None]
         
