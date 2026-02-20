@@ -2,7 +2,8 @@ from src.tasks.htr.base_htr import BaseHTR
 from abc import abstractmethod
 import torch
 import numpy as np
-from PIL import Image
+import glob
+import os
 
 from peft import PeftModel
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
@@ -73,6 +74,20 @@ class BaseVLMHTR(BaseHTR):
 
             if model_class_name == 'MiniCPM' or 'minicpm' in base_model_lower:
                 print("Using MiniCPM base model with LoRA adapter")
+
+                _resampler_files = glob.glob(
+                    os.path.expanduser("/mnt/cache/huggingface/modules/transformers_modules/**/resampler.py"),
+                    recursive=True
+                )
+                for _f in _resampler_files:
+                    with open(_f, 'r') as _fh:
+                        _content = _fh.read()
+                    if 'from typing import' in _content and 'List' not in _content.split('from typing import')[1].split('\n')[0]:
+                        _content = _content.replace('from typing import ', 'from typing import List, ', 1)
+                        with open(_f, 'w') as _fh:
+                            _fh.write(_content)
+                        print(f"Patched typing imports in {_f}")
+                
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     base_model_name, trust_remote_code=True
                 )
