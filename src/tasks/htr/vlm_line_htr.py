@@ -9,6 +9,11 @@ from pathlib import Path
 from PIL import Image
 from lxml import etree as ET
 
+from unsloth import FastVisionModel
+from unsloth.trainer import UnslothVisionDataCollator
+from transformers import AutoProcessor
+from trl import SFTTrainer, SFTConfig
+
 from src.alto.alto_lines import extract_lines_from_alto
 from src.alto.alto_text import extract_lines_with_bbox_from_alto
 
@@ -283,11 +288,6 @@ class VLMLineHTRTask(BaseVLMHTR):
         print("To train this model, you must change the environment to vlm-training:")
         print("\n  source envs/vlm-training/bin/activate")
 
-        from unsloth import FastVisionModel
-        from unsloth.trainer import UnslothVisionDataCollator
-        from transformers import AutoProcessor
-        from trl import SFTTrainer, SFTConfig
-
         if not data_path:
             raise ValueError("Training data path is required")
 
@@ -368,6 +368,11 @@ class VLMLineHTRTask(BaseVLMHTR):
             save_strategy="steps",
             save_steps=500,
             logging_steps=10,
+            evaluation_strategy="steps" if valid_samples else "no",
+            eval_steps=100, 
+            load_best_model_at_end=True if valid_samples else False,
+            metric_for_best_model="eval_loss",
+            greater_is_better=False,
             report_to="wandb" if self.use_wandb else "none",
             remove_unused_columns=False,
             dataset_kwargs={"skip_prepare_dataset": True},
