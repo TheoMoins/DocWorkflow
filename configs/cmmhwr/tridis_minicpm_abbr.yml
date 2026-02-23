@@ -12,6 +12,7 @@ tasks:
   htr:
     type: VLMLINEHTR
     config:
+      use_metadata: true
       model_name: "magistermilitum/Tridis_HTR_MiniCPM_ABBR"
       base_model: "openbmb/MiniCPM-Llama3-V-2_5"
       model_class: "MiniCPM"
