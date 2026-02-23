@@ -3,12 +3,15 @@ import os
 import shutil
 import gc
 import torch
+import glob
 from tqdm import tqdm
 from pathlib import Path
 from PIL import Image
 from lxml import etree as ET
 
 from src.alto.alto_lines import extract_lines_from_alto
+from src.alto.alto_text import extract_lines_with_bbox_from_alto
+
 
 
 class VLMLineHTRTask(BaseVLMHTR):
@@ -228,18 +231,16 @@ class VLMLineHTRTask(BaseVLMHTR):
         Returns:
             List of dicts with page_image_path, text, bbox (left, top, right, bottom)
         """
-        import glob as _glob
-        from src.alto.alto_text import extract_lines_with_bbox_from_alto
 
         samples = []
-        xml_files = _glob.glob(os.path.join(str(data_path), "*.xml"))
+        xml_files = glob.glob(os.path.join(str(data_path), "**", "*.xml"), recursive=True)
         skipped = 0
 
         for xml_path in xml_files:
             base_name = Path(xml_path).stem
             image_path = None
             for ext in ['.jpg', '.jpeg', '.png', '.tif', '.tiff']:
-                p = os.path.join(str(data_path), base_name + ext)
+                p = os.path.join(os.path.dirname(xml_path), base_name + ext)
                 if os.path.exists(p):
                     image_path = p
                     break
