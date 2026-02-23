@@ -165,10 +165,10 @@ class BaseHTR(BaseTask):
             except Exception as e:
                 print(f"  Warning: deduplication failed on {alto_path}: {e}")
 
-            try:
-                clean_alto_file(alto_path)
-            except Exception as e:
-                print(f"  Warning: CATMuS cleaning failed on {alto_path}: {e}")
+            # try:
+            #     clean_alto_file(alto_path)
+            # except Exception as e:
+            #     print(f"  Warning: CATMuS cleaning failed on {alto_path}: {e}")
 
         return results
     
