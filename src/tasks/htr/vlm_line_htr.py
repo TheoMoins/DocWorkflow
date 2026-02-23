@@ -368,7 +368,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             save_strategy="steps",
             save_steps=500,
             logging_steps=10,
-            evaluation_strategy="steps" if valid_samples else "no",
+            eval_strategy="steps" if valid_samples else "no",
             eval_steps=100, 
             load_best_model_at_end=True if valid_samples else False,
             metric_for_best_model="eval_loss",
