@@ -168,7 +168,7 @@ class BaseVLMHTR(BaseHTR):
                 self.model = AutoModelForImageTextToText.from_pretrained(
                     self.model_name, **model_kwargs
                 )
-            elif model_class_name == 'MiniCPM' or 'minicpm' in base_model_name.lower():
+            elif model_class_name == 'MiniCPM' or (base_model_name and 'minicpm' in base_model_name.lower()):                
                 print("Using MiniCPM base model with LoRA adapter")
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     base_model_name, trust_remote_code=True

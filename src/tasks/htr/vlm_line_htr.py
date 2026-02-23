@@ -257,15 +257,16 @@ class VLMLineHTRTask(BaseVLMHTR):
                 continue
 
             for line in extract_lines_with_bbox_from_alto(xml_path):
+                left  = line['hpos']
+                top   = line['vpos']
+                right = line['hpos'] + line['width']
+                bottom = line['vpos'] + line['height']
+                if right <= left or bottom <= top:
+                    continue
                 samples.append({
                     "page_image_path": image_path,
                     "text": line['text'],
-                    "bbox": (
-                        line['hpos'],
-                        line['vpos'],
-                        line['hpos'] + line['width'],
-                        line['vpos'] + line['height'],
-                    ),
+                    "bbox": (left, top, right, bottom),
                 })
 
         if skipped:
@@ -311,7 +312,10 @@ class VLMLineHTRTask(BaseVLMHTR):
             top    = max(0, top - padding)
             right  = min(page_img.width, right + padding)
             bottom = min(page_img.height, bottom + padding)
-            img = page_img.crop((left, top, right, bottom))
+            if right <= left or bottom <= top:
+                img = page_img
+            else:
+                img = page_img.crop((left, top, right, bottom))
 
             return {"messages": [
                 {
