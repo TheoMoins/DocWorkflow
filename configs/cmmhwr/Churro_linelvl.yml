@@ -6,7 +6,7 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  train: 
+  train: "../data/ICDAR_Competition/train"
   test: "../data/ICDAR_Competition/test"
 
 tasks:
