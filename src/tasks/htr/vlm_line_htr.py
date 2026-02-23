@@ -91,6 +91,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             tokenize=True,
             add_generation_prompt=True,
             return_dict=True,
+            padding=True,
             return_tensors="pt"
         ).to(self.model.device)
         
