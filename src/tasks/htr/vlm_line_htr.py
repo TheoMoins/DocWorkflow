@@ -12,7 +12,14 @@ from lxml import etree as ET
 from src.alto.alto_lines import extract_lines_from_alto
 from src.alto.alto_text import extract_lines_with_bbox_from_alto
 
-
+class _LazyLineDataset:
+    def __init__(self, samples, format_fn):
+        self.samples = samples
+        self.format_fn = format_fn
+    def __len__(self):
+        return len(self.samples)
+    def __getitem__(self, idx):
+        return self.format_fn(self.samples[idx])
 
 class VLMLineHTRTask(BaseVLMHTR):
     """
@@ -266,7 +273,6 @@ class VLMLineHTRTask(BaseVLMHTR):
         print(f"  Extracted {len(samples)} line samples from {len(xml_files) - skipped} pages")
         return samples
 
-
     def train(self, data_path=None, seed=42):
         """
         Fine-tune the VLM model at line level using Unsloth.
@@ -321,8 +327,8 @@ class VLMLineHTRTask(BaseVLMHTR):
                 },
             ]}
 
-        converted_train_set = [format_conversation(s) for s in train_samples]
-        converted_valid_set = [format_conversation(s) for s in valid_samples]
+        converted_train_set = _LazyLineDataset(train_samples, format_conversation)
+        converted_valid_set = _LazyLineDataset(valid_samples, format_conversation) if valid_samples else None
 
         print("Loading model with Unsloth...")
         model, tokenizer = FastVisionModel.from_pretrained(
