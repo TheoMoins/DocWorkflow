@@ -6,6 +6,7 @@ from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
 from lxml import etree as ET
+from src.tasks.htr.postprocessing import clean_alto_file
 
 from jiwer import cer, wer
 
@@ -163,6 +164,11 @@ class BaseHTR(BaseTask):
                 self._deduplicate_alto_consecutive_lines(alto_path)
             except Exception as e:
                 print(f"  Warning: deduplication failed on {alto_path}: {e}")
+
+            try:
+                clean_alto_file(alto_path)
+            except Exception as e:
+                print(f"  Warning: CATMuS cleaning failed on {alto_path}: {e}")
 
         return results
     
