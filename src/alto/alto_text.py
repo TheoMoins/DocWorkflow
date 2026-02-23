@@ -142,3 +142,39 @@ def extract_lines_dict_from_alto(alto_path):
         lines[line_id] = text
 
     return lines
+
+def extract_lines_with_bbox_from_alto(alto_path):
+    """
+    Extract text lines with bounding box coordinates from ALTO XML.
+    
+    Returns:
+        List of dicts with id, text, hpos, vpos, width, height
+    """
+    tree = ET.parse(alto_path)
+    root = tree.getroot()
+    ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+    
+    lines = []
+    for textline in root.findall('.//alto:TextLine', ns):
+        strings = textline.findall('.//alto:String', ns)
+        text = ' '.join([s.get('CONTENT', '') for s in strings if s.get('CONTENT')])
+        if not text.strip():
+            continue
+        try:
+            hpos   = int(float(textline.get('HPOS', 0)))
+            vpos   = int(float(textline.get('VPOS', 0)))
+            width  = int(float(textline.get('WIDTH', 0)))
+            height = int(float(textline.get('HEIGHT', 0)))
+        except (ValueError, TypeError):
+            continue
+        if width <= 0 or height <= 0:
+            continue
+        lines.append({
+            'id': textline.get('ID', ''),
+            'text': text,
+            'hpos': hpos,
+            'vpos': vpos,
+            'width': width,
+            'height': height,
+        })
+    return lines

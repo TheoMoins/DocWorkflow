@@ -6,6 +6,7 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
+  train: 
   test: "../data/ICDAR_Competition/test"
 
 tasks:
@@ -14,8 +15,20 @@ tasks:
     config:
       use_metadata: true
       model_name: 'stanford-oval/churro-3B'
-      device_map: "auto"
       max_new_tokens: 128
-      prompt: "Transcribe the text from this manuscript line. Do not translate, modernize or standardize the text. 
-        For example, if the transcription is using 'ſ' instead of 's' or 'а' instead of 'a', keep it that way.
-        Do not include any other words or separator in your response."
+      line_batch_size: 4
+      use_4bit: true
+      lora_r: 16
+      lora_dropout: 0
+      max_seq_length: 512
+      train_batch_size: 8
+      gradient_accumulation_steps: 2
+      warmup_ratio: 0.1
+      epochs: 5
+      learning_rate: 0.0001
+      weight_decay: 0.01
+      dataset_num_proc: 4
+      prompt: >
+        Transcribe the handwritten text in this line image.
+        Do not translate or modernize the text.
+        Output only the transcribed text.

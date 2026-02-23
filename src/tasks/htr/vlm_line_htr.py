@@ -20,8 +20,23 @@ class VLMLineHTRTask(BaseVLMHTR):
     
     def __init__(self, config):
         super().__init__(config)
-        self.name = "HTR (VLM Line-Level)"
+        self.name = "HTR_VLM_Line_Level"
         self.batch_size = config.get('line_batch_size', 1)
+
+        self.hyperparams.update({
+            'lora_r': config.get('lora_r', 16),
+            'lora_dropout': config.get('lora_dropout', 0),
+            'use_rslora': config.get('use_rslora', False),
+            'max_seq_length': config.get('max_seq_length', 1024),
+            'output_dir': config.get('output_dir', 'src/tasks/htr/models'),
+            'train_batch_size': config.get('train_batch_size', 4),
+            'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 4),
+            'warmup_ratio': config.get('warmup_ratio', 0.1),
+            'epochs': config.get('epochs', 3),
+            'learning_rate': config.get('learning_rate', 2e-4),
+            'weight_decay': config.get('weight_decay', 0.01),
+            'dataset_num_proc': config.get('dataset_num_proc', 1),
+        })
     
     def _get_file_extensions(self):
         """VLM Line-Level works with ALTO XML files."""
@@ -202,3 +217,179 @@ class VLMLineHTRTask(BaseVLMHTR):
         
         tree.write(output_path, pretty_print=True, 
                   xml_declaration=True, encoding="UTF-8")
+        
+
+    def _prepare_training_data_lines(self, data_path):
+        """
+        Prepare line-level training samples from ALTO XML + page images.
+        Extracts each TextLine bbox and its ground truth text.
+        Crops are performed lazily in format_conversation.
+        
+        Returns:
+            List of dicts with page_image_path, text, bbox (left, top, right, bottom)
+        """
+        import glob as _glob
+        from src.alto.alto_text import extract_lines_with_bbox_from_alto
+
+        samples = []
+        xml_files = _glob.glob(os.path.join(str(data_path), "*.xml"))
+        skipped = 0
+
+        for xml_path in xml_files:
+            base_name = Path(xml_path).stem
+            image_path = None
+            for ext in ['.jpg', '.jpeg', '.png', '.tif', '.tiff']:
+                p = os.path.join(str(data_path), base_name + ext)
+                if os.path.exists(p):
+                    image_path = p
+                    break
+
+            if not image_path:
+                skipped += 1
+                continue
+
+            for line in extract_lines_with_bbox_from_alto(xml_path):
+                samples.append({
+                    "page_image_path": image_path,
+                    "text": line['text'],
+                    "bbox": (
+                        line['hpos'],
+                        line['vpos'],
+                        line['hpos'] + line['width'],
+                        line['vpos'] + line['height'],
+                    ),
+                })
+
+        if skipped:
+            print(f"  Warning: {skipped} XML files had no matching image")
+        print(f"  Extracted {len(samples)} line samples from {len(xml_files) - skipped} pages")
+        return samples
+
+
+    def train(self, data_path=None, seed=42):
+        """
+        Fine-tune the VLM model at line level using Unsloth.
+        Each training sample is a cropped TextLine image + its ground truth text.
+        """
+        print("To train this model, you must change the environment to vlm-training:")
+        print("\n  source envs/vlm-training/bin/activate")
+
+        from unsloth import FastVisionModel
+        from unsloth.trainer import UnslothVisionDataCollator
+        from transformers import AutoProcessor
+        from trl import SFTTrainer, SFTConfig
+
+        if not data_path:
+            raise ValueError("Training data path is required")
+
+        global_path = str(data_path.parent)
+
+        print(f"Starting VLM line-level fine-tuning with Unsloth")
+        print(f"Model: {self.model_name}")
+
+        print("Preparing line-level training data...")
+        train_samples = self._prepare_training_data_lines(data_path)
+        valid_samples = self._prepare_training_data_lines(global_path + "/valid")
+
+        if not train_samples:
+            raise ValueError("No valid line-level training samples found")
+
+        print(f"Found {len(train_samples)} line samples (train) and {len(valid_samples)} (valid)")
+
+        def format_conversation(example):
+            page_img = Image.open(example["page_image_path"]).convert("RGB")
+            padding = 5
+            left, top, right, bottom = example["bbox"]
+            left   = max(0, left - padding)
+            top    = max(0, top - padding)
+            right  = min(page_img.width, right + padding)
+            bottom = min(page_img.height, bottom + padding)
+            img = page_img.crop((left, top, right, bottom))
+
+            return {"messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self.prompt},
+                        {"type": "image", "image": img},
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": example["text"]}],
+                },
+            ]}
+
+        converted_train_set = [format_conversation(s) for s in train_samples]
+        converted_valid_set = [format_conversation(s) for s in valid_samples]
+
+        print("Loading model with Unsloth...")
+        model, tokenizer = FastVisionModel.from_pretrained(
+            self.model_name,
+            load_in_4bit=self.hyperparams['use_4bit'],
+            use_gradient_checkpointing="unsloth",
+        )
+
+        model = FastVisionModel.get_peft_model(
+            model,
+            finetune_vision_layers=True,
+            finetune_language_layers=True,
+            finetune_attention_modules=True,
+            finetune_mlp_modules=True,
+            r=self.hyperparams['lora_r'],
+            lora_alpha=self.hyperparams['lora_r'],
+            lora_dropout=self.hyperparams['lora_dropout'],
+            use_rslora=self.hyperparams['use_rslora'],
+            loftq_config=None,
+        )
+
+        training_args = SFTConfig(
+            output_dir=self.hyperparams['output_dir'],
+            per_device_train_batch_size=self.hyperparams['train_batch_size'],
+            gradient_accumulation_steps=self.hyperparams['gradient_accumulation_steps'],
+            warmup_ratio=self.hyperparams['warmup_ratio'],
+            num_train_epochs=self.hyperparams['epochs'],
+            learning_rate=self.hyperparams['learning_rate'],
+            weight_decay=self.hyperparams['weight_decay'],
+            seed=seed,
+            optim="adamw_8bit",
+            save_strategy="steps",
+            save_steps=500,
+            logging_steps=10,
+            report_to="wandb" if self.use_wandb else "none",
+            remove_unused_columns=False,
+            dataset_kwargs={"skip_prepare_dataset": True},
+            dataset_num_proc=self.hyperparams['dataset_num_proc'],
+            max_seq_length=self.hyperparams['max_seq_length'],
+            dataset_text_field="",
+        )
+
+        if self.processor is None:
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_name,
+                trust_remote_code=True,
+                use_fast=False
+            )
+
+        trainer = SFTTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            args=training_args,
+            train_dataset=converted_train_set,
+            eval_dataset=converted_valid_set,
+            data_collator=UnslothVisionDataCollator(model, self.processor),
+        )
+
+        print("Starting training...")
+        trainer.train()
+
+        model_save_path = f"{training_args.output_dir}/{self.model_name.split('/')[-1]}-line-finetuned"
+        print(f"Saving fine-tuned model to {model_save_path}")
+        model.save_pretrained(model_save_path)
+        tokenizer.save_pretrained(model_save_path)
+        print(f"Training complete! Model saved to {model_save_path}")
+
+        del model, tokenizer, trainer
+        gc.collect()
+        if self.device == 'cuda':
+            torch.cuda.empty_cache()
