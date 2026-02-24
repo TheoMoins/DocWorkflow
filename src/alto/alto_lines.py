@@ -110,7 +110,8 @@ def extract_lines_from_alto(file_path):
                 'baseline': line_obj.baseline,
                 'boundary': line_obj.boundary if line_obj.boundary else None,
                 'tags': line_obj.tags,
-                'regions': line_regions  # Store region associations
+                'regions': line_regions,  # Store region associations
+                'text': line_obj.text
             })
     
     return str(image_path), lines, regions

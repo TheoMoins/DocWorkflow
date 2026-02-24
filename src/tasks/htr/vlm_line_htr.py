@@ -262,17 +262,24 @@ class VLMLineHTRTask(BaseVLMHTR):
                 skipped += 1
                 continue
 
-            for line in extract_lines_with_bbox_from_alto(xml_path):
-                left  = line['hpos']
-                top   = line['vpos']
-                right = line['hpos'] + line['width']
-                bottom = line['vpos'] + line['height']
-                if right <= left or bottom <= top:
-                    continue
+            # for line in extract_lines_with_bbox_from_alto(xml_path):
+            #     left  = line['hpos']
+            #     top   = line['vpos']
+            #     right = line['hpos'] + line['width']
+            #     bottom = line['vpos'] + line['height']
+            #     if right <= left or bottom <= top:
+            #         continue
+            #     samples.append({
+            #         "page_image_path": image_path,
+            #         "text": line['text'],
+            #         "bbox": (left, top, right, bottom),
+            #     })
+            _, lines, _ = extract_lines_from_alto(xml_path)
+            for line in lines:
                 samples.append({
                     "page_image_path": image_path,
                     "text": line['text'],
-                    "bbox": (left, top, right, bottom),
+                    "boundary": line['boundary']
                 })
 
         if skipped:
@@ -307,16 +314,18 @@ class VLMLineHTRTask(BaseVLMHTR):
 
         def format_conversation(example):
             page_img = Image.open(example["page_image_path"]).convert("RGB")
-            padding = 5
-            left, top, right, bottom = example["bbox"]
-            left   = max(0, left - padding)
-            top    = max(0, top - padding)
-            right  = min(page_img.width, right + padding)
-            bottom = min(page_img.height, bottom + padding)
-            if right <= left or bottom <= top:
-                img = page_img
-            else:
-                img = page_img.crop((left, top, right, bottom))
+            # padding = 5
+            # left, top, right, bottom = example["bbox"]
+            # left   = max(0, left - padding)
+            # top    = max(0, top - padding)
+            # right  = min(page_img.width, right + padding)
+            # bottom = min(page_img.height, bottom + padding)
+            # if right <= left or bottom <= top:
+            #     img = page_img
+            # else:
+            #     img = page_img.crop((left, top, right, bottom))
+            
+            img = self._extract_line_image(page_img, example["boundary"])
 
             return {"messages": [
                 {
