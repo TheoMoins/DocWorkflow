@@ -346,19 +346,8 @@ class VLMLineHTRTask(BaseVLMHTR):
         converted_valid_set = _LazyLineDataset(valid_samples, format_conversation) if valid_samples else None
 
         print("Loading model with Unsloth...")
-
-        resume_checkpoint = None
-        model_to_load = self.model_name
-        adapter_config_path = os.path.join(self.model_name, "adapter_config.json")
-        if os.path.exists(adapter_config_path):
-            from peft import PeftConfig
-            peft_cfg = PeftConfig.from_pretrained(self.model_name)
-            model_to_load = peft_cfg.base_model_name_or_path
-            resume_checkpoint = self.model_name
-            print(f"Detected LoRA checkpoint. Base model: {model_to_load}, resuming from: {resume_checkpoint}")
-
         model, tokenizer = FastVisionModel.from_pretrained(
-            model_to_load,
+            self.model_name,
             load_in_4bit=self.hyperparams['use_4bit'],
             use_gradient_checkpointing="unsloth",
         )
@@ -408,13 +397,6 @@ class VLMLineHTRTask(BaseVLMHTR):
                 trust_remote_code=True,
                 use_fast=False
             )
-
-        print(f"Model type: {type(model)}")
-        print(f"Has config: {hasattr(model, 'config')}")
-        if hasattr(model, 'config'):
-            print(f"Config type: {type(model.config)}")
-            print(f"Has vision_config: {hasattr(model.config, 'vision_config')}")
-            print(f"Model type attr: {getattr(model.config, 'model_type', 'N/A')}")
 
         trainer = SFTTrainer(
             model=model,
