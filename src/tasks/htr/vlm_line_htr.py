@@ -346,27 +346,35 @@ class VLMLineHTRTask(BaseVLMHTR):
         converted_valid_set = _LazyLineDataset(valid_samples, format_conversation) if valid_samples else None
 
         print("Loading model with Unsloth...")
+
+        resume_checkpoint = None
+        model_to_load = self.model_name
+        adapter_config_path = os.path.join(self.model_name, "adapter_config.json")
+        if os.path.exists(adapter_config_path):
+            from peft import PeftConfig
+            peft_cfg = PeftConfig.from_pretrained(self.model_name)
+            model_to_load = peft_cfg.base_model_name_or_path
+            resume_checkpoint = self.model_name
+            print(f"Detected LoRA checkpoint. Base model: {model_to_load}, resuming from: {resume_checkpoint}")
+
         model, tokenizer = FastVisionModel.from_pretrained(
-            self.model_name,
+            model_to_load,
             load_in_4bit=self.hyperparams['use_4bit'],
             use_gradient_checkpointing="unsloth",
         )
 
-        if not hasattr(model, 'peft_config'):
-            model = FastVisionModel.get_peft_model(
-                model,
-                finetune_vision_layers=True,
-                finetune_language_layers=True,
-                finetune_attention_modules=True,
-                finetune_mlp_modules=True,
-                r=self.hyperparams['lora_r'],
-                lora_alpha=self.hyperparams['lora_r'],
-                lora_dropout=self.hyperparams['lora_dropout'],
-                use_rslora=self.hyperparams['use_rslora'],
-                loftq_config=None,
-            )
-        else:
-            print("Model already has LoRA adapters, skipping get_peft_model.")
+        model = FastVisionModel.get_peft_model(
+            model,
+            finetune_vision_layers=True,
+            finetune_language_layers=True,
+            finetune_attention_modules=True,
+            finetune_mlp_modules=True,
+            r=self.hyperparams['lora_r'],
+            lora_alpha=self.hyperparams['lora_r'],
+            lora_dropout=self.hyperparams['lora_dropout'],
+            use_rslora=self.hyperparams['use_rslora'],
+            loftq_config=None,
+        )
 
         training_args = SFTConfig(
             output_dir=self.hyperparams['output_dir'],
