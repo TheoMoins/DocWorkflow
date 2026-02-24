@@ -409,6 +409,13 @@ class VLMLineHTRTask(BaseVLMHTR):
                 use_fast=False
             )
 
+        print(f"Model type: {type(model)}")
+        print(f"Has config: {hasattr(model, 'config')}")
+        if hasattr(model, 'config'):
+            print(f"Config type: {type(model.config)}")
+            print(f"Has vision_config: {hasattr(model.config, 'vision_config')}")
+            print(f"Model type attr: {getattr(model.config, 'model_type', 'N/A')}")
+
         trainer = SFTTrainer(
             model=model,
             tokenizer=tokenizer,
