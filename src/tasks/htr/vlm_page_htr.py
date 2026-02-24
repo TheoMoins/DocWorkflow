@@ -524,7 +524,7 @@ class VLMPageHTRTask(BaseVLMHTR):
                     'type': 'VLMPAGEHTR',
                     'config': {
                         'model_name': output_dir,
-                        'base_model_name': self.model_name,
+                        'base_model': self.model_name,
                         'use_lora_adapter': True,
                         'max_new_tokens': self.max_new_tokens,
                         'batch_size': self.batch_size,

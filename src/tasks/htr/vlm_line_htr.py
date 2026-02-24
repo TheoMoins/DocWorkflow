@@ -8,6 +8,7 @@ from tqdm import tqdm
 from pathlib import Path
 from PIL import Image
 from lxml import etree as ET
+import yaml
 
 from unsloth import FastVisionModel
 from unsloth.trainer import UnslothVisionDataCollator
@@ -415,7 +416,63 @@ class VLMLineHTRTask(BaseVLMHTR):
         tokenizer.save_pretrained(model_save_path)
         print(f"Training complete! Model saved to {model_save_path}")
 
+        config_path = self._create_finetuned_config(model_save_path, global_path)
+        
+        print(f"\nTo run prediction with fine-tuned model:")
+        print(f"   docworkflow -c {config_path} predict -t htr -d test")
+
         del model, tokenizer, trainer
         gc.collect()
         if self.device == 'cuda':
             torch.cuda.empty_cache()
+
+    def _create_finetuned_config(self, output_dir, global_path):
+        """
+        Create a configuration file for the fine-tuned model.
+        
+        Args:
+            output_dir: Directory where the model was saved
+            original_config_path: Path to the original training config (optional)
+        
+        Returns:
+            Path to the created config file
+        """
+
+        # Create config for the fine-tuned model
+        config = {
+            'run_name': f"{self.name}_finetuned",
+            'output_dir': 'results',
+            'device': self.config.get('device', 'cuda'),
+            'use_wandb': self.config.get('use_wandb', False),
+            'wandb_project': self.config.get('wandb_project', 'HTR-comparison'),
+            'data': {
+                'train': global_path + '/train',
+                'valid': global_path + '/valid',
+                'test': global_path + '/test'
+            },
+            'tasks': {
+                'htr': {
+                    'type': 'VLMLineHTR',
+                    'config': {
+                        'model_name': output_dir,
+                        'base_model': self.model_name,
+                        'use_lora_adapter': True,
+                        'max_new_tokens': self.max_new_tokens,
+                        'batch_size': self.batch_size,
+                        'prompt': self.prompt,
+                        **{k: v for k, v in self.hyperparams.items() 
+                        if k in ['use_dtype_param', 'device_map', 'attn_implementation', 'model_class']
+                        and v is not None}
+                    }
+                }
+            }
+        }
+        
+        # Save config in the model directory
+        model_config_path = Path(output_dir) / 'inference_config.yml'
+        with open(model_config_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        
+        print(f"\n Inference config saved to: {model_config_path}")
+        
+        return model_config_path
