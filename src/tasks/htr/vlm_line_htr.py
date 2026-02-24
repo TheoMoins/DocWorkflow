@@ -352,18 +352,21 @@ class VLMLineHTRTask(BaseVLMHTR):
             use_gradient_checkpointing="unsloth",
         )
 
-        model = FastVisionModel.get_peft_model(
-            model,
-            finetune_vision_layers=True,
-            finetune_language_layers=True,
-            finetune_attention_modules=True,
-            finetune_mlp_modules=True,
-            r=self.hyperparams['lora_r'],
-            lora_alpha=self.hyperparams['lora_r'],
-            lora_dropout=self.hyperparams['lora_dropout'],
-            use_rslora=self.hyperparams['use_rslora'],
-            loftq_config=None,
-        )
+        if not hasattr(model, 'peft_config'):
+            model = FastVisionModel.get_peft_model(
+                model,
+                finetune_vision_layers=True,
+                finetune_language_layers=True,
+                finetune_attention_modules=True,
+                finetune_mlp_modules=True,
+                r=self.hyperparams['lora_r'],
+                lora_alpha=self.hyperparams['lora_r'],
+                lora_dropout=self.hyperparams['lora_dropout'],
+                use_rslora=self.hyperparams['use_rslora'],
+                loftq_config=None,
+            )
+        else:
+            print("Model already has LoRA adapters, skipping get_peft_model.")
 
         training_args = SFTConfig(
             output_dir=self.hyperparams['output_dir'],
