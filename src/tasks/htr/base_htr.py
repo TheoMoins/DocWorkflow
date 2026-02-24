@@ -158,16 +158,16 @@ class BaseHTR(BaseTask):
         results = super().predict(data_path=data_path, output_dir=output_dir, save_image=save_image, **kwargs)
 
         # Deduplicate consecutive lines in all produced ALTO files
-        # for alto_path in glob.glob(str(Path(output_dir) / '**' / '*.xml'), recursive=True):
-        #     try:
-        #         self._deduplicate_alto_consecutive_lines(alto_path)
-        #     except Exception as e:
-        #         print(f"  Warning: deduplication failed on {alto_path}: {e}")
+        for alto_path in glob.glob(str(Path(output_dir) / '**' / '*.xml'), recursive=True):
+            try:
+                self._deduplicate_alto_consecutive_lines(alto_path)
+            except Exception as e:
+                print(f"  Warning: deduplication failed on {alto_path}: {e}")
 
-            # try:
-            #     clean_alto_file(alto_path)
-            # except Exception as e:
-            #     print(f"  Warning: CATMuS cleaning failed on {alto_path}: {e}")
+            try:
+                clean_alto_file(alto_path)
+            except Exception as e:
+                print(f"  Warning: CATMuS cleaning failed on {alto_path}: {e}")
 
         return results
     
