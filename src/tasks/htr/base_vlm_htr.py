@@ -227,7 +227,7 @@ class BaseVLMHTR(BaseHTR):
 
         # Draw the polygon on the mask with white (255) fill
         draw = ImageDraw.Draw(mask_pil)
-        draw.polygon(boundary_array, fill=255)
+        draw.polygon(boundary, fill=255)
 
         # Apply the mask to the original image
         # Image.composite(image1, image2, mask) selects pixels from image1 where mask is white,

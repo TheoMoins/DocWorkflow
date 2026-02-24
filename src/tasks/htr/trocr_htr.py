@@ -10,6 +10,8 @@ from lxml import etree as ET
 
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel, GenerationConfig
 
+from IPython.display import display
+
 from src.alto.alto_lines import extract_lines_from_alto
 
 
@@ -75,32 +77,23 @@ class TrOCRHTRTask(BaseHTR):
         min_y = int(boundary_array[:, 1].min())
         max_y = int(boundary_array[:, 1].max())
 
-        # Add margin
-        margin = 5
-        min_x = max(0, min_x - margin)
-        min_y = max(0, min_y - margin)
-        max_x = min(image.width, max_x + margin)
-        max_y = min(image.height, max_y + margin)
+        # Create a new blank mask image (mode 'L' for grayscale 8-bit pixels, 0-255)
+        mask_pil = Image.new('L', image.size, 0) # Initialize with black (0)
+        # Draw the polygon on the mask with white (255) fill
+        draw = ImageDraw.Draw(mask_pil)
+        draw.polygon(boundary, fill=255) # have to use boundary, not boundary_array
+
+        # Apply the mask to the original image
+        # Image.composite(image1, image2, mask) selects pixels from image1 where mask is white,
+        # and from image2 where mask is black. We want to keep original pixels where mask is white,
+        # and make others black, so image1 = img_pil, image2 = black image.
+        masked_image_pil = Image.composite(image, Image.new('RGB', image.size, (0, 0, 0)), mask_pil)
+
+
+        # Crop line
+        line_image = masked_image_pil.crop((min_x, min_y, max_x, max_y))
         
-        return image.crop((min_x, min_y, max_x, max_y))
-
-        # # Create a new blank mask image (mode 'L' for grayscale 8-bit pixels, 0-255)
-        # mask_pil = Image.new('L', image.size, 0) # Initialize with black (0)
-
-        # # Draw the polygon on the mask with white (255) fill
-        # draw = ImageDraw.Draw(mask_pil)
-        # draw.polygon(boundary_array, fill=255)
-
-        # # Apply the mask to the original image
-        # # Image.composite(image1, image2, mask) selects pixels from image1 where mask is white,
-        # # and from image2 where mask is black. We want to keep original pixels where mask is white,
-        # # and make others black, so image1 = img_pil, image2 = black image.
-        # masked_image_pil = Image.composite(image, Image.new('RGB', image.size, (0, 0, 0)), mask_pil)
-
-        # # Crop line
-        # line_image = masked_image_pil.crop((min_x, min_y, max_x, max_y))
-        
-        # return line_image
+        return line_image
     
     def _recognize_line(self, line_image):
         """
