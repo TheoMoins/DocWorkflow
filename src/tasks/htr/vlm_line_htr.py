@@ -314,19 +314,15 @@ class VLMLineHTRTask(BaseVLMHTR):
         print(f"Found {len(train_samples)} line samples (train) and {len(valid_samples)} (valid)")
 
         def format_conversation(example):
-            page_img = Image.open(example["page_image_path"]).convert("RGB")
-            # padding = 5
-            # left, top, right, bottom = example["bbox"]
-            # left   = max(0, left - padding)
-            # top    = max(0, top - padding)
-            # right  = min(page_img.width, right + padding)
-            # bottom = min(page_img.height, bottom + padding)
-            # if right <= left or bottom <= top:
-            #     img = page_img
-            # else:
-            #     img = page_img.crop((left, top, right, bottom))
-            
-            img = self._extract_line_image(page_img, example["boundary"])
+            try:
+                page_img = Image.open(example["page_image_path"]).convert("RGB")
+                img = self._extract_line_image(page_img, example["boundary"])
+            except Exception as e:
+                print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
+                return None
+
+            if img is None:
+                return None
 
             return {"messages": [
                 {
@@ -342,8 +338,17 @@ class VLMLineHTRTask(BaseVLMHTR):
                 },
             ]}
 
-        converted_train_set = _LazyLineDataset(train_samples, format_conversation)
-        converted_valid_set = _LazyLineDataset(valid_samples, format_conversation) if valid_samples else None
+        print("Validating train samples...")
+        valid_train = [s for s in train_samples if format_conversation(s) is not None]
+        if len(valid_train) < len(train_samples):
+            print(f"  Skipped {len(train_samples) - len(valid_train)} invalid samples")
+        converted_train_set = _LazyLineDataset(valid_train, format_conversation)
+
+        if valid_samples:
+            valid_valid = [s for s in valid_samples if format_conversation(s) is not None]
+            converted_valid_set = _LazyLineDataset(valid_valid, format_conversation)
+        else:
+            converted_valid_set = None
 
         print("Loading model with Unsloth...")
         model, tokenizer = FastVisionModel.from_pretrained(
