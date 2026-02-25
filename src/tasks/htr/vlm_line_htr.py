@@ -25,7 +25,10 @@ class _LazyLineDataset:
     def __len__(self):
         return len(self.samples)
     def __getitem__(self, idx):
-        return self.format_fn(self.samples[idx])
+        result = self.format_fn(self.samples[idx])
+        if result is None:
+            raise ValueError(f"Invalid sample at index {idx}")
+        return result
 
 class VLMLineHTRTask(BaseVLMHTR):
     """
@@ -339,13 +342,13 @@ class VLMLineHTRTask(BaseVLMHTR):
             ]}
 
         print("Validating train samples...")
-        valid_train = [s for s in train_samples if format_conversation(s) is not None]
+        valid_train = [s for s in train_samples if os.path.exists(s["page_image_path"]) and s.get("boundary")]
         if len(valid_train) < len(train_samples):
-            print(f"  Skipped {len(train_samples) - len(valid_train)} invalid samples")
+            print(f"  Skipped {len(train_samples) - len(valid_train)} samples")
         converted_train_set = _LazyLineDataset(valid_train, format_conversation)
 
         if valid_samples:
-            valid_valid = [s for s in valid_samples if format_conversation(s) is not None]
+            valid_valid = [s for s in valid_samples if os.path.exists(s["page_image_path"]) and s.get("boundary")]
             converted_valid_set = _LazyLineDataset(valid_valid, format_conversation)
         else:
             converted_valid_set = None
