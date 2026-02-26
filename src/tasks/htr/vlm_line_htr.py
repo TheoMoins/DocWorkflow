@@ -10,11 +10,6 @@ from PIL import Image
 from lxml import etree as ET
 import yaml
 
-from unsloth import FastVisionModel
-from unsloth.trainer import UnslothVisionDataCollator
-from transformers import AutoProcessor
-from trl import SFTTrainer, SFTConfig
-
 from src.alto.alto_lines import extract_lines_from_alto
 from src.alto.alto_text import extract_lines_with_bbox_from_alto
 
@@ -292,6 +287,11 @@ class VLMLineHTRTask(BaseVLMHTR):
         return samples
 
     def train(self, data_path=None, seed=42):
+        import unsloth
+        from unsloth import FastVisionModel
+        from unsloth.trainer import UnslothVisionDataCollator
+        from transformers import AutoProcessor
+        from trl import SFTTrainer, SFTConfig
         """
         Fine-tune the VLM model at line level using Unsloth.
         Each training sample is a cropped TextLine image + its ground truth text.

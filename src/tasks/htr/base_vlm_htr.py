@@ -6,7 +6,6 @@ from PIL import Image, ImageDraw
 import glob
 import os
 
-from peft import PeftModel
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from qwen_vl_utils import process_vision_info
@@ -43,6 +42,8 @@ class BaseVLMHTR(BaseHTR):
         self.tokenizer = None
     
     def load(self):
+        from peft import PeftModel
+
         """Load the VLM model (common for both page and line level)."""
         if not self.model_name:
             raise ValueError("model_name must be specified in config")
