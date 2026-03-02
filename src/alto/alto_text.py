@@ -178,3 +178,14 @@ def extract_lines_with_bbox_from_alto(alto_path):
             'height': height,
         })
     return lines
+
+
+def copy_alto_without_text(src_path, dst_path):
+    """Copy ALTO XML but strip all String CONTENT to avoid GT leakage."""
+    tree = ET.parse(src_path)
+    root = tree.getroot()
+    ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+    for string_elem in root.findall('.//alto:String', ns):
+        string_elem.set('CONTENT', '')
+        string_elem.set('WC', '0.0')
+    tree.write(dst_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")

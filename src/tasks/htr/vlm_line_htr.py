@@ -11,7 +11,7 @@ from lxml import etree as ET
 import yaml
 
 from src.alto.alto_lines import extract_lines_from_alto
-from src.alto.alto_text import extract_lines_with_bbox_from_alto
+from src.alto.alto_text import copy_alto_without_text
 
 class _LazyLineDataset:
     def __init__(self, samples, format_fn):
@@ -184,7 +184,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                 output_path = os.path.join(output_dir, os.path.basename(alto_path))
                 
                 if not os.path.exists(output_path):
-                    shutil.copy2(alto_path, output_path)
+                    copy_alto_without_text(alto_path, output_path)
                 
                 self._add_text_to_alto(output_path, recognized_texts, output_path)
                 
