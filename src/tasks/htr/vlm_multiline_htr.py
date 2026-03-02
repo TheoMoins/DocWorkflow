@@ -21,13 +21,14 @@ class _LazyLineDataset:
         return len(self.samples)
     def __getitem__(self, idx):
         result = self.format_fn(self.samples[idx])
+        #print(result)
         if result is None:
             raise ValueError(f"Invalid sample at index {idx}")
         return result
 
 class VLMMultiLineHTRTask(BaseVLMHTR):
     """
-    HTR using VLM for line-level transcription.
+    HTR using VLM for multiline transcription.
     Processes pre-segmented lines from ALTO XML files.
     Examples: Qwen3-VL-2B-catmus, Idefics3, etc.
     """
@@ -53,7 +54,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         })
     
     def _get_file_extensions(self):
-        """VLM Line-Level works with ALTO XML files."""
+        """VLM multiline works with ALTO XML files."""
         return ['*.xml']
     
     # modified for multiple images
@@ -165,7 +166,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
     #TODO: modify for multiple images
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
-        Process ALTO files with line-level VLM.
+        Process ALTO files with multiline VLM.
         
         Args:
             file_paths: List of ALTO XML paths
@@ -283,7 +284,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
 
     def _prepare_training_data_lines(self, data_path):
         """
-        Prepare line-level training samples from ALTO XML + page images.
+        Prepare multiline training samples from ALTO XML + page images.
         Extracts each TextLine bbox and its ground truth text.
         Crops are performed lazily in format_conversation.
         
@@ -355,15 +356,15 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
 
         global_path = str(data_path.parent)
 
-        print(f"Starting VLM line-level fine-tuning with Unsloth")
+        print(f"Starting VLM multiline fine-tuning with Unsloth")
         print(f"Model: {self.model_name}")
 
-        print("Preparing line-level training data...")
+        print("Preparing multiline training data...")
         train_samples = self._prepare_training_data_lines(data_path)
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
         if not train_samples:
-            raise ValueError("No valid line-level training samples found")
+            raise ValueError("No valid multiline training samples found")
 
         print(f"Found {len(train_samples)} line samples (train) and {len(valid_samples)} (valid)")
 
@@ -377,6 +378,11 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             #TODO: better error handling for if only one crop is bad
             if imgs is None:
                 return None
+            
+            validsamples = [x for x in zip(imgs, example["text"]) if x[0] is not None]
+
+            if len(validsamples)<1:
+                return None
 
             # modified to make conversation give a list of images and return a list of texts
             # it's possible this will be confusing for the model but it's also possible more context is helpful
@@ -385,12 +391,12 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": self.prompt}]+[{"type": "image", "image": img} for img in imgs]
+                        {"type": "text", "text": self.prompt}]+[{"type": "image", "image": x[0]} for x in validsamples]
                     
                 },
                 {
                     "role": "assistant",
-                    "content": [{"type": "text", "text": t} for t in example["text"]],
+                    "content": [{"type": "text", "text": x[1]} for x in validsamples],
                 },
             ]}
 
@@ -448,7 +454,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             remove_unused_columns=False,
             dataset_kwargs={"skip_prepare_dataset": True},
             dataset_num_proc=self.hyperparams['dataset_num_proc'],
-            max_seq_length=self.hyperparams['max_seq_length'],
+            max_seq_length=50000, #self.hyperparams['max_seq_length'],
             dataset_text_field="",
         )
 
@@ -465,7 +471,8 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             args=training_args,
             train_dataset=converted_train_set,
             eval_dataset=converted_valid_set,
-            data_collator=UnslothVisionDataCollator(model, self.processor),
+            data_collator=UnslothVisionDataCollator(model, self.processor, max_seq_length=50000),
+            max_seq_length=50000,
         )
 
         print("Starting training...")

@@ -1,3 +1,4 @@
+import unsloth
 from src.tasks.htr.base_vlm_htr import BaseVLMHTR
 import os
 import shutil
@@ -395,7 +396,8 @@ class VLMLineHTRTask(BaseVLMHTR):
             remove_unused_columns=False,
             dataset_kwargs={"skip_prepare_dataset": True},
             dataset_num_proc=self.hyperparams['dataset_num_proc'],
-            max_seq_length=self.hyperparams['max_seq_length'],
+            #max_seq_length=self.hyperparams['max_seq_length'],
+            max_seq_length=50000,
             dataset_text_field="",
         )
 
@@ -412,7 +414,9 @@ class VLMLineHTRTask(BaseVLMHTR):
             args=training_args,
             train_dataset=converted_train_set,
             eval_dataset=converted_valid_set,
-            data_collator=UnslothVisionDataCollator(model, self.processor),
+            data_collator=UnslothVisionDataCollator(model, self.processor, max_seq_length=50000, truncation=False),
+            max_seq_length=50000,
+            truncation=False,
         )
 
         print("Starting training...")
