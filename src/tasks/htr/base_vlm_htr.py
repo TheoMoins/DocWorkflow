@@ -272,6 +272,7 @@ class BaseVLMHTR(BaseHTR):
             }
         ]
     
+    #TODO: is messages supposed to be plural here?
     def _generate_from_messages(self, messages):
         """
         Generate text from messages (common generation logic).
@@ -282,6 +283,7 @@ class BaseVLMHTR(BaseHTR):
         Returns:
             Generated text string
         """
+        #TODO: what's going on with minicpm??
         if self.is_minicpm:
             image = messages[0]['content'][0]['image']
             prompt = messages[0]['content'][1]['text']
