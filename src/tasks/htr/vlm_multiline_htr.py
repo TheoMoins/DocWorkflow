@@ -25,7 +25,7 @@ class _LazyLineDataset:
             raise ValueError(f"Invalid sample at index {idx}")
         return result
 
-class VLMLineHTRTask(BaseVLMHTR):
+class VLMMultiLineHTRTask(BaseVLMHTR):
     """
     HTR using VLM for line-level transcription.
     Processes pre-segmented lines from ALTO XML files.
@@ -71,13 +71,11 @@ class VLMLineHTRTask(BaseVLMHTR):
         """
         if prompt is None:
             prompt = self.prompt
-
         return [
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt}].extend(
-                    [{"type": "image", "image": img} for img in imgs])
+                    {"type": "text", "text": prompt}] + [{"type": "image", "image": img} for img in imgs]
                 
             }
         ]
@@ -119,6 +117,8 @@ class VLMLineHTRTask(BaseVLMHTR):
         batch_messages = []
         for imgs in images:
             batch_messages.append(self._prepare_messages(imgs))
+        #for m in batch_messages:
+           # print(m)
         
         # Process batch using Qwen format
         inputs = self.processor.apply_chat_template(
@@ -151,10 +151,11 @@ class VLMLineHTRTask(BaseVLMHTR):
         del inputs, generated_ids, generated_ids_trimmed
         
         # we're going to assume each line image output is separated by a newline
-        texts_split=[x for y in output_texts for x in y.split()]
+        texts_split=[x for y in output_texts for x in y.splitlines()]
         # Reconstruct results
         #TODO: I will need to be able to parse this as multiple lines....
-        results = [{'text': '', 'confidence': 0.0} for x in line_images for _ in x ]
+        results = [{'text': '', 'confidence': 0.0} for _ in texts_split]
+        #print(len(texts_split))
         #for idx, text in zip(indices, output_texts):
         for idx, text in enumerate(texts_split):
             results[idx] = {'text': text.strip(), 'confidence': 1.0}
@@ -204,7 +205,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                 # Extract all line images
                 # Modify to do batches of batches
                 # we want groups of up to max 20 lines maybe?
-                maxlines = 20 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
+                maxlines = 40 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
                 nlines = len(lines)
 
                 line_images = []
@@ -321,7 +322,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             #     })
             _, lines, _ = extract_lines_from_alto(xml_path)
             # we want groups of up to max 20 lines maybe?
-            maxlines = 20 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
+            maxlines = 40 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
             nlines = len(lines)
             lineblocks = [lines[i:i+maxlines] for i in range(0,nlines, maxlines)]
             for block in lineblocks:
@@ -384,8 +385,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": self.prompt}].extend(
-                        [{"type": "image", "image": img} for img in imgs])
+                        {"type": "text", "text": self.prompt}]+[{"type": "image", "image": img} for img in imgs]
                     
                 },
                 {
