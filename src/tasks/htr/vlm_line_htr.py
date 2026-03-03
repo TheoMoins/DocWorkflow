@@ -425,7 +425,14 @@ class VLMLineHTRTask(BaseVLMHTR):
         trainer.add_callback(early_stopping_callback)
 
         print("Starting training...")
-        trainer.train(resume_from_checkpoint = True)
+        checkpoint_dir = self.hyperparams['output_dir']
+        has_checkpoint = any(
+            Path(checkpoint_dir, d).is_dir()
+            for d in os.listdir(checkpoint_dir)
+            if d.startswith("checkpoint-")
+        ) if os.path.exists(checkpoint_dir) else False
+
+        trainer.train(resume_from_checkpoint=has_checkpoint if has_checkpoint else None)
 
         model_save_path = f"{training_args.output_dir}/{self.model_name.split('/')[-1]}-line-finetuned"
         print(f"Saving fine-tuned model to {model_save_path}")
