@@ -12,6 +12,8 @@ import yaml
 
 from src.alto.alto_text import copy_and_fix_alto_namespaces
 
+Image.MAX_IMAGE_PIXELS = None
+
 
 class VLMPageHTRTask(BaseVLMHTR):
     """
