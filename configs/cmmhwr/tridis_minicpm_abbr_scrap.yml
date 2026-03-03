@@ -1,0 +1,22 @@
+run_name: "tridis_minicpm_abbr_scrap"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  #test: "../data/ICDAR_Competition/test"
+  test: "../data/ICDAR_Competition/test/mss_2_lostma/"
+
+tasks:
+  htr:
+    type: VLMLINEHTR
+    config:
+      use_metadata: true
+      model_name: "magistermilitum/Tridis_HTR_MiniCPM_ABBR"
+      base_model: "openbmb/MiniCPM-Llama3-V-2_5"
+      model_class: "MiniCPM"
+      max_new_tokens: 128
+      attn_implementation: "sdpa"
+      prompt: "Transcribe this manuscript line in mode <ABBR>"

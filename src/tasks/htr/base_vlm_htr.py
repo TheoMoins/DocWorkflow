@@ -261,6 +261,9 @@ class BaseVLMHTR(BaseHTR):
         """
         if prompt is None:
             prompt = self.prompt
+
+        if self.is_minicpm:
+            return [{"role": "user", "content": [prompt, image]}]
         
         return [
             {
@@ -284,14 +287,15 @@ class BaseVLMHTR(BaseHTR):
             Generated text string
         """
         #TODO: what's going on with minicpm??
+        # okay we need to extract this information properly
         if self.is_minicpm:
-            image = messages[0]['content'][0]['image']
-            prompt = messages[0]['content'][1]['text']
-            minicpm_msgs = [{"role": "user", "content": [prompt, image]}]
+            #image = messages[0]['content'][0]['image']
+            #prompt = messages[0]['content'][1]['text']
+            #minicpm_msgs = [{"role": "user", "content": [prompt, image]}]
             with torch.no_grad():
                 result = self.model.chat(
-                    image=image,
-                    msgs=minicpm_msgs,
+                    image=None, #is this necessary? check minicpm
+                    msgs=messages,
                     tokenizer=self.tokenizer,
                     max_new_tokens=self.max_new_tokens
                 )

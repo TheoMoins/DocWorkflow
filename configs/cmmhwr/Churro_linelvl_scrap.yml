@@ -1,0 +1,36 @@
+run_name: "churro_linelvl_scrap"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  train: "../data/ICDAR_Competition/train"
+  valid: "../data/ICDAR_Competition/valid"
+  test: "../data/ICDAR_Competition/test/mss_2_lostma/"
+
+tasks:
+  htr:
+    type: VLMLineHTR
+    config:
+      use_metadata: true
+      model_name: stanford-oval/churro-3B
+      use_lora_adapter: true
+      max_new_tokens: 128
+      line_batch_size: 1
+      use_4bit: true
+      lora_r: 16
+      lora_dropout: 0
+      max_seq_length: 512
+      train_batch_size: 32
+      gradient_accumulation_steps: 1
+      warmup_ratio: 0.1
+      epochs: 1
+      learning_rate: 0.0001
+      weight_decay: 0.01
+      dataset_num_proc: 4
+      prompt: >
+        Transcribe the handwritten text in this line image.
+        Do not translate or modernize the text.
+        Output only the transcribed text.

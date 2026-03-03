@@ -38,6 +38,8 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         self.name = "HTR_VLM_Line_Level"
         self.batch_size = config.get('line_batch_size', 1)
 
+        self.max_lines = config.get('max_lines', 20)
+
         self.hyperparams.update({
             'lora_r': config.get('lora_r', 16),
             'lora_dropout': config.get('lora_dropout', 0),
@@ -72,6 +74,10 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         """
         if prompt is None:
             prompt = self.prompt
+
+        if self.is_minicpm:
+            return [{"role": "user", "content": [prompt]+ imgs}]
+        
         return [
             {
                 "role": "user",
@@ -93,66 +99,72 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             List of recognition results
         """
         if self.is_minicpm:
-            results = [{'text': '', 'confidence': 0.0} for _ in line_images]
+            # need to modify this so it's every line and not every batch
+            #results = [{'text': '', 'confidence': 0.0} for _ in line_images]
+            output_texts = []
             for i, imgs in enumerate(line_images):
                 if imgs is None:
                     continue
                 messages = self._prepare_messages(imgs) # need to define custom prepare_messages
                 text = self._generate_from_messages(messages) # possibly fine as is?
-                results[i] = {'text': text, 'confidence': 1.0}
-            return results
+                output_texts.append(text)
+                #results[i] = {'text': text, 'confidence': 1.0}
+            #return results
+        else:
+            # Filter valid images
+            #TODO: come back to some of this logic so we can do it on an image basis instead of set of 20 images
+            # i might also need to associate indices with individual images
+            # valid image checking should probably happen inside message preparation...? since we're batching
+            valid_images = [(i, imgs) for i, imgs in enumerate(line_images) if imgs is not None]
+            
+            if not valid_images:
+                results = [{'text': '', 'confidence': 0.0} for x in line_images for _ in x ]
+            
+            indices, images = zip(*valid_images)
+            # going to ignore indices probably. will come back to do this more neatly
+            
+            # Prepare batch messages
+            batch_messages = []
+            for imgs in images:
+                batch_messages.append(self._prepare_messages(imgs))
+            #for m in batch_messages:
+            # print(m)
+            
+            # Process batch using Qwen format
+            inputs = self.processor.apply_chat_template(
+                batch_messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
+                padding=True,
+                return_tensors="pt"
+            ).to(self.model.device)
+            
+            # Generate
+            with torch.no_grad():
+                generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
+            
+            # Decode
+            generated_ids_trimmed = [
+                out_ids[len(in_ids):]
+                for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+            ]
+            
+            output_texts = self.processor.batch_decode(
+                generated_ids_trimmed,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False
+            )
 
-        # Filter valid images
-        #TODO: come back to some of this logic so we can do it on an image basis instead of set of 20 images
-        # i might also need to associate indices with individual images
-        # valid image checking should probably happen inside message preparation...? since we're batching
-        valid_images = [(i, imgs) for i, imgs in enumerate(line_images) if imgs is not None]
+            
+            # Cleanup
+            del inputs, generated_ids, generated_ids_trimmed
         
-        if not valid_images:
-            results = [{'text': '', 'confidence': 0.0} for x in line_images for _ in x ]
-        
-        indices, images = zip(*valid_images)
-        # going to ignore indices probably. will come back to do this more neatly
-        
-        # Prepare batch messages
-        batch_messages = []
-        for imgs in images:
-            batch_messages.append(self._prepare_messages(imgs))
-        #for m in batch_messages:
-           # print(m)
-        
-        # Process batch using Qwen format
-        inputs = self.processor.apply_chat_template(
-            batch_messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_dict=True,
-            padding=True,
-            return_tensors="pt"
-        ).to(self.model.device)
-        
-        # Generate
-        with torch.no_grad():
-            generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
-        
-        # Decode
-        generated_ids_trimmed = [
-            out_ids[len(in_ids):]
-            for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        
-        output_texts = self.processor.batch_decode(
-            generated_ids_trimmed,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False
-        )
-
-        
-        # Cleanup
-        del inputs, generated_ids, generated_ids_trimmed
-        
+        # set max limit to number of lines we can output to limit damage
         # we're going to assume each line image output is separated by a newline
-        texts_split=[x for y in output_texts for x in y.splitlines()]
+        #limit to maxlines to reduce impact of repeated lines
+        # we can try to remove repeated lines on purpose but i worry it will cause errors on poetry
+        texts_split=[x for y in output_texts for x in y.splitlines()[0:self.max_lines]]
         # Reconstruct results
         #TODO: I will need to be able to parse this as multiple lines....
         results = [{'text': '', 'confidence': 0.0} for _ in texts_split]
@@ -206,11 +218,11 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
                 # Extract all line images
                 # Modify to do batches of batches
                 # we want groups of up to max 20 lines maybe?
-                maxlines = 40 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
+               
                 nlines = len(lines)
 
                 line_images = []
-                lineblocks = [lines[i:i+maxlines] for i in range(0,nlines, maxlines)]
+                lineblocks = [lines[i:i+self.max_lines] for i in range(0,nlines, self.max_lines)]
                 for block in lineblocks:
                     block_images = []
                     for line in block:
@@ -323,9 +335,8 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             #     })
             _, lines, _ = extract_lines_from_alto(xml_path)
             # we want groups of up to max 20 lines maybe?
-            maxlines = 40 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
             nlines = len(lines)
-            lineblocks = [lines[i:i+maxlines] for i in range(0,nlines, maxlines)]
+            lineblocks = [lines[i:i+self.max_lines] for i in range(0,nlines, self.max_lines)]
             for block in lineblocks:
                 samples.append({ 
                     "page_image_path": image_path,
@@ -387,6 +398,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             # modified to make conversation give a list of images and return a list of texts
             # it's possible this will be confusing for the model but it's also possible more context is helpful
             # check to see if what we get in return has newlines or if i need to put them in for formatting purposes
+            #will need to modify this to train minicpm
             return {"messages": [
                 {
                     "role": "user",
@@ -396,7 +408,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
                 },
                 {
                     "role": "assistant",
-                    "content": [{"type": "text", "text": x[1]} for x in validsamples],
+                    "content": [{"type": "text", "text": '\n'.join([x[1]  for x in validsamples])}],
                 },
             ]}
 

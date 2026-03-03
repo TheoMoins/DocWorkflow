@@ -1,0 +1,22 @@
+run_name: "tridis_minicpm_abbr_multiline"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  test: "../data/ICDAR_Competition/test/mss_2_lostma/"
+
+tasks:
+  htr:
+    type: VLMMultiLineHTR
+    config:
+      use_metadata: true
+      model_name: "magistermilitum/Tridis_HTR_MiniCPM_ABBR"
+      base_model: "openbmb/MiniCPM-Llama3-V-2_5"
+      model_class: "MiniCPM"
+      max_lines: 2
+      max_new_tokens: 2048
+      attn_implementation: "sdpa"
+      prompt: "Transcribe each of these manuscript lines in mode <ABBR>. Transcribe each and every line in order. Insert a newline character in between the transcription of each line."
