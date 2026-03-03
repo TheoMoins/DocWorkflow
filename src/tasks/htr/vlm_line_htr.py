@@ -13,6 +13,8 @@ import yaml
 from src.alto.alto_lines import extract_lines_from_alto
 from src.alto.alto_text import copy_alto_without_text
 
+Image.MAX_IMAGE_PIXELS = None
+
 class _LazyLineDataset:
     def __init__(self, samples, format_fn):
         self.samples = samples
@@ -384,10 +386,10 @@ class VLMLineHTRTask(BaseVLMHTR):
             seed=seed,
             optim="adamw_8bit",
             save_strategy="steps",
-            save_steps=1000,
+            save_steps=500,
             logging_steps=100,
             eval_strategy="steps" if valid_samples else "no",
-            eval_steps=1000, 
+            eval_steps=500, 
             load_best_model_at_end=True if valid_samples else False,
             metric_for_best_model="eval_loss",
             greater_is_better=False,
