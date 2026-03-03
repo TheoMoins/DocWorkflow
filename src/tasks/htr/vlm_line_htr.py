@@ -384,7 +384,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             seed=seed,
             optim="adamw_8bit",
             save_strategy="steps",
-            save_steps=500,
+            save_steps=100,
             logging_steps=10,
             eval_strategy="steps" if valid_samples else "no",
             eval_steps=100, 
@@ -415,8 +415,17 @@ class VLMLineHTRTask(BaseVLMHTR):
             data_collator=UnslothVisionDataCollator(model, self.processor),
         )
 
+        from transformers import EarlyStoppingCallback
+        early_stopping_callback = EarlyStoppingCallback(
+            early_stopping_patience = 20,   # How many steps we will wait if the eval loss doesn't decrease
+            early_stopping_threshold = 0.01,  # Can set higher - sets how much loss should decrease by until
+                                            # we consider early stopping.
+        )
+
+        trainer.add_callback(early_stopping_callback)
+
         print("Starting training...")
-        trainer.train()
+        trainer.train(resume_from_checkpoint = True)
 
         model_save_path = f"{training_args.output_dir}/{self.model_name.split('/')[-1]}-line-finetuned"
         print(f"Saving fine-tuned model to {model_save_path}")
