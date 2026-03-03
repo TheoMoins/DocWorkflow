@@ -26,7 +26,7 @@ tasks:
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 12
+      train_batch_size: 16
       gradient_accumulation_steps: 1
       warmup_ratio: 0.1
       epochs: 4

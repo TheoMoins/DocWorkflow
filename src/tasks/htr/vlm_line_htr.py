@@ -384,10 +384,10 @@ class VLMLineHTRTask(BaseVLMHTR):
             seed=seed,
             optim="adamw_8bit",
             save_strategy="steps",
-            save_steps=100,
-            logging_steps=10,
+            save_steps=1000,
+            logging_steps=100,
             eval_strategy="steps" if valid_samples else "no",
-            eval_steps=100, 
+            eval_steps=1000, 
             load_best_model_at_end=True if valid_samples else False,
             metric_for_best_model="eval_loss",
             greater_is_better=False,
@@ -417,7 +417,7 @@ class VLMLineHTRTask(BaseVLMHTR):
 
         from transformers import EarlyStoppingCallback
         early_stopping_callback = EarlyStoppingCallback(
-            early_stopping_patience = 20,   # How many steps we will wait if the eval loss doesn't decrease
+            early_stopping_patience = 200,   # How many steps we will wait if the eval loss doesn't decrease
             early_stopping_threshold = 0.01,  # Can set higher - sets how much loss should decrease by until
                                             # we consider early stopping.
         )
