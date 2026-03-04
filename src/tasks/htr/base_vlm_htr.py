@@ -33,6 +33,7 @@ class BaseVLMHTR(BaseHTR):
             'attn_implementation': config.get('attn_implementation'),
             'model_class': config.get('model_class', None),
             'use_4bit': config.get('use_4bit', False),
+            'use_16bit': config.get('use_16bit', False),
             'base_model': config.get('base_model', None)
         }
         
@@ -369,7 +370,8 @@ class BaseVLMHTR(BaseHTR):
         with torch.no_grad():
             generated_ids = self.model.generate(
                 **inputs,
-                max_new_tokens=self.max_new_tokens
+                max_new_tokens=self.max_new_tokens,
+                do_sample=False
             )
         
         # Decode

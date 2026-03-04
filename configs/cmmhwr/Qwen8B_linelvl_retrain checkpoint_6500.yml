@@ -15,7 +15,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: "src/tasks/htr/models/checkpoint-6500" 
+      model_name: "src/tasks/htr/models/Qwen8B_linelvl_retrain_6500_step" 
       base_model: 'Qwen/Qwen3-VL-8B-Instruct'
       device_map: "auto"
       max_new_tokens: 128
