@@ -103,7 +103,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         
         # Generate
         with torch.no_grad():
-            generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, temperature=0.1)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
         
         # Decode
         generated_ids_trimmed = [
@@ -364,12 +364,12 @@ class VLMLineHTRTask(BaseVLMHTR):
 
         model = FastVisionModel.get_peft_model(
             model,
-            finetune_vision_layers=True,
+            finetune_vision_layers=False,
             finetune_language_layers=True,
             finetune_attention_modules=True,
             finetune_mlp_modules=True,
             r=self.hyperparams['lora_r'],
-            lora_alpha=self.hyperparams['lora_r'],
+            lora_alpha=self.hyperparams['lora_r']/2,
             lora_dropout=self.hyperparams['lora_dropout'],
             use_rslora=self.hyperparams['use_rslora'],
             loftq_config=None,
