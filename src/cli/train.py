@@ -10,8 +10,6 @@ def train(
     data_path: str,
     seed: int = 42
 ):
-    from unsloth import FastVisionModel 
-    import torch
     _ = np.random.default_rng(seed)
 
     train_path = Path(data_path)
