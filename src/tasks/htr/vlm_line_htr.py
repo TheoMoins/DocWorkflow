@@ -103,7 +103,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         
         # Generate
         with torch.no_grad():
-            generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, temperature=0)
         
         # Decode
         generated_ids_trimmed = [
