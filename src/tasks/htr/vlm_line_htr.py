@@ -359,6 +359,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         model, tokenizer = FastVisionModel.from_pretrained(
             self.model_name,
             load_in_4bit=self.hyperparams['use_4bit'],
+            load_in_16bit=self.hyperparams['use_16bit'],
             use_gradient_checkpointing="unsloth",
         )
 
@@ -369,7 +370,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             finetune_attention_modules=True,
             finetune_mlp_modules=True,
             r=self.hyperparams['lora_r'],
-            lora_alpha=self.hyperparams['lora_r']/2,
+            lora_alpha=self.hyperparams['lora_r'],
             lora_dropout=self.hyperparams['lora_dropout'],
             use_rslora=self.hyperparams['use_rslora'],
             loftq_config=None,

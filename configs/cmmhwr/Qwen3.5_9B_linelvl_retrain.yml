@@ -21,12 +21,13 @@ tasks:
       line_batch_size: 8
 
       # LoRA
-      use_4bit: true
+      use_4bit: false
+      use_16bit: true
       lora_r: 32
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 16
+      train_batch_size: 32
       gradient_accumulation_steps: 1
       warmup_ratio: 0.01
       epochs: 2
