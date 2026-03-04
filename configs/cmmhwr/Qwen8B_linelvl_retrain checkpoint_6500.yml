@@ -1,0 +1,43 @@
+run_name: "Qwen8B_linelvl_retrain_checkpoint_6500"
+output_dir: "results"
+device: "cuda"
+use_wandb: true
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  train: "../data/ICDAR_Competition/train"
+  valid: "../data/ICDAR_Competition/valid"
+  test: "../data/ICDAR_Competition/test"
+
+tasks:
+  htr:
+    type: VLMLineHTR
+    config:
+      use_metadata: true
+      model_name: "src/tasks/htr/models/checkpoint-6500" 
+      base_model: 'Qwen/Qwen3-VL-8B-Instruct'
+      device_map: "auto"
+      max_new_tokens: 128
+      line_batch_size: 8
+
+      # LoRA
+      use_4bit: true
+      lora_r: 64
+      lora_dropout: 0
+      use_rlora: false
+      max_seq_length: 512
+      train_batch_size: 16
+      gradient_accumulation_steps: 1
+      warmup_ratio: 0.01
+      epochs: 2
+
+      # lr 
+      learning_rate: 5.0e-5
+      weight_decay: 0.01
+      dataset_num_proc: 4
+      prompt: >
+        You are a paleographer specializing in all european medieval languages.
+        Transcribe the handwritten text in this line image.
+        Keep abbreviations, do not translate or modernize the text.
+        Do not add any word or separator beyond the transcription itself.
