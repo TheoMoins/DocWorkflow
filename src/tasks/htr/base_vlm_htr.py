@@ -249,6 +249,49 @@ class BaseVLMHTR(BaseHTR):
         line_image = masked_image_pil.crop((min_x, min_y, max_x, max_y))
         
         return line_image
+    
+    def _compress_image_if_needed(self, image: Image.Image, max_bytes: int = 10 * 1024 * 1024) -> Image.Image:
+        """
+        Compress/resize image if its estimated file size exceeds max_bytes.
+        Progressively reduces quality then dimensions until under threshold.
+        """
+        import io
+
+        def get_jpeg_size(img, quality=85):
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality)
+            return buf.tell(), buf
+
+        size, buf = get_jpeg_size(image)
+        if size <= max_bytes:
+            return image
+
+        # Step 1: try reducing JPEG quality
+        for quality in [75, 60, 45]:
+            size, buf = get_jpeg_size(image, quality)
+            if size <= max_bytes:
+                print(f"  Image compressed to quality={quality} ({size / 1024 / 1024:.1f} MB)")
+                buf.seek(0)
+                return Image.open(buf).convert("RGB")
+
+        # Step 2: reduce dimensions
+        scale = 0.8
+        img = image.copy()
+        while scale > 0.1:
+            new_w = int(img.width * scale)
+            new_h = int(img.height * scale)
+            img_resized = img.resize((new_w, new_h), Image.LANCZOS)
+            size, buf = get_jpeg_size(img_resized)
+            if size <= max_bytes:
+                print(f"  Image resized to {new_w}x{new_h} ({size / 1024 / 1024:.1f} MB)")
+                buf.seek(0)
+                return Image.open(buf).convert("RGB")
+            scale -= 0.1
+
+        print(f"  Warning: could not compress image below {max_bytes / 1024 / 1024:.0f} MB")
+        return image
+
+
     def _prepare_messages(self, image, prompt=None):
         """
         Prepare messages for VLM input.
@@ -263,6 +306,8 @@ class BaseVLMHTR(BaseHTR):
         if prompt is None:
             prompt = self.prompt
         
+        image = self._compress_image_if_needed(image)
+
         return [
             {
                 "role": "user",

@@ -19,7 +19,7 @@ tasks:
       base_model: 'Qwen/Qwen3-VL-8B-Instruct'
       device_map: "auto"
       max_new_tokens: 128
-      line_batch_size: 1
+      line_batch_size: 8
 
       # LoRA
       use_4bit: true
