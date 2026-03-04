@@ -358,7 +358,7 @@ class VLMPageHTRTask(BaseVLMHTR):
         model, tokenizer = FastVisionModel.from_pretrained(
             self.model_name,
             load_in_4bit=self.hyperparams['use_4bit'],
-            load_in_16bit=self.hyperparams['use_16bit'],
+            load_in_8bit=self.hyperparams['use_8bit'],
             use_gradient_checkpointing="unsloth",
         )
 
