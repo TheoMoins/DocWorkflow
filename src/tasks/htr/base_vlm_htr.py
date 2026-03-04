@@ -105,7 +105,7 @@ class BaseVLMHTR(BaseHTR):
                 print("Using Qwen3VLForConditionalGeneration for base model")
                 from transformers import Qwen3VLForConditionalGeneration
                 self.processor = AutoProcessor.from_pretrained(
-                    base_model_name, trust_remote_code=True
+                    base_model_name, trust_remote_code=True, padding_side='left'
                 )
                 base_model = Qwen3VLForConditionalGeneration.from_pretrained(
                     base_model_name, **model_kwargs
