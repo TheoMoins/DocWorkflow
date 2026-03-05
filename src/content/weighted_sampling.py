@@ -16,7 +16,7 @@ def load_catmus_chars(*json_paths):
     return chars
 
 CATMUS_SPECIAL_CHARS = load_catmus_chars(
-    Path(__file__).parent / "/catmus-combining.json",
+    Path(__file__).parent / "catmus-combining.json",
     Path(__file__).parent / "catmus-medieval.json",
     Path(__file__).parent / "catmus-superscript.json",
 )
