@@ -5,7 +5,7 @@ from pathlib import Path
 from lxml import etree as ET
 
 # Load CATMuS characters from bundled JSON files
-_DATA_DIR = Path(__file__).parent.parent.parent / "content" / "catmus"
+_DATA_DIR = Path(__file__).parent.parent / "content" / "catmus"
 
 def _build_catmus_whitelist() -> set:
     """Build the set of allowed characters from CATMuS JSON files + Latin standard."""
