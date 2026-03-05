@@ -411,10 +411,10 @@ class VLMLineHTRTask(BaseVLMHTR):
         # Statistiques pour diagnostic
         n_with_special = sum(1 for d in densities if d > 0)
         avg_density = sum(densities) / len(densities) if densities else 0
-        print(f"\n📊 Densité de caractères spéciaux :")
-        print(f"  Lignes avec ≥1 char spécial : {n_with_special} / {len(valid_train)} ({100*n_with_special/len(valid_train):.1f}%)")
-        print(f"  Densité moyenne             : {avg_density:.4f}")
-        print(f"  Poids min / max             : {min(sample_weights):.2f} / {max(sample_weights):.2f}")
+        print(f"\n📊 Density of special caracters:")
+        print(f"  Lines with ≥1 special char : {n_with_special} / {len(valid_train)} ({100*n_with_special/len(valid_train):.1f}%)")
+        print(f"  Mean density             : {avg_density:.4f}")
+        print(f"  Weight min / max             : {min(sample_weights):.2f} / {max(sample_weights):.2f}")
         
         # Resampling
         rng = torch.Generator()
@@ -429,10 +429,9 @@ class VLMLineHTRTask(BaseVLMHTR):
         valid_train_weighted = [valid_train[i] for i in weighted_indices]
         print(f"✓ Density-weighted resampling: {len(valid_train_weighted)} samples")
 
-        # Vérification : proportion de lignes spéciales après resampling
-        n_special_after = sum(1 for i in weighted_indices if densities[i] > 0)
-        print(f"  Lignes spéciales après resampling : {n_special_after} ({100*n_special_after/len(weighted_indices):.1f}%)")
-
+        # Verification
+        new_avg_density = sum(densities[i] for i in weighted_indices) / len(weighted_indices)
+        print(f"  Average density after resampling: {new_avg_density:.4f}")
 
         converted_train_set = _LazyLineDataset(valid_train, format_conversation)
 
@@ -499,7 +498,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         cer_callback = CEREvalCallback(
             model=model,
             processor=self.processor,
-            eval_samples=list(converted_valid_set)[:200] if converted_valid_set else [],
+            eval_samples=list(converted_valid_set)[:50] if converted_valid_set else [],
             device=self.device,
         )
 
