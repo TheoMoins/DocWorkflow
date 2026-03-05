@@ -251,7 +251,7 @@ class BaseVLMHTR(BaseHTR):
         
         return line_image
     
-    def _compress_image_if_needed(self, image: Image.Image, max_bytes: int = 10 * 1024 * 1024) -> Image.Image:
+    def _compress_image_if_needed(self, image: Image.Image, max_bytes: int = 0.1 * 1024 * 1024) -> Image.Image:
         """
         Compress/resize image if its estimated file size exceeds max_bytes.
         Progressively reduces quality then dimensions until under threshold.

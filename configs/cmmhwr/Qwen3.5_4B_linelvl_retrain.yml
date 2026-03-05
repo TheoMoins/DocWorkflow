@@ -15,7 +15,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'Qwen/Qwen3.5-9B'
+      model_name: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
