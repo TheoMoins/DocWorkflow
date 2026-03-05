@@ -10,8 +10,10 @@ from PIL import Image
 from lxml import etree as ET
 import yaml
 
+from transformers import TrainerCallback
+
+from src.content.weighted_sampling import special_char_density
 from src.alto.alto_lines import extract_lines_from_alto
-from src.alto.alto_text import extract_lines_with_bbox_from_alto
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -26,6 +28,54 @@ class _LazyLineDataset:
         if result is None:
             raise ValueError(f"Invalid sample at index {idx}")
         return result
+    
+class CEREvalCallback(TrainerCallback):
+    """Calcule le CER sur le validation set à chaque eval."""
+
+    def __init__(self, model, processor, eval_samples, device):
+        self.eval_samples = eval_samples
+        self.processor = processor
+        self.device = device
+        self._model = model
+
+    def on_evaluate(self, args, state, control, **kwargs):
+        from jiwer import cer
+        model = kwargs.get("model", self._model)
+        model.eval()
+
+        gt_texts, pred_texts = [], []
+
+        for sample in self.eval_samples:
+            try:
+                msg = sample["messages"]
+                img_content = next(c for c in msg[0]["content"] if c["type"] == "image")
+                img = img_content["image"]
+                gt = next(c["text"] for c in msg[1]["content"] if c["type"] == "text")
+
+                inputs = self.processor.apply_chat_template(
+                    [msg[:1]],  # user turn only
+                    tokenize=True,
+                    add_generation_prompt=True,
+                    return_dict=True,
+                    return_tensors="pt"
+                ).to(self.device)
+
+                with torch.no_grad():
+                    out = model.generate(**inputs, max_new_tokens=128)
+                trimmed = out[0][inputs["input_ids"].shape[1]:]
+                pred = self.processor.decode(trimmed, skip_special_tokens=True).strip()
+
+                gt_texts.append(gt)
+                pred_texts.append(pred)
+            except Exception:
+                continue
+
+        if gt_texts:
+            cer_score = cer(gt_texts, pred_texts)
+            print(f"\n📊 Eval CER (sample n={len(gt_texts)}): {cer_score:.4f}")
+            if args.report_to and "wandb" in args.report_to:
+                import wandb
+                wandb.log({"eval/cer": cer_score}, step=state.global_step)
 
 class VLMLineHTRTask(BaseVLMHTR):
     """
@@ -347,6 +397,42 @@ class VLMLineHTRTask(BaseVLMHTR):
         valid_train = [s for s in train_samples if os.path.exists(s["page_image_path"]) and s.get("boundary")]
         if len(valid_train) < len(train_samples):
             print(f"  Skipped {len(train_samples) - len(valid_train)} samples")
+
+        # --- Calcul des poids ---
+        # alpha contrôle le boost des lignes avec caractères spéciaux
+        # alpha=10 → une ligne à densité 0.1 a un poids 2x plus élevé qu'une ligne vide
+        # alpha=50 → une ligne à densité 0.1 a un poids 6x plus élevé
+        DENSITY_ALPHA = 20.0
+
+        densities = [special_char_density(s["text"]) for s in valid_train]
+        sample_weights = [1.0 + DENSITY_ALPHA * d for d in densities]
+
+        # Statistiques pour diagnostic
+        n_with_special = sum(1 for d in densities if d > 0)
+        avg_density = sum(densities) / len(densities) if densities else 0
+        print(f"\n📊 Densité de caractères spéciaux :")
+        print(f"  Lignes avec ≥1 char spécial : {n_with_special} / {len(valid_train)} ({100*n_with_special/len(valid_train):.1f}%)")
+        print(f"  Densité moyenne             : {avg_density:.4f}")
+        print(f"  Poids min / max             : {min(sample_weights):.2f} / {max(sample_weights):.2f}")
+        
+        # Resampling
+        rng = torch.Generator()
+        rng.manual_seed(seed)
+        weighted_indices = torch.multinomial(
+            torch.tensor(sample_weights, dtype=torch.float32),
+            num_samples=len(valid_train),
+            replacement=True,
+            generator=rng,
+        ).tolist()
+
+        valid_train_weighted = [valid_train[i] for i in weighted_indices]
+        print(f"✓ Density-weighted resampling: {len(valid_train_weighted)} samples")
+
+        # Vérification : proportion de lignes spéciales après resampling
+        n_special_after = sum(1 for i in weighted_indices if densities[i] > 0)
+        print(f"  Lignes spéciales après resampling : {n_special_after} ({100*n_special_after/len(weighted_indices):.1f}%)")
+
+
         converted_train_set = _LazyLineDataset(valid_train, format_conversation)
 
         if valid_samples:
@@ -409,6 +495,13 @@ class VLMLineHTRTask(BaseVLMHTR):
                 use_fast=False
             )
 
+        cer_callback = CEREvalCallback(
+            model=model,
+            processor=self.processor,
+            eval_samples=list(converted_valid_set)[:200] if converted_valid_set else [],
+            device=self.device,
+        )
+
         trainer = SFTTrainer(
             model=model,
             tokenizer=tokenizer,
@@ -416,6 +509,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             train_dataset=converted_train_set,
             eval_dataset=converted_valid_set,
             data_collator=UnslothVisionDataCollator(model, self.processor),
+            callbacks=[cer_callback],
         )
 
         from transformers import EarlyStoppingCallback
