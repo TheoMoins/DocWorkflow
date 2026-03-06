@@ -38,7 +38,6 @@ tasks:
       weight_decay: 0.02
       dataset_num_proc: 4
       prompt: >
-        You are a paleographer specializing in all european medieval languages.
         Transcribe the handwritten text in this line image.
         Keep abbreviations, do not translate or modernize the text.
-        Do not add any word or separator beyond the transcription itself.
+        Output ONLY the transcription. No explanation, no punctuation added, no modernization.

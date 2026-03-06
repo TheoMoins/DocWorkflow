@@ -54,15 +54,20 @@ class CEREvalCallback(TrainerCallback):
                 gt = next(c["text"] for c in msg[1]["content"] if c["type"] == "text")
 
                 inputs = self.processor.apply_chat_template(
-                    [msg[:1]],  # user turn only
+                    [msg[:1]],
                     tokenize=True,
                     add_generation_prompt=True,
                     return_dict=True,
+                    enable_thinking=False,
                     return_tensors="pt"
                 ).to(self.device)
 
                 with torch.no_grad():
-                    out = model.generate(**inputs, max_new_tokens=128)
+                    out = model.generate(
+                        **inputs,
+                        max_new_tokens=128,
+                        do_sample=False,          # greedy pour le CER
+                    )
                 trimmed = out[0][inputs["input_ids"].shape[1]:]
                 pred = self.processor.decode(trimmed, skip_special_tokens=True).strip()
 
@@ -73,7 +78,13 @@ class CEREvalCallback(TrainerCallback):
 
         if gt_texts:
             cer_score = cer(gt_texts, pred_texts)
-            print(f"\n📊 Eval CER (sample n={len(gt_texts)}): {cer_score:.4f}")
+            print(f"\n📊 Eval CER (n={len(gt_texts)}): {cer_score:.4f}")
+
+            print(f"\n📝 Exemples de transcriptions (step {state.global_step}):")
+            for i in range(3):
+                print(f"  [{i+1}] GT  : {gt_texts[i]}")
+                print(f"       Pred: {pred_texts[i]}")
+
             if args.report_to and "wandb" in args.report_to:
                 import wandb
                 wandb.log({"eval/cer": cer_score}, step=state.global_step)
@@ -149,6 +160,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             add_generation_prompt=True,
             return_dict=True,
             padding=True,
+            enable_thinking=False,
             return_tensors="pt"
         ).to(self.model.device)
         
@@ -500,6 +512,13 @@ class VLMLineHTRTask(BaseVLMHTR):
                 max_pixels=self.hyperparams['max_pixels']
             )
 
+        # This is too long to process!
+        cer_callback = CEREvalCallback(
+            model=model,
+            processor=self.processor,
+            eval_samples=list(converted_valid_set)[:50] if converted_valid_set else [],
+            device=self.device,
+        )
 
         trainer = SFTTrainer(
             model=model,
@@ -508,6 +527,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             train_dataset=converted_train_set,
             eval_dataset=converted_valid_set,
             data_collator=UnslothVisionDataCollator(model, self.processor),
+            callbacks=[cer_callback],
         )
 
         from transformers import EarlyStoppingCallback

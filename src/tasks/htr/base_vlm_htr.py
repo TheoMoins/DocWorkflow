@@ -348,6 +348,7 @@ class BaseVLMHTR(BaseHTR):
         text = self.processor.apply_chat_template(
             messages,
             tokenize=False,
+            enable_thinking=False,
             add_generation_prompt=True
         )
         
