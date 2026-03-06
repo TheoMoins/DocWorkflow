@@ -373,6 +373,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             try:
                 page_img = Image.open(example["page_image_path"]).convert("RGB")
                 img = self._extract_line_image(page_img, example["boundary"])
+                img = self._compress_image_if_needed(img)
             except Exception as e:
                 print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
                 return None
@@ -432,6 +433,9 @@ class VLMLineHTRTask(BaseVLMHTR):
         # Verification
         new_avg_density = sum(densities[i] for i in weighted_indices) / len(weighted_indices)
         print(f"  Average density after resampling: {new_avg_density:.4f}")
+        n_special_after = sum(1 for i in weighted_indices if densities[i] > 0)
+        print(f"  Lines with ≥1 special char after resampling : {n_special_after} ({100*n_special_after/len(weighted_indices):.1f}%)")
+
 
         converted_train_set = _LazyLineDataset(valid_train, format_conversation)
 
