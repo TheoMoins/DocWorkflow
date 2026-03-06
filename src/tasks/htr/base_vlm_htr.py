@@ -119,6 +119,7 @@ class BaseVLMHTR(BaseHTR):
                 self.processor = AutoProcessor.from_pretrained(
                     base_model_name, 
                     trust_remote_code=True,
+                    padding_side='left',
                     max_pixels=self.hyperparams['max_pixels']
                 )
                 base_model = AutoModelForImageTextToText.from_pretrained(
@@ -138,6 +139,7 @@ class BaseVLMHTR(BaseHTR):
             self.processor = AutoProcessor.from_pretrained(
                 self.model_name,
                 trust_remote_code=True,
+                padding_side='left',
                 max_pixels=self.hyperparams['max_pixels'],
             )
             
