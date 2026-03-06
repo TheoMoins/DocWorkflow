@@ -405,7 +405,8 @@ class VLMPageHTRTask(BaseVLMHTR):
             self.processor = AutoProcessor.from_pretrained(
                 self.model_name,
                 trust_remote_code=True,
-                use_fast=False
+                use_fast=False,
+                max_pixels=self.hyperparams['max_pixels']
             )
                     
         # TEST: Vérifier les données converties

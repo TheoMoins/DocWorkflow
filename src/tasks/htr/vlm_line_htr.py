@@ -373,7 +373,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             try:
                 page_img = Image.open(example["page_image_path"]).convert("RGB")
                 img = self._extract_line_image(page_img, example["boundary"])
-                img = self._compress_image_if_needed(img)
+                # img = self._compress_image_if_needed(img)
             except Exception as e:
                 print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
                 return None
@@ -496,7 +496,8 @@ class VLMLineHTRTask(BaseVLMHTR):
             self.processor = AutoProcessor.from_pretrained(
                 self.model_name,
                 trust_remote_code=True,
-                use_fast=False
+                use_fast=False,
+                max_pixels=self.hyperparams['max_pixels']
             )
 
 

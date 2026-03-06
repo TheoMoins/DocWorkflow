@@ -34,7 +34,8 @@ class BaseVLMHTR(BaseHTR):
             'model_class': config.get('model_class', None),
             'use_4bit': config.get('use_4bit', False),
             'use_8bit': config.get('use_8bit', False),
-            'base_model': config.get('base_model', None)
+            'base_model': config.get('base_model', None),
+            'max_pixels': config.get('max_pixels', 512*28*28)
         }
         
         self.processor = None
@@ -106,14 +107,19 @@ class BaseVLMHTR(BaseHTR):
                 print("Using Qwen3VLForConditionalGeneration for base model")
                 from transformers import Qwen3VLForConditionalGeneration
                 self.processor = AutoProcessor.from_pretrained(
-                    base_model_name, trust_remote_code=True, padding_side='left'
+                    base_model_name, 
+                    trust_remote_code=True, 
+                    padding_side='left',
+                    max_pixels=self.hyperparams['max_pixels']
                 )
                 base_model = Qwen3VLForConditionalGeneration.from_pretrained(
                     base_model_name, **model_kwargs
                 )
             else:
                 self.processor = AutoProcessor.from_pretrained(
-                    base_model_name, trust_remote_code=True
+                    base_model_name, 
+                    trust_remote_code=True,
+                    max_pixels=self.hyperparams['max_pixels']
                 )
                 base_model = AutoModelForImageTextToText.from_pretrained(
                     base_model_name, **model_kwargs
@@ -131,7 +137,8 @@ class BaseVLMHTR(BaseHTR):
             # Standard loading (no LoRA)
             self.processor = AutoProcessor.from_pretrained(
                 self.model_name,
-                trust_remote_code=True
+                trust_remote_code=True,
+                max_pixels=self.hyperparams['max_pixels'],
             )
             
             # Model loading configuration
@@ -267,15 +274,6 @@ class BaseVLMHTR(BaseHTR):
         if size <= max_bytes:
             return image
 
-        # Step 1: try reducing JPEG quality
-        for quality in [75, 60, 45]:
-            size, buf = get_jpeg_size(image, quality)
-            if size <= max_bytes:
-                print(f"  Image compressed to quality={quality} ({size / 1024 / 1024:.1f} MB)")
-                buf.seek(0)
-                return Image.open(buf).convert("RGB")
-
-        # Step 2: reduce dimensions
         scale = 0.8
         img = image.copy()
         while scale > 0.1:
@@ -307,7 +305,7 @@ class BaseVLMHTR(BaseHTR):
         if prompt is None:
             prompt = self.prompt
         
-        image = self._compress_image_if_needed(image)
+        # image = self._compress_image_if_needed(image)
 
         return [
             {

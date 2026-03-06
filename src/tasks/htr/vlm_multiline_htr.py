@@ -456,7 +456,8 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             self.processor = AutoProcessor.from_pretrained(
                 self.model_name,
                 trust_remote_code=True,
-                use_fast=False
+                use_fast=False,
+                max_pixels=self.hyperparams['max_pixels']
             )
 
         trainer = SFTTrainer(
