@@ -39,9 +39,6 @@ def _build_catmus_whitelist() -> set:
 
 
 CATMUS_WHITELIST: set = _build_catmus_whitelist()
-print(f"[DEBUG] Whitelist size: {len(CATMUS_WHITELIST)}, DATA_DIR={_DATA_DIR}, JSON found: {list(_DATA_DIR.glob('catmus-*.json'))}")
-print(f"[DEBUG] U+0303 in whitelist: {chr(0x0303) in CATMUS_WHITELIST}, U+A751 in whitelist: {chr(0xA751) in CATMUS_WHITELIST}")
-
 
 def clean_htr_text(text: str) -> str:
     """

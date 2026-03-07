@@ -73,6 +73,10 @@ class CEREvalCallback(TrainerCallback):
 
                 gt_texts.append(gt)
                 pred_texts.append(pred)
+
+                del inputs, out, trimmed
+                torch.cuda.empty_cache()
+
             except Exception:
                 continue
 
@@ -88,6 +92,9 @@ class CEREvalCallback(TrainerCallback):
             if args.report_to and "wandb" in args.report_to:
                 import wandb
                 wandb.log({"eval/cer": cer_score}, step=state.global_step)
+
+        torch.cuda.empty_cache()
+
 
 class VLMLineHTRTask(BaseVLMHTR):
     """
