@@ -520,12 +520,12 @@ class VLMLineHTRTask(BaseVLMHTR):
             )
 
         # This is too long to process!
-        cer_callback = CEREvalCallback(
-            model=model,
-            processor=self.processor,
-            eval_samples=list(converted_valid_set)[:50] if converted_valid_set else [],
-            device=self.device,
-        )
+        # cer_callback = CEREvalCallback(
+        #     model=model,
+        #     processor=self.processor,
+        #     eval_samples=list(converted_valid_set)[:50] if converted_valid_set else [],
+        #     device=self.device,
+        # )
 
         trainer = SFTTrainer(
             model=model,
@@ -534,7 +534,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             train_dataset=converted_train_set,
             eval_dataset=converted_valid_set,
             data_collator=UnslothVisionDataCollator(model, self.processor),
-            callbacks=[cer_callback],
+            # callbacks=[cer_callback],
         )
 
         from transformers import EarlyStoppingCallback
