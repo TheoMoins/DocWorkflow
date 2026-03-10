@@ -56,6 +56,7 @@ class BaseVLMHTR(BaseHTR):
         base_model_name = self.hyperparams.get('base_model')
         use_lora = base_model_name is not None
         
+        base_model = None
         if use_lora:
             # LoRA adapter mode: load base model + adapter
             print(f"Loading base model: {base_model_name}")
@@ -137,14 +138,15 @@ class BaseVLMHTR(BaseHTR):
                 base_model = AutoModelForImageTextToText.from_pretrained(
                     base_model_name, **model_kwargs
                 )
-            
-            # Load LoRA adapter
-            print("Loading LoRA adapter...")
-            self.model = PeftModel.from_pretrained(
-                base_model,
-                self.model_name,
-                is_trainable=False
-            )
+
+            if base_model is not None:
+                # Load LoRA adapter
+                print("Loading LoRA adapter...")
+                self.model = PeftModel.from_pretrained(
+                    base_model,
+                    self.model_name,
+                    is_trainable=False
+                )
             
         else:
             # Standard loading (no LoRA)
