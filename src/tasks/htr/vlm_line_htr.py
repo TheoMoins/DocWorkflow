@@ -9,6 +9,8 @@ from pathlib import Path
 from PIL import Image
 from lxml import etree as ET
 import yaml
+from peft import PeftModel
+
 
 from transformers import TrainerCallback
 
@@ -465,13 +467,26 @@ class VLMLineHTRTask(BaseVLMHTR):
             converted_valid_set = None
 
         print("Loading model with Unsloth...")
-        model, tokenizer = FastVisionModel.from_pretrained(
-            self.model_name,
-            load_in_4bit=self.hyperparams['use_4bit'],
-            load_in_8bit=self.hyperparams['use_8bit'],
-            use_gradient_checkpointing="unsloth",
-        )
-
+        base_model = self.hyperparams.get('base_model')
+        if base_model:
+            model, tokenizer = FastVisionModel.from_pretrained(
+                base_model,
+                load_in_4bit=False,
+                load_in_8bit=False,
+                use_gradient_checkpointing="unsloth",
+            )
+            print(f"Merging LoRA from {self.model_name}...")
+            model = PeftModel.from_pretrained(model, self.model_name)
+            model = model.merge_and_unload()
+            print("Merge done.")
+        else:
+            model, tokenizer = FastVisionModel.from_pretrained(
+                self.model_name,
+                load_in_4bit=self.hyperparams['use_4bit'],
+                load_in_8bit=self.hyperparams['use_8bit'],
+                use_gradient_checkpointing="unsloth",
+            )
+        
         model = FastVisionModel.get_peft_model(
             model,
             finetune_vision_layers=False,
