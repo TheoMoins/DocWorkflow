@@ -108,22 +108,22 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         # )
 
         training_args = UnslothTrainingArguments(
-                per_device_train_batch_size = 2,
-                gradient_accumulation_steps = 8,
+                per_device_train_batch_size = self.hyperparams['train_batch_size'],
+                gradient_accumulation_steps = self.hyperparams['gradient_accumulation_steps'],
 
                 # Use warmup_ratio and num_train_epochs for longer runs!
                 # max_steps = 10, #120
                 # warmup_steps = 1, #10
-                warmup_ratio = 0.1,
-                num_train_epochs = 1,
+                warmup_ratio=self.hyperparams['warmup_ratio'],
+                num_train_epochs=self.hyperparams['epochs'],
 
                 # Select a 2 to 10x smaller learning rate for the embedding matrices!
-                learning_rate = 5e-5,
-                embedding_learning_rate = 1e-5,
+                learning_rate = self.hyperparams['learning_rate'],#5e-5,
+                embedding_learning_rate = self.hyperparams['learning_rate']/5,
 
                 logging_steps = 1,
                 optim = "adamw_8bit",
-                weight_decay = 0.001,
+                weight_decay=self.hyperparams['weight_decay'],
                 lr_scheduler_type = "linear",
                 seed = 3407,
                 output_dir = "outputs",
