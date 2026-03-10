@@ -158,8 +158,7 @@ class BaseVLMHTR(BaseHTR):
             )
             
             # Model loading configuration
-            model_kwargs = {"trust_remote_code": True, 
-                            "padding_side": 'left'}
+            model_kwargs = {"trust_remote_code": True}
             
             if self.device == 'cuda':
                 if self.hyperparams['use_dtype_param']:
