@@ -1,4 +1,4 @@
-run_name: "Qwen3.5_4B_linelvl_checkpoint_23500"
+run_name: "Qwen3.5_4B_linelvl_retrain_silver"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -6,7 +6,7 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  train: "../data/ICDAR_Competition/train2"
+  train: "../data/ICDAR_Competition/train"
   valid: "../data/ICDAR_Competition/valid"
   test: "../data/ICDAR_Competition/test"
 
@@ -15,7 +15,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: "src/tasks/htr/models/Qwen3.5_4B_linelvl_checkpoint-23500"
+      model_name: "outputs/Qwen3.5-4B-silver-13000"
       base_model: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128
@@ -35,7 +35,7 @@ tasks:
       epochs: 2
 
       # lr 
-      learning_rate: 5.0e-5
+      learning_rate: 1.0e-5
       weight_decay: 0.02
       dataset_num_proc: 4
       prompt: >
