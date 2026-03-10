@@ -111,6 +111,33 @@ def aggregate_scores_by_metadata(document_scores, metric_keys=['cer', 'wer']):
                 # Add to summary metrics in score/ with clear naming
                 summary_metrics[f"score/avg_{feature_name}_{metric_key}"] = unweighted_avg
         
+        # Romance / non-romance averages (only for the 'language' feature)
+        if feature_name == 'language':
+            ROMANCE_LANGUAGES = {
+                'Catalan', 'French', 'Italian', 'Latin', 'Occitan',
+                'Venitian', 'Aragonese', 'Galician', 'Portuguese',
+                'Castillan'
+            }
+
+            romance_means = {metric_key: [] for metric_key in metric_keys}
+            nonromance_means = {metric_key: [] for metric_key in metric_keys}
+
+            for _, row in grouped.iterrows():
+                feature_value = row[feature_name]
+                for metric_key in metric_keys:
+                    mean_col = f'score/{metric_key}_mean'
+                    if mean_col in row and pd.notna(row[mean_col]):
+                        if feature_value in ROMANCE_LANGUAGES:
+                            romance_means[metric_key].append(row[mean_col])
+                        else:
+                            nonromance_means[metric_key].append(row[mean_col])
+
+            for metric_key in metric_keys:
+                if romance_means[metric_key]:
+                    summary_metrics[f"score/avg_romances_{metric_key}"] = sum(romance_means[metric_key]) / len(romance_means[metric_key])
+                if nonromance_means[metric_key]:
+                    summary_metrics[f"score/avg_nonromances_{metric_key}"] = sum(nonromance_means[metric_key]) / len(nonromance_means[metric_key])
+        
         aggregated[feature_name] = {
             'aggregated': grouped.to_dict('records'),
             'summary_metrics': summary_metrics,
