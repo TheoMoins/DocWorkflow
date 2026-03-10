@@ -8,6 +8,7 @@ import os
 
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from unsloth import FastVisionModel
 from qwen_vl_utils import process_vision_info
 from src.utils.transformers_models import is_supported_by_auto_image_text
 
@@ -115,6 +116,17 @@ class BaseVLMHTR(BaseHTR):
                 base_model = Qwen3VLForConditionalGeneration.from_pretrained(
                     base_model_name, **model_kwargs
                 )
+            elif os.path.exists(self.model_name):
+                print("Local checkpoint detected, loading with FastVisionModel (Unsloth)...")
+                self.processor = AutoProcessor.from_pretrained(
+                    self.model_name, trust_remote_code=True, padding_side='left'
+                )
+                self.model, _ = FastVisionModel.from_pretrained(
+                    self.model_name,
+                    load_in_4bit=self.hyperparams.get('use_4bit', False),
+                    load_in_8bit=self.hyperparams.get('use_8bit', False),
+                )
+                FastVisionModel.for_inference(self.model)
             else:
                 self.processor = AutoProcessor.from_pretrained(
                     base_model_name, 
