@@ -1,4 +1,4 @@
-run_name: "Qwen3.5_4B_linelvl_checkpoint"
+run_name: "Qwen3.5_4B_linelvl_checkpoint_23500"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -15,7 +15,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: "src/tasks/htr/models/Qwen3.5_4B_linelvl_checkpoint-4500" 
+      model_name: "src/tasks/htr/models/Qwen3.5_4B_linelvl_checkpoint-23500"
       base_model: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128

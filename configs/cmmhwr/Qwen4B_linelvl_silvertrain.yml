@@ -1,21 +1,21 @@
-run_name: "Qwen3.5_4B_linelvl_retrain"
+run_name: "Qwen4B_linelvl_occitansilver"
 output_dir: "results"
 device: "cuda"
-use_wandb: true
+use_wandb: false
 wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  train: "../data/ICDAR_Competition/train2"
-  valid: "../data/ICDAR_Competition/valid"
+  train: "../data/occitan"
   test: "../data/ICDAR_Competition/test"
+  valid: "../data/ICDAR_Competition/valid"
 
 tasks:
   htr:
-    type: VLMLineHTR
+    type: VLMSILVERHTR
     config:
       use_metadata: true
-      model_name: 'Qwen/Qwen3.5-4B'
+      model_name: "qwen_trained_merged"
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
@@ -31,7 +31,7 @@ tasks:
       train_batch_size: 8
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
-      epochs: 3
+      epochs: 2
 
       # lr 
       learning_rate: 1.0e-5
