@@ -116,13 +116,13 @@ class BaseVLMHTR(BaseHTR):
                 base_model = Qwen3VLForConditionalGeneration.from_pretrained(
                     base_model_name, **model_kwargs
                 )
-            elif os.path.exists(self.model_name):
+            elif os.path.exists(base_model_name):
                 print("Local checkpoint detected, loading with FastVisionModel (Unsloth)...")
                 self.processor = AutoProcessor.from_pretrained(
-                    self.model_name, trust_remote_code=True, padding_side='left'
+                    base_model_name, trust_remote_code=True, padding_side='left'
                 )
                 self.model, _ = FastVisionModel.from_pretrained(
-                    self.model_name,
+                    base_model_name,
                     load_in_4bit=self.hyperparams.get('use_4bit', False),
                     load_in_8bit=self.hyperparams.get('use_8bit', False),
                 )
