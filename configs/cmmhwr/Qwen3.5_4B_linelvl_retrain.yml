@@ -23,18 +23,18 @@ tasks:
 
       # LoRA
       use_4bit: false
-      use_8bit: true
+      use_8bit: false
       lora_r: 64
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 8
+      train_batch_size: 16
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
       epochs: 3
 
       # lr 
-      learning_rate: 1.0e-5
+      learning_rate: 5.0e-5
       weight_decay: 0.02
       dataset_num_proc: 4
       prompt: >

@@ -20,14 +20,29 @@ from src.alto.alto_text import copy_alto_without_text
 
 Image.MAX_IMAGE_PIXELS = None
 
+from functools import lru_cache
+
 class _LazyLineDataset:
     def __init__(self, samples, format_fn):
         self.samples = samples
         self.format_fn = format_fn
+        self._page_cache = {}
+        self._cache_max = 8  # nombre de pages en cache
+
+    def _get_page_image(self, path):
+        if path not in self._page_cache:
+            if len(self._page_cache) >= self._cache_max:
+                oldest = next(iter(self._page_cache))
+                self._page_cache[oldest].close()
+                del self._page_cache[oldest]
+            self._page_cache[path] = Image.open(path).convert("RGB")
+        return self._page_cache[path]
+
     def __len__(self):
         return len(self.samples)
+
     def __getitem__(self, idx):
-        result = self.format_fn(self.samples[idx])
+        result = self.format_fn(self.samples[idx], self._get_page_image)
         if result is None:
             raise ValueError(f"Invalid sample at index {idx}")
         return result
@@ -390,11 +405,13 @@ class VLMLineHTRTask(BaseVLMHTR):
 
         print(f"Found {len(train_samples)} line samples (train) and {len(valid_samples)} (valid)")
 
-        def format_conversation(example):
+        def format_conversation(example, get_page_image=None):
             try:
-                page_img = Image.open(example["page_image_path"]).convert("RGB")
+                if get_page_image:
+                    page_img = get_page_image(example["page_image_path"])
+                else:
+                    page_img = Image.open(example["page_image_path"]).convert("RGB")
                 img = self._extract_line_image(page_img, example["boundary"])
-                # img = self._compress_image_if_needed(img)
             except Exception as e:
                 print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
                 return None
@@ -524,6 +541,8 @@ class VLMLineHTRTask(BaseVLMHTR):
             dataset_num_proc=self.hyperparams['dataset_num_proc'],
             max_seq_length=self.hyperparams['max_seq_length'],
             dataset_text_field="",
+            dataloader_num_workers=4,
+            dataloader_pin_memory=True,
         )
 
         if self.processor is None:
