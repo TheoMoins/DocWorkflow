@@ -22,9 +22,10 @@ Image.MAX_IMAGE_PIXELS = None
 
 class VLMLineHTRTaskSilver(VLMLineHTRTask):
     """
-    HTR using VLM for line-level transcription.
-    Processes pre-segmented lines from ALTO XML files.
-    Examples: Qwen3-VL-2B-catmus, Idefics3, etc.
+    For performing continued pre-training of the language heads 
+    of VLMs on additional textual data (for learning new languages 
+    or domains). Training data should consist of a folder of text files.
+    Each line from each text file is treated as a sample.
     """
     
     def __init__(self, config):
@@ -50,8 +51,8 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         from transformers import AutoProcessor, DataCollatorForLanguageModeling, TrainingArguments
         from trl import SFTTrainer, SFTConfig
         """
-        Fine-tune the VLM model at line level using Unsloth.
-        Each training sample is a cropped TextLine image + its ground truth text.
+        Perform continued pre-training of language head of VLM on text data.
+        Each training sample is a line of text.
         """
         print("To train this model, you must change the environment to vlm-training:")
         print("\n  source envs/vlm-training/bin/activate")
@@ -61,11 +62,12 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
 
         global_path = str(data_path.parent)
 
-        print(f"Starting VLM line-level fine-tuning with Unsloth")
+        print(f"Starting VLM continued pre-training with Unsloth")
         print(f"Model: {self.model_name}")
 
         print("Preparing line-level training data...")
         train_samples = self._prepare_training_data_textonly(data_path)
+        #TODO: We are currently not using the validation samples I think    
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
         if not train_samples:
