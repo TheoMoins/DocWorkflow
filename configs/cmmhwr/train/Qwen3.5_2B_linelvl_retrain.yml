@@ -1,4 +1,4 @@
-run_name: "Qwen3.5_4B_linelvl_checkpoint_1000_silver"
+run_name: "Qwen3.5_2B_linelvl_retrain"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -15,8 +15,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: "src/tasks/htr/models/checkpoint-1000"
-      base_model: 'outputs/Qwen3.5-4B-silver-13000'
+      model_name: 'Qwen/Qwen3.5-2B'
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
@@ -24,15 +23,15 @@ tasks:
 
       # LoRA
       use_4bit: false
-      use_8bit: true
+      use_8bit: false
       lora_r: 64
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 8
+      train_batch_size: 16
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
-      epochs: 2
+      epochs: 3
 
       # lr 
       learning_rate: 5.0e-5
