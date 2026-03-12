@@ -37,11 +37,24 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
     def _prepare_training_data_textonly(self, data_path):
         """
         Prepare line-level training samples from plain text files
+        Splits on lines in text file
+        If line is too long (such as when text file does not include line breaks)
+        splits every n characters to produce lines of reasonable length
         Returns:
             dataset
         """
-        from datasets import load_dataset
-        dataset = load_dataset("text", data_dir=data_path, split='train')
+        from datasets import load_dataset, Dataset
+        import pandas as pd
+        from textwrap import wrap
+
+        n = 1024 # max line length in characters
+        
+        ds = load_dataset("text", data_dir=data_path, split='train')
+        df = ds.to_pandas()
+        df['len'] = (df['text'].astype(str).str.len())
+        df = df[df['len']>0].reset_index(drop=True)
+        df['text'][df['len']>n] = df['text'][df['len']>n].apply(lambda x: wrap(x, width=n, expand_tabs=False,replace_whitespace=False, break_on_hyphens=False, break_long_words = False))
+        dataset = Dataset.from_pandas(df.explode('text').drop(columns=['len']).reset_index(drop=True))
         return dataset
         
     def train(self, data_path=None, seed=42):
