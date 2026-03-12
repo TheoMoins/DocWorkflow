@@ -53,7 +53,7 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         df = ds.to_pandas()
         df['len'] = (df['text'].astype(str).str.len())
         df = df[df['len']>0].reset_index(drop=True)
-        df['text'][df['len']>n] = df['text'][df['len']>n].apply(lambda x: wrap(x, width=n, expand_tabs=False,replace_whitespace=False, break_on_hyphens=False, break_long_words = False))
+        df.loc[df['len']>n,'text'] = df['text'][df['len']>n].apply(lambda x: wrap(x, width=n, expand_tabs=False,replace_whitespace=False, break_on_hyphens=False, break_long_words = False))
         dataset = Dataset.from_pandas(df.explode('text').drop(columns=['len']).reset_index(drop=True))
         return dataset
         
