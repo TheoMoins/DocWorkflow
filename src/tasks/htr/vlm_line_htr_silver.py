@@ -51,6 +51,7 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         
         ds = load_dataset("text", data_dir=data_path, split='train')
         df = ds.to_pandas()
+        df['text'] = df['text'].astype(object)
         df['len'] = (df['text'].astype(str).str.len())
         df = df[df['len']>0].reset_index(drop=True)
         df.loc[df['len']>n,'text'] = df['text'][df['len']>n].apply(lambda x: wrap(x, width=n, expand_tabs=False,replace_whitespace=False, break_on_hyphens=False, break_long_words = False))
