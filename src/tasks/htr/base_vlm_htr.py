@@ -250,6 +250,23 @@ class BaseVLMHTR(BaseHTR):
 
         # Appliquer le masque
         result = Image.composite(cropped, Image.new('RGB', (w, h), (0, 0, 0)), mask)
+
+        max_ratio = 190 # unsloth limit: 200
+        rw, rh = result.size
+        if rw > 0 and rh > 0:
+            ratio = max(rw / rh, rh / rw)
+            if ratio > max_ratio:
+                if rw > rh:
+                    new_h = max(1, rw // max_ratio)
+                    padded = Image.new('RGB', (rw, new_h), (0, 0, 0))
+                    padded.paste(result, (0, (new_h - rh) // 2))
+                    result = padded
+                else:
+                    new_w = max(1, rh // max_ratio)
+                    padded = Image.new('RGB', (new_w, rh), (0, 0, 0))
+                    padded.paste(result, ((new_w - rw) // 2, 0))
+                    result = padded
+
         return result
     
     def _compress_image_if_needed(self, image: Image.Image, max_bytes: int = 0.1 * 1024 * 1024) -> Image.Image:
