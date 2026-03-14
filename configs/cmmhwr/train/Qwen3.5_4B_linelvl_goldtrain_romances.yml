@@ -17,12 +17,13 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'Qwen/Qwen3.5-4B'
+      model_name: 'outputs/Qwen3.5-4B-HTR_VLM_Line_Level_Silver'
+      base_model: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
       max_pixels: 401408
-      special_char_weighting: 20.0
+      special_char_weighting: 0
 
       # LoRA
       use_4bit: false
@@ -34,13 +35,13 @@ tasks:
       train_batch_size: 16
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
-      epochs: 3
+      epochs: 4
 
       # lr 
       learning_rate: 5.0e-5
       weight_decay: 0.02
       dataset_num_proc: 4
-      prompt: >
+      prompt_template: >
         Transcribe the handwritten text in this line image.
-        Keep abbreviations, do not translate or modernize the text.
-        Output ONLY the transcription. No explanation, no punctuation added, no modernization.
+        {conventions}
+        Output ONLY the transcription.
