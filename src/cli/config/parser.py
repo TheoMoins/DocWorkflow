@@ -112,7 +112,11 @@ class Config(object):
         for set_type in ["train", "valid", "test"]:
             if not self.yaml["data"].get(set_type):
                 continue
-            result[set_type] = Path(self.yaml["data"][set_type])
+            value = self.yaml["data"][set_type]
+            if isinstance(value, list):
+                result[set_type] = [Path(p) for p in value]
+            else:
+                result[set_type] = Path(value)
         return result
     
     @classmethod
