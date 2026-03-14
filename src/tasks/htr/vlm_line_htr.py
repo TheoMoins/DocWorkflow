@@ -395,34 +395,29 @@ class VLMLineHTRTask(BaseVLMHTR):
         if not data_path:
             raise ValueError("Training data path is required")
 
-        global_path = str(data_path.parent)
+        data_paths = data_path if isinstance(data_path, list) else [data_path]
+
+        global_path = str(data_paths[0].parent)
 
         print(f"Starting VLM line-level fine-tuning with Unsloth")
         print(f"Model: {self.model_name}")
 
         print("Preparing line-level training data...")
-        train_paths = self.config.get('train_sources', None)
         prompt_tpl = self.config.get('prompt_template', self.prompt)
 
-        if train_paths and isinstance(train_paths, list):
-            train_samples = []
-            for src_path in train_paths:
-                src_path = Path(src_path)
-                conventions = load_conventions(src_path)
-                if conventions and '{conventions}' in prompt_tpl:
-                    resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
-                else:
-                    resolved_prompt = self.prompt
-                samples = self._prepare_training_data_lines(src_path)
-                for s in samples:
-                    s['prompt'] = resolved_prompt
-                train_samples.extend(samples)
-                print(f"  {src_path}: {len(samples)} samples, conventions: {bool(conventions)}")
-        else:
-            # Single source — backward compatible
-            train_samples = self._prepare_training_data_lines(data_path)
-            for s in train_samples:
-                s['prompt'] = self.prompt
+        train_samples = []
+        for src_path in data_paths:
+            src_path = Path(src_path)
+            conventions = load_conventions(src_path)
+            if conventions and '{conventions}' in prompt_tpl:
+                resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+            else:
+                resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
+            samples = self._prepare_training_data_lines(src_path)
+            for s in samples:
+                s['prompt'] = resolved_prompt
+            train_samples.extend(samples)
+            print(f"  {src_path}: {len(samples)} samples, conventions: {bool(conventions)}")
 
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
