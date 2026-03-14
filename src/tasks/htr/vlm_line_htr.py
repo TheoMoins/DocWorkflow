@@ -14,6 +14,7 @@ from peft import PeftModel
 
 from transformers import TrainerCallback
 
+from src.tasks.htr.prompt_convention import build_conventions_block, load_conventions
 from src.content.weighted_sampling import special_char_density
 from src.alto.alto_lines import extract_lines_from_alto
 from src.alto.alto_text import copy_alto_without_text
@@ -124,6 +125,8 @@ class VLMLineHTRTask(BaseVLMHTR):
         super().__init__(config)
         self.name = "HTR_VLM_Line_Level"
         self.batch_size = config.get('line_batch_size', 1)
+        self.train_sources = config.get('train_sources', None)
+        self.prompt_template = config.get('prompt_template', self.prompt)
 
         self.hyperparams.update({
             'lora_r': config.get('lora_r', 16),
@@ -138,6 +141,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             'learning_rate': config.get('learning_rate', 2e-4),
             'weight_decay': config.get('weight_decay', 0.01),
             'dataset_num_proc': config.get('dataset_num_proc', 1),
+            'special_char_weighting': config.get('special_char_weighting', None),
         })
     
     def _get_file_extensions(self):
@@ -397,7 +401,29 @@ class VLMLineHTRTask(BaseVLMHTR):
         print(f"Model: {self.model_name}")
 
         print("Preparing line-level training data...")
-        train_samples = self._prepare_training_data_lines(data_path)
+        train_paths = self.config.get('train_sources', None)
+        prompt_tpl = self.config.get('prompt_template', self.prompt)
+
+        if train_paths and isinstance(train_paths, list):
+            train_samples = []
+            for src_path in train_paths:
+                src_path = Path(src_path)
+                conventions = load_conventions(src_path)
+                if conventions and '{conventions}' in prompt_tpl:
+                    resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+                else:
+                    resolved_prompt = self.prompt
+                samples = self._prepare_training_data_lines(src_path)
+                for s in samples:
+                    s['prompt'] = resolved_prompt
+                train_samples.extend(samples)
+                print(f"  {src_path}: {len(samples)} samples, conventions: {bool(conventions)}")
+        else:
+            # Single source — backward compatible
+            train_samples = self._prepare_training_data_lines(data_path)
+            for s in train_samples:
+                s['prompt'] = self.prompt
+
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
         if not train_samples:
@@ -423,7 +449,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": self.prompt},
+                        {"type": "text", "text": example.get("prompt", self.prompt)},
                         {"type": "image", "image": img},
                     ],
                 },
@@ -442,10 +468,10 @@ class VLMLineHTRTask(BaseVLMHTR):
         # alpha contrôle le boost des lignes avec caractères spéciaux
         # alpha=10 → une ligne à densité 0.1 a un poids 2x plus élevé qu'une ligne vide
         # alpha=50 → une ligne à densité 0.1 a un poids 6x plus élevé
-        DENSITY_ALPHA = 20.0
-
-        densities = [special_char_density(s["text"]) for s in valid_train]
-        sample_weights = [1.0 + DENSITY_ALPHA * d for d in densities]
+        alpha = self.hyperparams.get('special_char_weighting', 0)
+        if alpha != 0:
+            densities = [special_char_density(s["text"]) for s in valid_train]
+        sample_weights = [1.0 + alpha * d for d in densities]
 
         # Statistiques pour diagnostic
         n_with_special = sum(1 for d in densities if d > 0)

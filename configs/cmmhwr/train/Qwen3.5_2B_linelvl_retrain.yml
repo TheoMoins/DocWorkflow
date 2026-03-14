@@ -6,7 +6,9 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  train: "../data/ICDAR_Competition/train2"
+  train:
+    - "../data/ICDAR_Competition/train_romance"
+    - "../data/ICDAR_Competition/train_nonromance"
   valid: "../data/ICDAR_Competition/valid"
   test: "../data/ICDAR_Competition/test"
 
@@ -20,6 +22,7 @@ tasks:
       max_new_tokens: 128
       line_batch_size: 8
       max_pixels: 401408
+      special_char_weighting: 20.0
 
       # LoRA
       use_4bit: false
