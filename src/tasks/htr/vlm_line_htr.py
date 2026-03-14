@@ -408,16 +408,35 @@ class VLMLineHTRTask(BaseVLMHTR):
         train_samples = []
         for src_path in data_paths:
             src_path = Path(src_path)
-            conventions = load_conventions(src_path)
-            if conventions and '{conventions}' in prompt_tpl:
-                resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+            subdirs = sorted([p for p in src_path.iterdir() if p.is_dir()])
+            
+            if subdirs:
+                # Structure hiérarchique : conventions par document
+                docs_with_conv = 0
+                for doc_path in subdirs:
+                    conventions = load_conventions(doc_path)
+                    if conventions and '{conventions}' in prompt_tpl:
+                        resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+                        docs_with_conv += 1
+                    else:
+                        resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
+                    samples = self._prepare_training_data_lines(doc_path)
+                    for s in samples:
+                        s['prompt'] = resolved_prompt
+                    train_samples.extend(samples)
+                print(f"  {src_path}: {len(subdirs)} documents, {sum(1 for _ in train_samples)- len(train_samples) + len(train_samples)} samples, {docs_with_conv}/{len(subdirs)} with conventions")
             else:
-                resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
-            samples = self._prepare_training_data_lines(src_path)
-            for s in samples:
-                s['prompt'] = resolved_prompt
-            train_samples.extend(samples)
-            print(f"  {src_path}: {len(samples)} samples, conventions: {bool(conventions)}")
+                conventions = load_conventions(src_path)
+                if conventions and '{conventions}' in prompt_tpl:
+                    resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+                else:
+                    resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
+                samples = self._prepare_training_data_lines(src_path)
+                for s in samples:
+                    s['prompt'] = resolved_prompt
+                train_samples.extend(samples)
+                conv_info = f"conventions: {list(conventions.keys())}" if conventions else "no conventions"
+                print(f"  {src_path}: {len(samples)} samples ({conv_info})")
 
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
@@ -466,35 +485,36 @@ class VLMLineHTRTask(BaseVLMHTR):
         alpha = self.hyperparams.get('special_char_weighting', 0)
         if alpha != 0:
             densities = [special_char_density(s["text"]) for s in valid_train]
-        sample_weights = [1.0 + alpha * d for d in densities]
+            sample_weights = [1.0 + alpha * d for d in densities]
 
-        # Statistiques pour diagnostic
-        n_with_special = sum(1 for d in densities if d > 0)
-        avg_density = sum(densities) / len(densities) if densities else 0
-        print(f"\n📊 Density of special caracters:")
-        print(f"  Lines with ≥1 special char : {n_with_special} / {len(valid_train)} ({100*n_with_special/len(valid_train):.1f}%)")
-        print(f"  Mean density             : {avg_density:.4f}")
-        print(f"  Weight min / max             : {min(sample_weights):.2f} / {max(sample_weights):.2f}")
-        
-        # Resampling
-        rng = torch.Generator()
-        rng.manual_seed(seed)
-        weighted_indices = torch.multinomial(
-            torch.tensor(sample_weights, dtype=torch.float32),
-            num_samples=len(valid_train),
-            replacement=True,
-            generator=rng,
-        ).tolist()
+            # Statistiques pour diagnostic
+            n_with_special = sum(1 for d in densities if d > 0)
+            avg_density = sum(densities) / len(densities) if densities else 0
+            print(f"\n📊 Density of special caracters:")
+            print(f"  Lines with ≥1 special char : {n_with_special} / {len(valid_train)} ({100*n_with_special/len(valid_train):.1f}%)")
+            print(f"  Mean density             : {avg_density:.4f}")
+            print(f"  Weight min / max             : {min(sample_weights):.2f} / {max(sample_weights):.2f}")
+            
+            # Resampling
+            rng = torch.Generator()
+            rng.manual_seed(seed)
+            weighted_indices = torch.multinomial(
+                torch.tensor(sample_weights, dtype=torch.float32),
+                num_samples=len(valid_train),
+                replacement=True,
+                generator=rng,
+            ).tolist()
 
-        valid_train_weighted = [valid_train[i] for i in weighted_indices]
-        print(f"✓ Density-weighted resampling: {len(valid_train_weighted)} samples")
+            valid_train_weighted = [valid_train[i] for i in weighted_indices]
+            print(f"✓ Density-weighted resampling: {len(valid_train_weighted)} samples")
 
-        # Verification
-        new_avg_density = sum(densities[i] for i in weighted_indices) / len(weighted_indices)
-        print(f"  Average density after resampling: {new_avg_density:.4f}")
-        n_special_after = sum(1 for i in weighted_indices if densities[i] > 0)
-        print(f"  Lines with ≥1 special char after resampling : {n_special_after} ({100*n_special_after/len(weighted_indices):.1f}%)")
-
+            # Verification
+            new_avg_density = sum(densities[i] for i in weighted_indices) / len(weighted_indices)
+            print(f"  Average density after resampling: {new_avg_density:.4f}")
+            n_special_after = sum(1 for i in weighted_indices if densities[i] > 0)
+            print(f"  Lines with ≥1 special char after resampling : {n_special_after} ({100*n_special_after/len(weighted_indices):.1f}%)")
+        else:
+            valid_train_weighted = valid_train
 
         converted_train_set = _LazyLineDataset(valid_train, format_conversation)
 
