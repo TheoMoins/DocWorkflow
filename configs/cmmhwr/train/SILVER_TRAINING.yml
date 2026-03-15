@@ -1,4 +1,4 @@
-run_name: "Qwen4B_linelvl_occitansilver"
+run_name: "Qwen4B_linelvl_romancesilver"
 output_dir: "results"
 device: "cuda"
 use_wandb: false
@@ -6,7 +6,7 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  train: "./silver_reweight"
+  train: "./silver_romance"
 
 tasks:
   htr:
@@ -17,7 +17,7 @@ tasks:
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
-      max_pixels: 401408
+      max_pixels: 200704
 
       # LoRA
       use_4bit: false
@@ -26,7 +26,7 @@ tasks:
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 16
+      train_batch_size: 8
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
       epochs: 1

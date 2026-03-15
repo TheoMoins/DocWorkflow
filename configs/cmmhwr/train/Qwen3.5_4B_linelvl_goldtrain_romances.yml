@@ -35,7 +35,7 @@ tasks:
       train_batch_size: 16
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
-      epochs: 4
+      epochs: 3
 
       # lr 
       learning_rate: 5.0e-5
