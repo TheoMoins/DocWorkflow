@@ -16,7 +16,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'outputs/Qwen3.5-4B-HTR_VLM_Line_Level_Silver'
+      model_name: 'src/tasks/htr/models/Qwen3.5-4B-HTR_VLM_Line_Level_Silver-line-finetuned'
       base_model: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128
@@ -34,7 +34,7 @@ tasks:
       train_batch_size: 16
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
-      epochs: 4
+      epochs: 1
 
       # lr 
       learning_rate: 5.0e-5
