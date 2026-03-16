@@ -294,6 +294,8 @@ class BaseTask(ABC):
                 if metadata:
                     # Prefix metadata with 'metadata/'
                     for key, value in metadata.items():
+                        if key == 'conventions':
+                            continue
                         doc_summary[f'metadata/{key}'] = value
                     print(f"  📋 Metadata: {metadata}")
 
