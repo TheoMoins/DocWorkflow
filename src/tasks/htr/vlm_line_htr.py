@@ -217,7 +217,40 @@ class VLMLineHTRTask(BaseVLMHTR):
             results[idx] = {'text': text.strip(), 'confidence': 1.0}
         
         return results
-        
+
+    def _prepare_samples_with_conventions(self, data_path: Path, prompt_tpl: str) -> list:
+        data_path = Path(data_path)
+        subdirs = sorted([p for p in data_path.iterdir() if p.is_dir()]) if data_path.exists() else []
+        samples = []
+
+        if subdirs:
+            docs_with_conv = 0
+            for doc_path in subdirs:
+                conventions = load_conventions(doc_path)
+                if conventions and '{conventions}' in prompt_tpl:
+                    resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+                    docs_with_conv += 1
+                else:
+                    resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
+                doc_samples = self._prepare_training_data_lines(doc_path)
+                for s in doc_samples:
+                    s['prompt'] = resolved_prompt
+                samples.extend(doc_samples)
+            print(f"  {data_path}: {len(subdirs)} documents, {len(samples)} samples, {docs_with_conv}/{len(subdirs)} with conventions")
+        else:
+            conventions = load_conventions(data_path)
+            if conventions and '{conventions}' in prompt_tpl:
+                resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+            else:
+                resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
+            samples = self._prepare_training_data_lines(data_path)
+            for s in samples:
+                s['prompt'] = resolved_prompt
+            conv_info = f"conventions: {list(conventions.keys())}" if conventions else "no conventions"
+            print(f"  {data_path}: {len(samples)} samples ({conv_info})")
+
+        return samples
+
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
         Process ALTO files with line-level VLM.
@@ -237,6 +270,14 @@ class VLMLineHTRTask(BaseVLMHTR):
 
         for alto_path in tqdm(file_paths, desc="  Recognizing lines", unit="page"):
             try:
+                doc_dir = Path(alto_path).parent
+                conventions = load_conventions(doc_dir)
+                prompt_tpl = self.prompt_template
+                if conventions and '{conventions}' in prompt_tpl:
+                    self.prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+                else:
+                    self.prompt = prompt_tpl.replace('{conventions}', '').strip()
+
                 image_path, lines, _ = extract_lines_from_alto(alto_path)
                 
                 if not os.path.exists(image_path):
@@ -407,38 +448,9 @@ class VLMLineHTRTask(BaseVLMHTR):
 
         train_samples = []
         for src_path in data_paths:
-            src_path = Path(src_path)
-            subdirs = sorted([p for p in src_path.iterdir() if p.is_dir()])
-            
-            if subdirs:
-                # Structure hiérarchique : conventions par document
-                docs_with_conv = 0
-                for doc_path in subdirs:
-                    conventions = load_conventions(doc_path)
-                    if conventions and '{conventions}' in prompt_tpl:
-                        resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
-                        docs_with_conv += 1
-                    else:
-                        resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
-                    samples = self._prepare_training_data_lines(doc_path)
-                    for s in samples:
-                        s['prompt'] = resolved_prompt
-                    train_samples.extend(samples)
-                print(f"  {src_path}: {len(subdirs)} documents, {sum(1 for _ in train_samples)- len(train_samples) + len(train_samples)} samples, {docs_with_conv}/{len(subdirs)} with conventions")
-            else:
-                conventions = load_conventions(src_path)
-                if conventions and '{conventions}' in prompt_tpl:
-                    resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
-                else:
-                    resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
-                samples = self._prepare_training_data_lines(src_path)
-                for s in samples:
-                    s['prompt'] = resolved_prompt
-                train_samples.extend(samples)
-                conv_info = f"conventions: {list(conventions.keys())}" if conventions else "no conventions"
-                print(f"  {src_path}: {len(samples)} samples ({conv_info})")
+            train_samples.extend(self._prepare_samples_with_conventions(src_path, prompt_tpl))
 
-        valid_samples = self._prepare_training_data_lines(global_path + "/valid")
+        valid_samples = self._prepare_samples_with_conventions(Path(global_path) / "valid", prompt_tpl)
 
         if not train_samples:
             raise ValueError("No valid line-level training samples found")
