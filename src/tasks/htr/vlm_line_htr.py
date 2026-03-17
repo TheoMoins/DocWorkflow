@@ -559,7 +559,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         
         model = FastVisionModel.get_peft_model(
             model,
-            finetune_vision_layers=False,
+            finetune_vision_layers=True,
             finetune_language_layers=True,
             finetune_attention_modules=True,
             finetune_mlp_modules=True,
