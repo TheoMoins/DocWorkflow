@@ -1,4 +1,4 @@
-run_name: "Qwen3.5_4B_linelvl_goldtrain_romances_nosilver"
+run_name: "Qwen3.5_4B_linelvl_goldtrain_all"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -7,8 +7,10 @@ save_image: true
 
 data:
   train:
-    - "../data/ICDAR_Competition/train_romance"
+    - "../data/ICDAR_Competition/platinum_romance"
     - "../data/ICDAR_Competition/gold_romance"
+    - "../data/ICDAR_Competition/platinum_nonromance"
+    - "../data/ICDAR_Competition/gold_nonromance"
   valid: "../data/ICDAR_Competition/valid"
   test: "../data/ICDAR_Competition/test"
 

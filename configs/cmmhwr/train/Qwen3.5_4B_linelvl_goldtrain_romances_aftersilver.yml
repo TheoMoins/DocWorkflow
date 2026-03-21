@@ -1,4 +1,4 @@
-run_name: "Qwen3.5_4B_linelvl_goldtrain_romances_nosilver"
+run_name: "Qwen3.5_4B_linelvl_goldtrain_romances_silver"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -17,7 +17,8 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'Qwen/Qwen3.5-4B'
+      model_name: 'src/tasks/htr/models/Qwen3.5-4B-HTR_VLM_Line_Level_Silver-line-finetuned'
+      base_model: 'outputs/silver_romance_merged'
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
