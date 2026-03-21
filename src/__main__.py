@@ -232,9 +232,10 @@ def train_command(config: Config, task: str, seed: int):
 )
 @click.option("-p", "--pred_path", required=True)
 @click.option("-o", "--output", required=False, default="", type=click.Path(), help="Save results")
+@click.option("--json", "json_format", is_flag=True, default=False,
+              help="Export HTR results as a single submission.json (competition format)")
 @click.pass_obj
-def print_command(config: Config, task: str, pred_path: str, output: str):
-
+def print_command(config: Config, task: str, pred_path: str, output: str, json_format: bool):
     if output == "":
         if not config.yaml.get("output_dir"):
             output = "./results/"
@@ -251,7 +252,8 @@ def print_command(config: Config, task: str, pred_path: str, output: str):
     visualize(task = task_obj, 
               task_name = task,
               pred_path=pred_path, 
-              results_dir=output)
+              results_dir=output,
+              json_format=json_format)
 
 
 @cli.command("prepare-yolo-lines")

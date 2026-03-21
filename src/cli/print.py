@@ -10,7 +10,8 @@ def visualize(
     task_name: str,
     pred_path: str,
     results_dir: str,
-    source_data_path: str = None
+    source_data_path: str = None,
+    json_format: str = False
 ):
 
     console = Console()
@@ -24,7 +25,8 @@ def visualize(
     
     img_dir = source_data_path if source_data_path else pred_path
 
-    results = task.visualize(task_name=task_name, data_path=img_dir, xml_path=pred_path, output_dir=dir)
+    results = task.visualize(task_name=task_name, data_path=img_dir, xml_path=pred_path, 
+                             output_dir=dir, json_format=json_format)
 
     print(f"\nDone!")
 

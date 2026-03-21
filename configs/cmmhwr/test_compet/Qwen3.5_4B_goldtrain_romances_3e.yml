@@ -1,0 +1,42 @@
+run_name: "test_compet_Qwen3.5_4B_goldtrain_romances_3e"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+save_image: true
+
+data:
+  test: "../data/ICDAR_Competition/cmmhwr_test"
+
+tasks:
+  htr:
+    type: VLMLineHTR
+    config:
+      use_metadata: true
+      model_name: 'src/tasks/htr/models/romance_checkpoints/Qwen3.5-4B-line-finetuned'
+      base_model: 'Qwen/Qwen3.5-4B'
+      device_map: "auto"
+      max_new_tokens: 128
+      line_batch_size: 8
+      max_pixels: 401408
+      special_char_weighting: 0
+
+      # LoRA
+      use_4bit: false
+      use_8bit: false
+      lora_r: 64
+      lora_dropout: 0
+      use_rlora: false
+      max_seq_length: 512
+      train_batch_size: 16
+      gradient_accumulation_steps: 2
+      warmup_ratio: 0.01
+      epochs: 3
+
+      # lr 
+      learning_rate: 5.0e-5
+      weight_decay: 0.02
+      dataset_num_proc: 4
+      prompt_template: >
+        Transcribe the handwritten text in this line image.
+        {conventions}
+        Output ONLY the transcription.
