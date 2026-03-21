@@ -1,4 +1,4 @@
-run_name: "test_compet_Qwen3.5_4B_goldtrain_25000cp"
+run_name: "test_compet_Qwen3.5_4B_goldtrain_20000cp"
 output_dir: "results"
 device: "cuda"
 use_wandb: false
@@ -12,7 +12,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'src/tasks/htr/models/checkpoint-25000'
+      model_name: 'src/tasks/htr/models/checkpoint-20000'
       base_model: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128
