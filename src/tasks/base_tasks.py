@@ -508,7 +508,7 @@ class BaseTask(ABC):
         print(f"\n✓ Processed {total_subdirs} subdirectories")
         return all_results
     
-    def visualize(self, task_name, data_path, xml_path=None, output_dir=None):
+    def visualize(self, task_name, data_path, xml_path=None, output_dir=None, json_format=False):        
         """
         Visualisation tool from xml object.
         
@@ -542,7 +542,8 @@ class BaseTask(ABC):
                 img_dir=data_path,
                 xml_dir=xml_path,
                 output_dir=output_dir,
-                visualization_type=task_name
+                visualization_type=task_name,
+                json_format=json_format
             )
         else:
             # Hierarchical structure: process each subdirectory
@@ -574,7 +575,8 @@ class BaseTask(ABC):
                         img_dir=str(subdir_path),
                         xml_dir=str(subdir_xml),
                         output_dir=str(subdir_output) if subdir_output else None,
-                        visualization_type=task_name
+                        visualization_type=task_name,
+                        json_format=json_format
                     )
                     
                     total_success += success_count

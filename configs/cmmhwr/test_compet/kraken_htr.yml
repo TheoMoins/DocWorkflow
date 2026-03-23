@@ -1,0 +1,15 @@
+run_name: "test_compet_kraken"
+output_dir: "results"
+device: "cpu"
+use_wandb: false
+save_image: true
+
+data:
+  test: "../data/ICDAR_Competition/cmmhwr_test"
+
+tasks:
+  htr:
+    type: KrakenHTR
+    config:
+      use_metadata: true
+      model_path: "src/tasks/htr/models/catmus-medieval-1.6.0.mlmodel"

@@ -7,7 +7,7 @@ from collections import defaultdict
 import os
 import glob
 from pathlib import Path
-import statistics
+import json
 from typing import List, Dict, Tuple, Optional, Any
 
 class DocumentVisualizer:
@@ -327,7 +327,7 @@ class DocumentVisualizer:
             
         return fig
     
-    def visualize(self, output_dir=None):
+    def visualize(self, output_dir=None, json_format=False):
         """
         Effectue la visualisation en fonction du type spécifié.
         
@@ -361,11 +361,14 @@ class DocumentVisualizer:
                     print(f"Visualization saved to {save_path}")
                     
                 elif self.visualization_type == 'htr':
-                    save_path = os.path.join(output_dir, f"{base_name}.txt")
-                    if self.export_text(save_path):
-                        print(f"Text exported to {save_path}")
+                    if json_format:
+                        return self.extract_lines_with_ids()
                     else:
-                        return False
+                        save_path = os.path.join(output_dir, f"{base_name}.txt")
+                        if self.export_text(save_path):
+                            print(f"Text exported to {save_path}")
+                        else:
+                            return False
                 else:
                     print(f"Unknown visualization type: {self.visualization_type}")
                     return False
@@ -377,13 +380,14 @@ class DocumentVisualizer:
                 elif self.visualization_type == 'line':
                     self.draw_lines()
                 elif self.visualization_type == 'htr':
-                    # Pour HTR, afficher le texte dans la console
-                    text = self.extract_text()
-                    print("\n" + "="*60)
-                    print(f"Text from: {os.path.basename(self.alto_path)}")
-                    print("="*60)
-                    print(text)
-                    print("="*60 + "\n")
+                    if json_format:
+                        return self.extract_lines_with_ids()
+                    else:
+                        save_path = os.path.join(output_dir, f"{base_name}.txt")
+                        if self.export_text(save_path):
+                            print(f"Text exported to {save_path}")
+                        else:
+                            return False
                     
             return True
             
@@ -443,8 +447,23 @@ class DocumentVisualizer:
         except Exception as e:
             print(f"Error exporting text from {self.alto_path}: {e}")
             return False
+    
+    def extract_lines_with_ids(self):
+        lines = {}
+        for textline in self.root.findall('.//alto:TextLine', self.ns):
+            line_id = textline.get('ID')
+            if not line_id:
+                continue
+            words = [
+                s.get('CONTENT', '')
+                for s in textline.findall('.//alto:String', self.ns)
+                if s.get('CONTENT', '')
+            ]
+            lines[line_id] = ' '.join(words)
+        return lines
 
-def visualize_folder(img_dir, xml_dir=None, output_dir=None, visualization_type='layout'):
+
+def visualize_folder(img_dir, xml_dir=None, output_dir=None, visualization_type='layout', json_format=False):
     """
     Traite tous les fichiers ALTO XML d'un dossier et génère des visualisations.
     
@@ -472,7 +491,8 @@ def visualize_folder(img_dir, xml_dir=None, output_dir=None, visualization_type=
         
     # Traiter chaque fichier XML
     success_count = 0
-    
+    all_lines = {}
+
     for xml_file in xml_files:
         base_name = os.path.splitext(os.path.basename(xml_file))[0]
         
@@ -492,8 +512,22 @@ def visualize_folder(img_dir, xml_dir=None, output_dir=None, visualization_type=
         
         # Créer le visualiseur et générer la visualisation
         visualizer = DocumentVisualizer(img_file, xml_file, visualization_type)
-        if visualizer.visualize(output_dir):
-            success_count += 1
+        
+        if visualization_type == 'htr' and json_format: 
+            result = visualizer.visualize(output_dir, json_format=True)
+            if isinstance(result, dict):
+                all_lines.update(result)
+                success_count += 1
+        else:
+            if visualizer.visualize(output_dir):
+                success_count += 1
+    
+    if visualization_type == 'htr' and json_format and all_lines:
+        json_path = os.path.join(output_dir, 'predictions.json')
+        os.makedirs(output_dir, exist_ok=True)
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(all_lines, f, ensure_ascii=False, indent=2)
+        print(f"Submission JSON saved to {json_path} ({len(all_lines)} lines)")
     
     print(f"Processed {len(xml_files)} XML files with {success_count} successful visualizations")
     return success_count

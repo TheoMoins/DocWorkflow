@@ -1,23 +1,19 @@
-run_name: "Qwen3.5_4B_linelvl_goldtrain_romances_nosilver"
+run_name: "test_compet_Qwen3.5_4B_goldtrain_20000cp"
 output_dir: "results"
 device: "cuda"
-use_wandb: true
-wandb_project: "icdar-htr-competition-2026"
+use_wandb: false
 save_image: true
 
 data:
-  train:
-    - "../data/ICDAR_Competition/train_romance"
-    - "../data/ICDAR_Competition/gold_romance"
-  valid: "../data/ICDAR_Competition/valid"
-  test: "../data/ICDAR_Competition/test"
+  test: "../data/ICDAR_Competition/cmmhwr_test"
 
 tasks:
   htr:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'Qwen/Qwen3.5-4B'
+      model_name: 'src/tasks/htr/models/checkpoint-20000'
+      base_model: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
