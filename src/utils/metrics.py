@@ -1,10 +1,14 @@
 import pandas as pd
 import jiwer
 from jiwer import cer, wer
+from jiwer.transforms import AbstractTransform
+import regex
 from pathlib import Path
 
 from torchmetrics.text import CharErrorRate, WordErrorRate
 import unicodedata
+from collections import Counter
+from itertools import chain
 
 from src.utils.metadata import create_metadata_stats
 
@@ -32,6 +36,13 @@ def aggregate_metrics(metrics_list):
                 result[key] = sum(values)  # Sum totals
             else:
                 result[key] = sum(values) / len(values)  # Average metrics
+        else:
+            if key.startswith('analysis/'):
+                #print(key)
+                all_dicts = [m[key] for m in metrics_list if key in m]
+                #print(all_dicts)
+                value = tuple(dict(Counter(chain.from_iterable([d[i] for d in all_dicts]))) for i in range(3))
+                result[key] = value
     
     return result
 
@@ -57,9 +68,23 @@ def calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores,
     word_accuracy = 1.0 - wer_score
     
     # Get detailed error counts
-    cer_output = jiwer.process_characters(all_gt_texts, all_pred_texts)
-    wer_output = jiwer.process_words(all_gt_texts, all_pred_texts)
+    # Need some custom work to make jiwer process diacritics correctly
+    class DiacriticTransform(AbstractTransform):
+        def process_string(self, s: str):
+            s = regex.findall(r'\X', unicodedata.normalize("NFD", s))
+            return s
     
+    dt = DiacriticTransform()
+    # use process_words because we force it to treat each combined character (NOT unicode codepoint) as a character
+    cer_output = jiwer.process_words(all_gt_texts, all_pred_texts, reference_transform=dt, hypothesis_transform=dt)
+    wer_output = jiwer.process_words(all_gt_texts, all_pred_texts)
+
+    #cer_analysis = jiwer.visualize_error_counts(cer_output)
+    #wer_analysis = jiwer.visualize_error_counts(wer_output)
+
+    cer_analysis = jiwer.collect_error_counts(cer_output)
+    wer_analysis = jiwer.collect_error_counts(wer_output)
+
     metrics_dict = {
         "score/cer": cer_score,
         "score/wer": wer_score,
@@ -73,6 +98,8 @@ def calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores,
         "detailed/word_insertions": wer_output.insertions,
         "detailed/word_deletions": wer_output.deletions,
         "detailed/word_substitutions": wer_output.substitutions,
+        "analysis/cer": cer_analysis,
+        "analysis/wer": wer_analysis
     }
     
     # Add worst pages

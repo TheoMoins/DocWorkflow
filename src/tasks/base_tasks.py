@@ -183,6 +183,9 @@ class BaseTask(ABC):
         
         for key in sorted(metrics.keys()):
             value = metrics[key]
+
+            if key.startswith('analysis/'): # do NOT print the dicts
+                continue
             if isinstance(value, (int, float)):
                 formatted_value = round(value, 4)
             else:
