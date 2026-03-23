@@ -1,4 +1,4 @@
-run_name: "Qwen3.5_4B_linelvl_goldtrain_romances_vision_3e"
+run_name: "Qwen3.5_4B_linelvl_goldtrain_all_vision_3e"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -17,7 +17,7 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'src/tasks/htr/models/romance_checkpoints/Qwen3.5-4B-line-finetuned'
+      model_name: 'src/tasks/htr/models/allgold_checkpoints/Qwen3.5-4B-line-finetuned'
       base_model: 'Qwen/Qwen3.5-4B'
       device_map: "auto"
       max_new_tokens: 128
