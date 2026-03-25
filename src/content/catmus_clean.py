@@ -64,6 +64,11 @@ def clean_htr_text(text: str, whitelist: set) -> str:
     # 3. Strip brackets, keep content
     text = re.sub(r'\[([^\]]*)\]', r'\1', text)
 
+    # Replace allographs
+    graphs = {"v":"u","V":"U","j":"i", "J":"I", "ſ": "s"} #todo: expand
+    for graph, normal in graphs.items():
+        text = text.replace(graph, normal)
+
     # 4. Filter to whitelist
     text = ''.join(c for c in text if c in whitelist)
 
