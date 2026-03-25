@@ -18,6 +18,7 @@ import shutil
 import glob
 from pathlib import Path
 from lxml import etree as ET
+import pandas as pd
 
 
 # ---------------------------------------------------------------------------
@@ -49,11 +50,20 @@ def _build_catmus_whitelist(json_dir: Path) -> set:
     return allowed
 
 
+def _build_normalization_dictionary(json_dir, do_extended=False):
+    df = pd.read_csv(json_dir/"postproc_norms.csv",keep_default_na=False)
+    if do_extended:
+        graphs = dict(zip(df['source'],df['target']))
+    else:
+        graphs = dict(zip(df[df['set']=='base']['source'],df[df['set']=='base']['target']))
+    return graphs
+
+
 # ---------------------------------------------------------------------------
 # Text cleaning
 # ---------------------------------------------------------------------------
 
-def clean_htr_text(text: str, whitelist: set) -> str:
+def clean_htr_text(text: str, whitelist: set, graphs: dict) -> str:
     # 1. Remove '[...]' / '[…]' entirely
     text = re.sub(r'\[\.{2,}\]', '', text)
     text = re.sub(r'\[…\]', '', text)
@@ -65,7 +75,7 @@ def clean_htr_text(text: str, whitelist: set) -> str:
     text = re.sub(r'\[([^\]]*)\]', r'\1', text)
 
     # Replace allographs
-    graphs = {"v":"u","V":"U","j":"i", "J":"I", "ſ": "s"} #todo: expand
+    #graphs = {"v":"u","V":"U","j":"i", "J":"I", "ſ": "s"} #todo: expand
     for graph, normal in graphs.items():
         text = text.replace(graph, normal)
 
@@ -79,7 +89,7 @@ def clean_htr_text(text: str, whitelist: set) -> str:
 # ALTO file processing
 # ---------------------------------------------------------------------------
 
-def clean_alto_file(alto_path: str, whitelist: set) -> int:
+def clean_alto_file(alto_path: str, whitelist: set, graphs: dict) -> int:
     """Returns number of String elements modified."""
     tree = ET.parse(alto_path)
     root = tree.getroot()
@@ -89,7 +99,7 @@ def clean_alto_file(alto_path: str, whitelist: set) -> int:
     for string_elem in root.findall('.//alto:String', ns):
         content = string_elem.get('CONTENT', '')
         if content:
-            cleaned = clean_htr_text(content, whitelist)
+            cleaned = clean_htr_text(content, whitelist, graphs)
             if cleaned != content:
                 string_elem.set('CONTENT', cleaned)
                 modified += 1
@@ -129,6 +139,10 @@ def main():
     whitelist = _build_catmus_whitelist(json_dir)
     print(f"✓ Whitelist built from {len(json_files)} JSON file(s) — {len(whitelist)} allowed characters")
 
+    # Build normalization dictionary
+    # csv should be in same folder as json files
+    graphs = _build_normalization_dictionary(json_dir, False) # do not use extended character list
+
     # Prepare output directory
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -151,7 +165,7 @@ def main():
             shutil.copy2(xml_path, target)
 
         try:
-            n = clean_alto_file(target, whitelist)
+            n = clean_alto_file(target, whitelist, graphs)
             status = f"{n} strings modified" if n else "no changes"
             print(f"  {'→' if output_dir else '✎'} {Path(xml_path).name}  ({status})")
             total_modified += n
