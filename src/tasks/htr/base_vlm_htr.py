@@ -43,6 +43,22 @@ class BaseVLMHTR(BaseHTR):
         self.is_minicpm = False
         self.tokenizer = None
     
+    def _build_base_gen_kwargs(self) -> dict:
+        """Resolve EOS/pad token ids and return safe base generation kwargs."""
+        gen_kwargs = {}
+        eos_id = getattr(self.model.config, "eos_token_id", None)
+        pad_id = getattr(self.model.config, "pad_token_id", None)
+        tok = getattr(self.processor, "tokenizer", None)
+        if eos_id is None and tok is not None:
+            eos_id = getattr(tok, "eos_token_id", None)
+        if pad_id is None and tok is not None:
+            pad_id = getattr(tok, "pad_token_id", None)
+        if eos_id is not None:
+            gen_kwargs["eos_token_id"] = eos_id
+        if pad_id is not None:
+            gen_kwargs["pad_token_id"] = pad_id
+        return gen_kwargs
+
     def load(self):
         from peft import PeftModel
         from src.utils.memory_monitor import get_fast_vision_model
@@ -347,12 +363,10 @@ class BaseVLMHTR(BaseHTR):
         ).to(self.device)
         
         # Generate
+        gen_kwargs = self._build_base_gen_kwargs()
+        gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
         with torch.no_grad():
-            generated_ids = self.model.generate(
-                **inputs,
-                max_new_tokens=self.max_new_tokens,
-                do_sample=False
-            )
+            generated_ids = self.model.generate(**inputs, **gen_kwargs)
         
         # Decode
         generated_ids_trimmed = [
