@@ -549,6 +549,8 @@ class VLMLineHTRTask(BaseVLMHTR):
             model = PeftModel.from_pretrained(model, self.model_name)
             model = model.merge_and_unload()
             print("Merge done.")
+            model.save_pretrained(self.hyperparams.get('model_dir') + '/merged_base')
+            print ("Merged model saved to "+ self.hyperparams.get('model_dir') + '/merged_base')
         else:
             model, tokenizer = FastVisionModel.from_pretrained(
                 self.model_name,
