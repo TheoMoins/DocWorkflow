@@ -197,7 +197,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             gen_kwargs = self._build_base_gen_kwargs()
             gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
             generated_ids = self.model.generate(**inputs, **gen_kwargs)        
-        
+
         # Decode
         generated_ids_trimmed = [
             out_ids[len(in_ids):]
@@ -638,7 +638,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         trainer.add_callback(early_stopping_callback)
 
         print("Starting training...")
-        checkpoint_dir = self.hyperparams['output_dir']
+        checkpoint_dir = self.hyperparams['model_dir']
         has_checkpoint = any(
             Path(checkpoint_dir, d).is_dir()
             for d in os.listdir(checkpoint_dir)
