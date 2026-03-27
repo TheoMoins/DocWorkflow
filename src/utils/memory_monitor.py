@@ -3,6 +3,13 @@ import psutil
 import gc
 
 
+def get_fast_vision_model():
+    try:
+        from unsloth import FastVisionModel
+        return FastVisionModel
+    except (ImportError, NotImplementedError):
+        return None
+
 def get_memory_usage_percent():
     """Get current system memory usage as percentage."""
     return psutil.virtual_memory().percent

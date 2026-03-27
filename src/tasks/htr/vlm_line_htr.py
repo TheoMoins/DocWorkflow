@@ -133,7 +133,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             'lora_dropout': config.get('lora_dropout', 0),
             'use_rslora': config.get('use_rslora', False),
             'max_seq_length': config.get('max_seq_length', 1024),
-            'output_dir': config.get('output_dir', 'src/tasks/htr/models'),
+            'model_dir': config.get('model_dir', 'src/tasks/htr/models'),
             'train_batch_size': config.get('train_batch_size', 4),
             'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 4),
             'warmup_ratio': config.get('warmup_ratio', 0.1),
@@ -571,7 +571,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         )
 
         training_args = SFTConfig(
-            output_dir=self.hyperparams['output_dir'],
+            output_dir=self.hyperparams['model_dir'],
             per_device_train_batch_size=self.hyperparams['train_batch_size'],
             gradient_accumulation_steps=self.hyperparams['gradient_accumulation_steps'],
             warmup_ratio=self.hyperparams['warmup_ratio'],
@@ -689,6 +689,8 @@ class VLMLineHTRTask(BaseVLMHTR):
                     'config': {
                         'model_name': output_dir,
                         'base_model': self.model_name,
+                        'use_metadata': True,
+                        'model_dir': output_dir,
                         'use_lora_adapter': True,
                         'max_new_tokens': self.max_new_tokens,
                         'batch_size': self.batch_size,

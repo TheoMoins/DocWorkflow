@@ -8,7 +8,6 @@ import os
 
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from unsloth import FastVisionModel
 from qwen_vl_utils import process_vision_info
 from src.utils.transformers_models import is_supported_by_auto_image_text
 
@@ -46,6 +45,10 @@ class BaseVLMHTR(BaseHTR):
     
     def load(self):
         from peft import PeftModel
+        from src.utils.memory_monitor import get_fast_vision_model
+        FastVisionModel = get_fast_vision_model()
+        if FastVisionModel is None:
+            raise RuntimeError("Training requires a GPU with unsloth installed.")
 
         """Load the VLM model (common for both page and line level)."""
         if not self.model_name:
@@ -268,38 +271,6 @@ class BaseVLMHTR(BaseHTR):
                     result = padded
 
         return result
-    
-    def _compress_image_if_needed(self, image: Image.Image, max_bytes: int = 0.1 * 1024 * 1024) -> Image.Image:
-        """
-        Compress/resize image if its estimated file size exceeds max_bytes.
-        Progressively reduces quality then dimensions until under threshold.
-        """
-        import io
-
-        def get_jpeg_size(img, quality=85):
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=quality)
-            return buf.tell(), buf
-
-        size, buf = get_jpeg_size(image)
-        if size <= max_bytes:
-            return image
-
-        scale = 0.8
-        img = image.copy()
-        while scale > 0.1:
-            new_w = int(img.width * scale)
-            new_h = int(img.height * scale)
-            img_resized = img.resize((new_w, new_h), Image.LANCZOS)
-            size, buf = get_jpeg_size(img_resized)
-            if size <= max_bytes:
-                print(f"  Image resized to {new_w}x{new_h} ({size / 1024 / 1024:.1f} MB)")
-                buf.seek(0)
-                return Image.open(buf).convert("RGB")
-            scale -= 0.1
-
-        print(f"  Warning: could not compress image below {max_bytes / 1024 / 1024:.0f} MB")
-        return image
 
 
     def _prepare_messages(self, image, prompt=None):
@@ -316,7 +287,6 @@ class BaseVLMHTR(BaseHTR):
         if prompt is None:
             prompt = self.prompt
         
-        # image = self._compress_image_if_needed(image)
 
         return [
             {

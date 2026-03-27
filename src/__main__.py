@@ -1,8 +1,6 @@
-try:
-    from unsloth import FastVisionModel
-    import torch
-except ImportError:
-    pass
+from src.utils.memory_monitor import get_fast_vision_model
+FastVisionModel = get_fast_vision_model()
+
 
 from pathlib import Path
 
