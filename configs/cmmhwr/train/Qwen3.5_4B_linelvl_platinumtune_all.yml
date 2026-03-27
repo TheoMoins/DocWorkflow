@@ -1,19 +1,23 @@
-run_name: "test_compet_Qwen3.5_4B_goldtrain_3e"
+run_name: "Qwen3.5_4B_linelvl_goldtrain_platinumtune_all"
 output_dir: "results"
 device: "cuda"
-use_wandb: false
+use_wandb: true
+wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  test: "../data/ICDAR_Competition/cmmhwr_test"
+  train:
+    - "../data/ICDAR_Competition/platinum_romance"
+    - "../data/ICDAR_Competition/platinum_nonromance"
+  valid: "../data/ICDAR_Competition/valid"
+  test: "../data/ICDAR_Competition/test"
 
 tasks:
   htr:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'src/tasks/htr/models/allgold_checkpoints/Qwen3.5-4B-line-finetuned'
-      base_model: 'Qwen/Qwen3.5-4B'
+      model_name: 'src/tasks/htr/models/allgold_checkpoints/allgold_merged'
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8
@@ -27,10 +31,10 @@ tasks:
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 16
-      gradient_accumulation_steps: 2
+      train_batch_size: 8 #16
+      gradient_accumulation_steps: 2 #2
       warmup_ratio: 0.01
-      epochs: 3
+      epochs: 2
 
       # lr 
       learning_rate: 5.0e-5

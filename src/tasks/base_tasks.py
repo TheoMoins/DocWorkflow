@@ -109,6 +109,10 @@ class BaseTask(ABC):
         if not self.use_wandb:
             return
 
+        # remove htr analysis metrics
+        metrics.pop("analysis/cer",None)
+        metrics.pop("analysis/wer",None)
+
         # Log scalar metrics
         if run:
             run.log(metrics)
@@ -282,8 +286,12 @@ class BaseTask(ABC):
                 score['document'] = subdir_name
             
             all_page_scores.extend(doc_page_scores)
-            all_metrics_for_aggregation.append(doc_metrics)
+            all_metrics_for_aggregation.append(doc_metrics.copy())
             
+            # remove individual document analysis scores although i
+            # might want this later
+            doc_metrics.pop("analysis/cer",None)
+            doc_metrics.pop("analysis/wer",None)
             # Document summary
             doc_summary = {
                 'document': subdir_name,
@@ -353,11 +361,16 @@ class BaseTask(ABC):
         wandb_tables, wandb_files, metadata_metrics = prepare_wandb_data(
             page_scores, document_scores, structure_type, Path(pred_path).parent
         )
+
+        #print(wandb_tables)
+        #print(page_scores)
+        #print(document_scores)
+        #return
         
         # Merge metadata metrics into main metrics
         metrics_dict.update(metadata_metrics)
         
-        self._log_to_wandb(metrics_dict, wandb_run, tables=wandb_tables, files=wandb_files)
+        self._log_to_wandb(metrics_dict.copy(), wandb_run, tables=wandb_tables, files=wandb_files)
         self._display_metrics(metrics_dict)
         if metadata_metrics:
             display_metadata_metrics(metadata_metrics)
