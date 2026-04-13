@@ -4,6 +4,8 @@ import unicodedata
 from pathlib import Path
 from lxml import etree as ET
 
+import pandas as pd
+
 # Load CATMuS characters from bundled JSON files
 _DATA_DIR = Path(__file__).parent.parent.parent / "content"
 
@@ -37,8 +39,17 @@ def _build_catmus_whitelist() -> set:
 
     return allowed
 
+# Build dictionary for allograph normalization
+def _build_normalization_dictionary(do_extended=False):
+    df = pd.read_csv(_DATA_DIR/"postproc_norms.csv",keep_default_na=False)
+    if do_extended:
+        graphs = dict(zip(df['source'],df['target']))
+    else:
+        graphs = dict(zip(df[df['set']=='base']['source'],df[df['set']=='base']['target']))
+    return graphs
 
 CATMUS_WHITELIST: set = _build_catmus_whitelist()
+ALLOGRAPHS_DICT: dict = _build_normalization_dictionary()
 
 def clean_htr_text(text: str) -> str:
     """
@@ -57,6 +68,11 @@ def clean_htr_text(text: str) -> str:
 
     # 3. Strip brackets but keep content
     text = re.sub(r'\[([^\]]*)\]', r'\1', text)
+
+    # Replace allographs
+    #graphs = {"v":"u","V":"U","j":"i", "J":"I", "ſ": "s"} #todo: expand
+    for graph, normal in ALLOGRAPHS_DICT.items():
+        text = text.replace(graph, normal)
 
     # 4. Filter to whitelist
     text = ''.join(c for c in text if c in CATMUS_WHITELIST)
