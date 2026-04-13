@@ -181,7 +181,7 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         tokenizer.save_pretrained(model_save_path)
         print(f"Training complete! Model saved to {model_save_path}")
 
-        config_path = self._create_finetuned_config(model_save_path, global_path)
+        config_path = self._create_finetuned_config(model_save_path, global_path, 'VLMLineHTR')
         
         print(f"\nTo run prediction with fine-tuned model:")
         print(f"   docworkflow -c {config_path} predict -t htr -d test")
