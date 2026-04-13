@@ -82,7 +82,9 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         print(f"Model: {self.model_name}")
 
         print("Preparing line-level training data...")
-        train_samples = self._prepare_training_data_textonly(data_path)
+        train_samples = []
+        for src_path in data_paths:
+            train_samples.extend(self._prepare_training_data_textonly(src_path))
         #TODO: We are currently not using the validation samples I think    
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
