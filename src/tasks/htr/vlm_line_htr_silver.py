@@ -74,7 +74,9 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         if not data_path:
             raise ValueError("Training data path is required")
 
-        global_path = str(data_path.parent)
+        data_paths = data_path if isinstance(data_path, list) else [data_path]
+
+        global_path = str(data_paths[0].parent)
 
         print(f"Starting VLM continued pre-training with Unsloth")
         print(f"Model: {self.model_name}")
