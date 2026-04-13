@@ -133,7 +133,9 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         
         # Generate
         with torch.no_grad():
-            generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens)
+            gen_kwargs = self._build_base_gen_kwargs()
+            gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
+            generated_ids = self.model.generate(**inputs, **gen_kwargs)        
         
         # Decode
         generated_ids_trimmed = [

@@ -194,8 +194,10 @@ class VLMLineHTRTask(BaseVLMHTR):
         
         # Generate
         with torch.no_grad():
-            generated_ids = self.model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
-        
+            gen_kwargs = self._build_base_gen_kwargs()
+            gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
+            generated_ids = self.model.generate(**inputs, **gen_kwargs)        
+
         # Decode
         generated_ids_trimmed = [
             out_ids[len(in_ids):]
@@ -539,18 +541,25 @@ class VLMLineHTRTask(BaseVLMHTR):
         print("Loading model with Unsloth...")
         base_model = self.hyperparams.get('base_model')
         if base_model:
+           # model, tokenizer = FastVisionModel.from_pretrained(
+           #     base_model,
+           #     load_in_4bit=False,
+           #     load_in_8bit=False,
+           #     use_gradient_checkpointing="unsloth",
+           # )
+            print(f"Merging LoRA from {self.model_name}...")
+           # hacky change to fix loading
             model, tokenizer = FastVisionModel.from_pretrained(
-                base_model,
-                load_in_4bit=False,
-                load_in_8bit=False,
+                self.model_name,
+                load_in_4bit=self.hyperparams['use_4bit'],
+                load_in_8bit=self.hyperparams['use_8bit'],
                 use_gradient_checkpointing="unsloth",
             )
-            print(f"Merging LoRA from {self.model_name}...")
-            model = PeftModel.from_pretrained(model, self.model_name)
+            model.save_pretrained_merged(self.hyperparams.get('model_dir') + '/merged_base', tokenizer, save_method = "merged_16bit")
+            print ("Merged model saved to "+ self.hyperparams.get('model_dir') + '/merged_base')
+            #todo: check that this produces the same results
             model = model.merge_and_unload()
             print("Merge done.")
-            model.save_pretrained(self.hyperparams.get('model_dir') + '/merged_base')
-            print ("Merged model saved to "+ self.hyperparams.get('model_dir') + '/merged_base')
         else:
             model, tokenizer = FastVisionModel.from_pretrained(
                 self.model_name,
@@ -636,7 +645,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         trainer.add_callback(early_stopping_callback)
 
         print("Starting training...")
-        checkpoint_dir = self.hyperparams['output_dir']
+        checkpoint_dir = self.hyperparams['model_dir']
         has_checkpoint = any(
             Path(checkpoint_dir, d).is_dir()
             for d in os.listdir(checkpoint_dir)
