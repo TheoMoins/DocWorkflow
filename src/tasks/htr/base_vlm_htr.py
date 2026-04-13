@@ -136,7 +136,7 @@ class BaseVLMHTR(BaseHTR):
                 base_model = Qwen3VLForConditionalGeneration.from_pretrained(
                     base_model_name, **model_kwargs
                 )
-            elif os.path.exists(base_model_name):
+            elif False: #os.path.exists(base_model_name):
                 print("Local checkpoint detected, loading with FastVisionModel (Unsloth)...")
                 self.processor = AutoProcessor.from_pretrained(
                     base_model_name, trust_remote_code=True, padding_side='left'
