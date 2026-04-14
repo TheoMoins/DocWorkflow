@@ -10,20 +10,9 @@ from PIL import Image
 from lxml import etree as ET
 import yaml
 
-from src.alto.alto_lines import extract_lines_from_alto
-from src.alto.alto_text import copy_alto_without_text
-
-class _LazyLineDataset:
-    def __init__(self, samples, format_fn):
-        self.samples = samples
-        self.format_fn = format_fn
-    def __len__(self):
-        return len(self.samples)
-    def __getitem__(self, idx):
-        result = self.format_fn(self.samples[idx])
-        if result is None:
-            raise ValueError(f"Invalid sample at index {idx}")
-        return result
+from src.alto.alto_lines import read_lines_geometry
+from src.alto.alto_text import copy_alto_without_text, write_text_to_alto
+from src.utils.lazy_dataset import LazyLineDataset as _LazyLineDataset
 
 class VLMMultiLineHTRTask(BaseVLMHTR):
     """
@@ -185,7 +174,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
 
         for alto_path in tqdm(file_paths, desc="  Recognizing lines", unit="page"):
             try:
-                image_path, lines, _ = extract_lines_from_alto(alto_path)
+                image_path, lines, _ = read_lines_geometry(alto_path)
                 
                 if not os.path.exists(image_path):
                     print(f"  Warning: Image {image_path} not found")
@@ -236,7 +225,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
                 if not os.path.exists(output_path):
                     copy_alto_without_text(alto_path, output_path)
                 
-                self._add_text_to_alto(output_path, recognized_texts, output_path)
+                write_text_to_alto(output_path, recognized_texts, output_path)
                 
                 results.append({'file': alto_path, 'texts': recognized_texts})
                 
@@ -261,28 +250,6 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         
         return results
 
-    def _add_text_to_alto(self, alto_path, texts, output_path):
-        """Add recognized text to ALTO XML."""
-        tree = ET.parse(alto_path)
-        root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-        
-        text_lines = root.findall('.//alto:TextLine', ns)
-        
-        for line, text_data in zip(text_lines, texts):
-            if text_data and 'text' in text_data and text_data['text']:
-                # Remove existing String elements
-                for string_elem in line.findall('alto:String', ns):
-                    line.remove(string_elem)
-                
-                # Add new String
-                string_elem = ET.SubElement(line, f"{{{ns['alto']}}}String")
-                string_elem.set('CONTENT', text_data['text'])
-                string_elem.set('WC', str(text_data.get('confidence', 1.0)))
-        
-        tree.write(output_path, pretty_print=True, 
-                  xml_declaration=True, encoding="UTF-8")
-        
 
     def _prepare_training_data_lines(self, data_path):
         """
@@ -310,20 +277,8 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             if not image_path:
                 skipped += 1
                 continue
-
-            # for line in extract_lines_with_bbox_from_alto(xml_path):
-            #     left  = line['hpos']
-            #     top   = line['vpos']
-            #     right = line['hpos'] + line['width']
-            #     bottom = line['vpos'] + line['height']
-            #     if right <= left or bottom <= top:
-            #         continue
-            #     samples.append({
-            #         "page_image_path": image_path,
-            #         "text": line['text'],
-            #         "bbox": (left, top, right, bottom),
-            #     })
-            _, lines, _ = extract_lines_from_alto(xml_path)
+    
+            _, lines, _ = read_lines_geometry(xml_path)
             # we want groups of up to max 20 lines maybe?
             maxlines = 40 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
             nlines = len(lines)
@@ -340,8 +295,29 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         print(f"  Extracted {len(samples)} line samples from {len(xml_files) - skipped} pages")
         return samples
 
+    def _format_conversation(self, example, get_page_image):
+        try:
+            page_img = get_page_image(example["page_image_path"])
+            imgs = [self._extract_line_image(page_img, b) for b in example["boundary"]]
+        except Exception as e:
+            print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
+            return None
+        if imgs is None:
+            return None
+        return {"messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": self.prompt},
+                ] + [{"type": "image", "image": img} for img in imgs],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": t} for t in example["text"]],
+            },
+        ]}
+
     def train(self, data_path=None, seed=42):
-        import unsloth
         from unsloth import FastVisionModel
         from unsloth.trainer import UnslothVisionDataCollator
         from transformers import AutoProcessor
@@ -370,42 +346,15 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
 
         print(f"Found {len(train_samples)} line samples (train) and {len(valid_samples)} (valid)")
 
-        def format_conversation(example): 
-            try:
-                page_img = Image.open(example["page_image_path"]).convert("RGB")
-                imgs = [self._extract_line_image(page_img, b) for b in example["boundary"]]
-            except Exception as e:
-                print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
-                return None
-            #TODO: better error handling for if only one crop is bad
-            if imgs is None:
-                return None
-
-            # modified to make conversation give a list of images and return a list of texts
-            # it's possible this will be confusing for the model but it's also possible more context is helpful
-            # check to see if what we get in return has newlines or if i need to put them in for formatting purposes
-            return {"messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": self.prompt}]+[{"type": "image", "image": img} for img in imgs]
-                    
-                },
-                {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": t} for t in example["text"]],
-                },
-            ]}
-
         print("Validating train samples...")
         valid_train = [s for s in train_samples if os.path.exists(s["page_image_path"]) and s.get("boundary")]
         if len(valid_train) < len(train_samples):
             print(f"  Skipped {len(train_samples) - len(valid_train)} samples")
-        converted_train_set = _LazyLineDataset(valid_train, format_conversation)
+        converted_train_set = _LazyLineDataset(valid_train, self._format_conversation)
 
         if valid_samples:
             valid_valid = [s for s in valid_samples if os.path.exists(s["page_image_path"]) and s.get("boundary")]
-            converted_valid_set = _LazyLineDataset(valid_valid, format_conversation)
+            converted_valid_set = _LazyLineDataset(valid_valid, self._format_conversation)
         else:
             converted_valid_set = None
 
@@ -481,7 +430,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         tokenizer.save_pretrained(model_save_path)
         print(f"Training complete! Model saved to {model_save_path}")
 
-        config_path = self._create_finetuned_config(model_save_path, global_path)
+        config_path = self._create_finetuned_config(model_save_path, global_path, 'VLMMultiLineHTR')
         
         print(f"\nTo run prediction with fine-tuned model:")
         print(f"   docworkflow -c {config_path} predict -t htr -d test")
@@ -490,54 +439,3 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         gc.collect()
         if self.device == 'cuda':
             torch.cuda.empty_cache()
-
-    def _create_finetuned_config(self, output_dir, global_path):
-        """
-        Create a configuration file for the fine-tuned model.
-        
-        Args:
-            output_dir: Directory where the model was saved
-            original_config_path: Path to the original training config (optional)
-        
-        Returns:
-            Path to the created config file
-        """
-
-        # Create config for the fine-tuned model
-        config = {
-            'run_name': f"{self.name}_finetuned",
-            'output_dir': 'results',
-            'device': self.config.get('device', 'cuda'),
-            'use_wandb': self.config.get('use_wandb', False),
-            'wandb_project': self.config.get('wandb_project', 'HTR-comparison'),
-            'data': {
-                'train': global_path + '/train',
-                'valid': global_path + '/valid',
-                'test': global_path + '/test'
-            },
-            'tasks': {
-                'htr': {
-                    'type': 'VLMMultiLineHTR',
-                    'config': {
-                        'model_name': output_dir,
-                        'base_model': self.model_name,
-                        'use_lora_adapter': True,
-                        'max_new_tokens': self.max_new_tokens,
-                        'batch_size': self.batch_size,
-                        'prompt': self.prompt,
-                        **{k: v for k, v in self.hyperparams.items() 
-                        if k in ['use_dtype_param', 'device_map', 'attn_implementation', 'model_class']
-                        and v is not None}
-                    }
-                }
-            }
-        }
-        
-        # Save config in the model directory
-        model_config_path = Path(output_dir) / 'inference_config.yml'
-        with open(model_config_path, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-        
-        print(f"\n Inference config saved to: {model_config_path}")
-        
-        return model_config_path

@@ -8,7 +8,7 @@ from lxml import etree as ET
 
 from src.utils.utils import IGNORED_ZONE_TYPES
 from src.utils.sorting import sort_zones_reading_order
-
+from src.alto import ALTO_NS, ALTO_NS_PREFIX
 
 def normalize_box(box, width, height, scale=100):
     """
@@ -61,7 +61,7 @@ def calculate_iou(box1, box2):
     # Calculate IoU
     return intersection / union if union > 0 else 0.0
 
-def extract_lines_from_alto(file_path):
+def read_lines_geometry(file_path):
     """
     Parse ALTO XML file and extract line and region information.
     
@@ -186,8 +186,7 @@ def _add_line_to_element(parent_element, line, line_id=None, tag_id="LT1"):
         L'élément TextLine créé
     """
     # Créer l'élément TextLine
-    ns = 'http://www.loc.gov/standards/alto/ns-v4#'
-    line_element = ET.SubElement(parent_element, f"{{{ns}}}TextLine")
+    line_element = ET.SubElement(parent_element, f"{{{ALTO_NS}}}TextLine")
     
     # Ajouter l'ID
     if line_id is None and 'id' in line:
@@ -210,8 +209,8 @@ def _add_line_to_element(parent_element, line, line_id=None, tag_id="LT1"):
         line_element.set('HEIGHT', str(int(max_y - min_y)))
         
         # Ajouter Shape avec Polygon
-        shape = ET.SubElement(line_element, f"{{{ns}}}Shape")
-        polygon = ET.SubElement(shape, f"{{{ns}}}Polygon")
+        shape = ET.SubElement(line_element, f"{{{ALTO_NS}}}Shape")
+        polygon = ET.SubElement(shape, f"{{{ALTO_NS}}}Polygon")
         points = " ".join([f"{int(p[0])},{int(p[1])}" for p in boundary])
         polygon.set('POINTS', points)
     
@@ -231,12 +230,12 @@ def add_lines_to_alto(lines, output_path, alto_path, reading_order="dbscan"):
     """
     try:
         # Extraire les informations du fichier ALTO existant
-        image_file, _, regions = extract_lines_from_alto(alto_path)
+        image_file, _, regions = read_lines_geometry(alto_path)
         
         # Parser le fichier XML
         tree = ET.parse(alto_path)
         root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+        ns = ALTO_NS_PREFIX
         
         # Vérifier qu'il y a au moins un bloc de texte
         text_blocks = root.findall('.//alto:TextBlock', ns)

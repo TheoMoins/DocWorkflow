@@ -10,12 +10,6 @@ from PIL import Image
 from lxml import etree as ET
 import yaml
 
-from transformers import TrainerCallback
-
-from src.content.weighted_sampling import special_char_density
-from src.alto.alto_lines import extract_lines_from_alto
-from src.alto.alto_text import copy_alto_without_text
-
 Image.MAX_IMAGE_PIXELS = None
 
 
@@ -74,13 +68,17 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         if not data_path:
             raise ValueError("Training data path is required")
 
-        global_path = str(data_path.parent)
+        data_paths = data_path if isinstance(data_path, list) else [data_path]
+
+        global_path = str(data_paths[0].parent)
 
         print(f"Starting VLM continued pre-training with Unsloth")
         print(f"Model: {self.model_name}")
 
         print("Preparing line-level training data...")
-        train_samples = self._prepare_training_data_textonly(data_path)
+        train_samples = []
+        for src_path in data_paths:
+            train_samples.extend(self._prepare_training_data_textonly(src_path))
         #TODO: We are currently not using the validation samples I think    
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
@@ -179,7 +177,7 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         tokenizer.save_pretrained(model_save_path)
         print(f"Training complete! Model saved to {model_save_path}")
 
-        config_path = self._create_finetuned_config(model_save_path, global_path)
+        config_path = self._create_finetuned_config(model_save_path, global_path, 'VLMLineHTR')
         
         print(f"\nTo run prediction with fine-tuned model:")
         print(f"   docworkflow -c {config_path} predict -t htr -d test")

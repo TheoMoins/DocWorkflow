@@ -56,7 +56,7 @@ def test_kraken_line_score_no_files(mock_glob, kraken_line_config, temp_dir):
         task.score(str(temp_dir / "pred"), str(temp_dir / "gt"))
 
 
-@patch('src.tasks.line.kraken_line.extract_lines_from_alto')
+@patch('src.tasks.line.kraken_line.read_lines_geometry')
 @patch('src.tasks.line.kraken_line.glob.glob')
 @patch('src.tasks.line.kraken_line.Image.open')
 def test_kraken_line_score_missing_predictions(mock_image, mock_glob, 

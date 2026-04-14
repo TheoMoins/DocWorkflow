@@ -8,7 +8,7 @@ from pathlib import Path
 import gc
 import warnings
 
-from src.alto.alto_lines import extract_lines_from_alto, convert_lines_to_boxes
+from src.alto.alto_lines import read_lines_geometry, convert_lines_to_boxes
 
 
 class BaseLine(BaseTask):
@@ -67,12 +67,12 @@ class BaseLine(BaseTask):
         for pred_file, gt_file in tqdm(zip(pred_files, gt_files), 
                                        total=len(pred_files),
                                        desc="  Scoring", unit="page"):
-            image_path, gt_lines, _ = extract_lines_from_alto(gt_file)
+            image_path, gt_lines, _ = read_lines_geometry(gt_file)
             if not gt_lines:
                 print(f"  Warning: No lines in {Path(gt_file).name}")
                 continue
             
-            _, pred_lines, _ = extract_lines_from_alto(pred_file)
+            _, pred_lines, _ = read_lines_geometry(pred_file)
             if not pred_lines:
                 print(f"  Warning: No predictions in {Path(pred_file).name}")
                 continue
