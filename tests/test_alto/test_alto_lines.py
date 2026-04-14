@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from lxml import etree as ET
 from src.alto.alto_lines import (
-    extract_lines_from_alto,
+    read_lines_geometry,
     convert_lines_to_boxes,
     calculate_iou,
     normalize_box,
@@ -70,7 +70,7 @@ def sample_alto_with_lines(temp_dir, sample_image_path):
 
 def test_extract_lines_from_alto(sample_alto_with_lines, sample_image_path):
     """Teste l'extraction des lignes depuis un fichier ALTO."""
-    image_path, lines, regions = extract_lines_from_alto(str(sample_alto_with_lines))
+    image_path, lines, regions = read_lines_geometry(str(sample_alto_with_lines))
     
     assert image_path is not None
     assert len(lines) == 2
@@ -84,7 +84,7 @@ def test_extract_lines_from_alto(sample_alto_with_lines, sample_image_path):
 
 def test_convert_lines_to_boxes(sample_alto_with_lines):
     """Teste la conversion des lignes en boxes."""
-    _, lines, _ = extract_lines_from_alto(str(sample_alto_with_lines))
+    _, lines, _ = read_lines_geometry(str(sample_alto_with_lines))
     image_size = (640, 480)
     
     # Test ground truth format

@@ -18,7 +18,7 @@ from yaltai.models.krakn import segment as line_segment
 from src.tasks.line.base_line import BaseLine
 from src.utils.utils import IGNORED_ZONE_TYPES
 from src.utils.memory_monitor import check_memory_safe, force_garbage_collection, get_memory_usage_percent
-from src.alto.alto_lines import extract_lines_from_alto, convert_lines_to_boxes, add_lines_to_alto
+from src.alto.alto_lines import read_lines_geometry, add_lines_to_alto
 
 class KrakenLineTask(BaseLine):
     """
@@ -72,7 +72,7 @@ class KrakenLineTask(BaseLine):
         
         def process_image():
             try:
-                _, _, all_regions = extract_lines_from_alto(file_name)
+                _, _, all_regions = read_lines_geometry(file_name)
 
                 # Only keep mainzones
                 alto_regions = {
@@ -156,7 +156,7 @@ class KrakenLineTask(BaseLine):
                 # Check if ALTO file exists and contains layout regions
                 has_layout = False
                 if os.path.exists(alto_path):
-                    _, _, regions = extract_lines_from_alto(alto_path)
+                    _, _, regions = read_lines_geometry(alto_path)
                     has_layout = bool(regions)
                 
                 if not has_layout:

@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, Optional
 from PIL import Image
 import yaml
 
-from src.alto.alto_lines import extract_lines_from_alto
+from src.alto.alto_lines import read_lines_geometry
 
 
 # Mapping des types de lignes vers des class_id
@@ -224,7 +224,7 @@ def find_image_for_xml(xml_path: str) -> Optional[str]:
     """
     # Extraire info depuis ALTO
     try:
-        image_path, _, _ = extract_lines_from_alto(xml_path)
+        image_path, _, _ = read_lines_geometry(xml_path)
         if image_path and os.path.exists(image_path):
             return image_path
     except Exception:
@@ -276,7 +276,7 @@ def process_split(xml_files: List[str], output_dir: Path, split_name: str,
     for xml_path in xml_files:
         try:
             # Extraire lignes
-            _, lines, _ = extract_lines_from_alto(xml_path)
+            _, lines, _ = read_lines_geometry(xml_path)
             
             if not lines:
                 continue

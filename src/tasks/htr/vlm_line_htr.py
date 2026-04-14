@@ -16,8 +16,9 @@ from transformers import TrainerCallback
 
 from src.tasks.htr.prompt_convention import build_conventions_block, load_conventions
 from src.content.weighted_sampling import special_char_density
-from src.alto.alto_lines import extract_lines_from_alto
-from src.alto.alto_text import copy_alto_without_text
+from src.alto import ALTO_NS, ALTO_NS_PREFIX
+from src.alto.alto_lines import read_lines_geometry
+from src.alto.alto_text import copy_alto_without_text, write_text_to_alto
 from src.utils.lazy_dataset import LazyLineDataset as _LazyLineDataset
 
 Image.MAX_IMAGE_PIXELS = None
@@ -254,7 +255,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                 else:
                     self.prompt = prompt_tpl.replace('{conventions}', '').strip()
 
-                image_path, lines, _ = extract_lines_from_alto(alto_path)
+                image_path, lines, _ = read_lines_geometry(alto_path)
                 
                 if not os.path.exists(image_path):
                     print(f"  Warning: Image {image_path} not found")
@@ -296,7 +297,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                 if not os.path.exists(output_path):
                     copy_alto_without_text(alto_path, output_path)
                 
-                self._add_text_to_alto(output_path, recognized_texts, output_path)
+                write_text_to_alto(output_path, recognized_texts, output_path)
                 
                 results.append({'file': alto_path, 'texts': recognized_texts})
                 
@@ -321,28 +322,6 @@ class VLMLineHTRTask(BaseVLMHTR):
         
         return results
     
-    def _add_text_to_alto(self, alto_path, texts, output_path):
-        """Add recognized text to ALTO XML."""
-        tree = ET.parse(alto_path)
-        root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-        
-        text_lines = root.findall('.//alto:TextLine', ns)
-        
-        for line, text_data in zip(text_lines, texts):
-            if text_data and 'text' in text_data and text_data['text']:
-                # Remove existing String elements
-                for string_elem in line.findall('alto:String', ns):
-                    line.remove(string_elem)
-                
-                # Add new String
-                string_elem = ET.SubElement(line, f"{{{ns['alto']}}}String")
-                string_elem.set('CONTENT', text_data['text'])
-                string_elem.set('WC', str(text_data.get('confidence', 1.0)))
-        
-        tree.write(output_path, pretty_print=True, 
-                  xml_declaration=True, encoding="UTF-8")
-        
 
     def _prepare_training_data_lines(self, data_path):
         """
@@ -371,19 +350,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                 skipped += 1
                 continue
 
-            # for line in extract_lines_with_bbox_from_alto(xml_path):
-            #     left  = line['hpos']
-            #     top   = line['vpos']
-            #     right = line['hpos'] + line['width']
-            #     bottom = line['vpos'] + line['height']
-            #     if right <= left or bottom <= top:
-            #         continue
-            #     samples.append({
-            #         "page_image_path": image_path,
-            #         "text": line['text'],
-            #         "bbox": (left, top, right, bottom),
-            #     })
-            _, lines, _ = extract_lines_from_alto(xml_path)
+            _, lines, _ = read_lines_geometry(xml_path)
             for line in lines:
                 samples.append({
                     "page_image_path": image_path,
