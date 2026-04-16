@@ -387,6 +387,59 @@ class BaseVLMHTR(BaseHTR):
         
         return output_text.strip()
     
+    
+    def _create_finetuned_config(self, output_dir, global_path, task_type: str):
+        """
+        Create a configuration file for the fine-tuned model.
+
+        Args:
+            output_dir: Directory where the model was saved
+            global_path: Root data path (parent of train/valid/test)
+            task_type: Value for tasks.htr.type in the YAML config
+
+        Returns:
+            Path to the created config file
+        """
+        import yaml
+        from pathlib import Path
+
+        config = {
+            'run_name': f"{self.name}_finetuned",
+            'output_dir': 'results',
+            'device': self.config.get('device', 'cuda'),
+            'use_wandb': self.config.get('use_wandb', False),
+            'wandb_project': self.config.get('wandb_project', 'HTR-comparison'),
+            'data': {
+                'train': global_path + '/train',
+                'valid': global_path + '/valid',
+                'test': global_path + '/test',
+            },
+            'tasks': {
+                'htr': {
+                    'type': task_type,
+                    'config': {
+                        'model_name': output_dir,
+                        'base_model': self.model_name,
+                        'use_lora_adapter': True,
+                        'max_new_tokens': self.max_new_tokens,
+                        'batch_size': self.batch_size,
+                        'prompt': self.prompt,
+                        **{k: v for k, v in self.hyperparams.items()
+                        if k in ['use_dtype_param', 'device_map', 'attn_implementation', 'model_class']
+                        and v is not None},
+                    },
+                }
+            },
+        }
+
+        model_config_path = Path(output_dir) / 'inference_config.yml'
+        with open(model_config_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        print(f"\n Inference config saved to: {model_config_path}")
+        return model_config_path
+
+
     @abstractmethod
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """Must be implemented by subclasses (page vs line level)."""
