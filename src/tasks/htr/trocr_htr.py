@@ -12,8 +12,8 @@ from transformers import TrOCRProcessor, VisionEncoderDecoderModel, GenerationCo
 
 from IPython.display import display
 
-from src.alto.alto_lines import extract_lines_from_alto
-
+from src.alto.alto_lines import read_lines_geometry
+from src.alto.alto_text import write_text_to_alto
 
 class TrOCRHTRTask(BaseHTR):
     """
@@ -148,7 +148,7 @@ class TrOCRHTRTask(BaseHTR):
         
         for alto_path in tqdm(file_paths, desc="  Recognizing text", unit="page"):
             try:
-                image_path, lines, _ = extract_lines_from_alto(alto_path)
+                image_path, lines, _ = read_lines_geometry(alto_path)
                 
                 if not os.path.exists(image_path):
                     print(f"  Warning: Image {image_path} not found")
@@ -193,7 +193,7 @@ class TrOCRHTRTask(BaseHTR):
                     shutil.copy2(alto_path, output_path)
                 
                 # Add recognized text to ALTO
-                self._add_text_to_alto(output_path, recognized_texts, output_path)
+                write_text_to_alto(output_path, recognized_texts, output_path)
                 
                 results.append({
                     'file': alto_path,
@@ -215,31 +215,3 @@ class TrOCRHTRTask(BaseHTR):
         
         return results
     
-    def _add_text_to_alto(self, alto_path, texts, output_path):
-        """
-        Add recognized text to ALTO XML file.
-        
-        Args:
-            alto_path: Input ALTO path
-            texts: List of recognized text dicts
-            output_path: Output ALTO path
-        """
-        tree = ET.parse(alto_path)
-        root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-        
-        text_lines = root.findall('.//alto:TextLine', ns)
-        
-        for line, text_data in zip(text_lines, texts):
-            if text_data and 'text' in text_data and text_data['text']:
-                # Remove existing String elements
-                for string_elem in line.findall('alto:String', ns):
-                    line.remove(string_elem)
-                
-                # Add new String element
-                string_elem = ET.SubElement(line, f"{{{ns['alto']}}}String")
-                string_elem.set('CONTENT', text_data['text'])
-                string_elem.set('WC', str(text_data.get('confidence', 1.0)))
-        
-        tree.write(output_path, pretty_print=True, 
-                  xml_declaration=True, encoding="UTF-8")

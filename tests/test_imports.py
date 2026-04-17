@@ -119,7 +119,7 @@ def test_docworkflow_imports():
         from src.tasks.line.kraken_line import KrakenLineTask
         from src.tasks.htr.kraken_htr import KrakenHTRTask
         from src.alto.alto_zones import extract_zones_from_alto
-        from src.alto.alto_lines import extract_lines_from_alto
+        from src.alto.alto_lines import read_lines_geometry
         from src.alto.yolalto import create_alto_xml
         from src.cli.config import Config
         from src.utils.visualisation import DocumentVisualizer

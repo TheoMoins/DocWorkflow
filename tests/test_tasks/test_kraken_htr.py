@@ -153,30 +153,3 @@ def test_kraken_htr_predict_no_files(mock_glob, mock_exists, mock_load,
     with pytest.raises(ValueError, match="No ALTO XML files found"):
         task.predict(str(temp_dir), str(temp_dir / "output"))
 
-
-def test_kraken_htr_add_text_to_alto(kraken_htr_config, sample_alto_with_text, 
-                                     temp_dir):
-    """Teste l'ajout de texte à un fichier ALTO."""
-    task = KrakenHTRTask(kraken_htr_config)
-    
-    texts = [
-        {'text': 'Updated text', 'confidence': 0.98}
-    ]
-    
-    output_path = temp_dir / "output.xml"
-    
-    task._add_text_to_alto(
-        str(sample_alto_with_text),
-        texts,
-        str(output_path)
-    )
-    
-    assert output_path.exists()
-    
-    # Vérifier que le texte a été ajouté
-    tree = ET.parse(str(output_path))
-    ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-    strings = tree.findall('.//alto:String', ns)
-    
-    assert len(strings) == 1
-    assert strings[0].get('CONTENT') == 'Updated text'

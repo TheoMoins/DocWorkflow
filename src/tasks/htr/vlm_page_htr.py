@@ -8,9 +8,8 @@ from tqdm import tqdm
 from PIL import Image
 from pathlib import Path
 from lxml import etree as ET
-import yaml
 
-from src.alto.alto_text import copy_and_fix_alto_namespaces
+from src.alto.alto_text import copy_and_fix_alto_namespaces, read_document_text, create_minimal_alto, split_text_into_alto_lines
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -26,204 +25,6 @@ class VLMPageHTRTask(BaseVLMHTR):
         super().__init__(config)
         self.name = "HTR_VLM_Page_Level"
     
-    def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
-        """
-        Process images for page-level VLM HTR.
-        
-        Args:
-            file_paths: List of image paths
-            source_dir: Source directory
-            output_dir: Output directory
-            save_image: Whether to copy images
-            
-        Returns:
-            List of results
-        """
-        print(f"  Processing {len(file_paths)} images...")
-        
-        results = []
-        
-        for image_path in tqdm(file_paths, desc="  Recognizing text", unit="image"):
-            try:
-                # Recognize full page
-                messages = self._prepare_messages(Image.open(image_path).convert("RGB"))
-                text = self._generate_from_messages(messages)
-                
-                # Create/update ALTO
-                base_name = Path(image_path).stem
-                output_path = os.path.join(output_dir, f"{base_name}.xml")
-                
-                existing_alto = os.path.join(source_dir, f"{base_name}.xml")
-                if os.path.exists(existing_alto):
-                    copy_and_fix_alto_namespaces(existing_alto, output_path)
-                else:
-                    self._create_simple_alto_with_text(image_path, text, output_path)
-                
-                # Split into lines
-                self._split_output_into_lines(output_path, text, image_path)
-                
-                results.append({'file': image_path, 'text': text})
-                
-                if save_image:
-                    image_output = os.path.join(output_dir, os.path.basename(image_path))
-                    if not os.path.exists(image_output):
-                        shutil.copy2(image_path, image_output)
-                
-                # Memory cleanup
-                if len(results) % 10 == 0:
-                    gc.collect()
-                    if self.device == 'cuda':
-                        torch.cuda.empty_cache()
-                
-            except Exception as e:
-                print(f"  Error processing {image_path}: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        return results
-    
-    def _split_output_into_lines(self, alto_path, text, image_path):
-        """Split VLM output into TextLines (same as before)."""
-        from PIL import Image
-        
-        lines_text = [line.strip() for line in text.split('\n') if line.strip()]
-        
-        if not lines_text:
-            return alto_path
-        
-        tree = ET.parse(alto_path)
-        root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-        
-        with Image.open(image_path) as img:
-            width, height = img.size
-        
-        existing_lines = root.findall('.//alto:TextLine', ns)
-        
-        if existing_lines and len(existing_lines) == len(lines_text):
-            # Perfect match
-            for line_elem, line_text in zip(existing_lines, lines_text):
-                for string_elem in line_elem.findall('alto:String', ns):
-                    line_elem.remove(string_elem)
-                
-                string_elem = ET.SubElement(line_elem, ET.QName(ns['alto'], 'String'))
-                string_elem.set('CONTENT', line_text)
-                string_elem.set('WC', '1.0')
-        else:
-            # Create new structure
-            text_blocks = root.findall('.//alto:TextBlock', ns)
-            
-            if text_blocks:
-                text_block = text_blocks[0]
-                for extra_block in text_blocks[1:]:
-                    extra_block.getparent().remove(extra_block)
-                
-                for line_elem in text_block.findall('alto:TextLine', ns):
-                    text_block.remove(line_elem)
-                
-                line_height = height // max(len(lines_text), 1)
-                margin = 10
-                
-                for idx, line_text in enumerate(lines_text):
-                    y_pos = idx * line_height + margin
-                    line_elem = ET.SubElement(text_block, ET.QName(ns['alto'], 'TextLine'))
-                    line_elem.set('ID', f'line_{idx}')
-                    line_elem.set('HPOS', str(margin))
-                    line_elem.set('VPOS', str(y_pos))
-                    line_elem.set('WIDTH', str(width - 2 * margin))
-                    line_elem.set('HEIGHT', str(line_height - margin))
-                    
-                    baseline_y = y_pos + line_height // 2
-                    line_elem.set('BASELINE', f"{margin} {baseline_y} {width - margin} {baseline_y}")
-                    
-                    string_elem = ET.SubElement(line_elem, ET.QName(ns['alto'], 'String'))
-                    string_elem.set('CONTENT', line_text)
-                    string_elem.set('WC', '1.0')
-        
-        def indent_xml(elem, level=0):
-            i = "\n" + level*"  "
-            if len(elem):
-                if not elem.text or not elem.text.strip():
-                    elem.text = i + "  "
-                if not elem.tail or not elem.tail.strip():
-                    elem.tail = i
-                for child in elem:
-                    indent_xml(child, level+1)
-                if not child.tail or not child.tail.strip():
-                    child.tail = i
-            else:
-                if level and (not elem.tail or not elem.tail.strip()):
-                    elem.tail = i
-        
-        indent_xml(root)
-        ET.cleanup_namespaces(root)
-        tree.write(alto_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
-        return alto_path
-
-
-
-    def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
-        """
-        Process a batch of images for VLM HTR.
-        
-        Args:
-            file_paths: List of image paths to process
-            source_dir: Source directory (for finding ALTO if exists)
-            output_dir: Directory to save ALTO XML files
-            save_image: Whether to copy images to output
-            
-        Returns:
-            List of prediction results
-        """
-        print(f"  Processing {len(file_paths)} images...")
-        
-        results = []
-        
-        for image_path in tqdm(file_paths, desc="  Recognizing text", unit="image"):
-            try:
-                # Recognize text
-                text = self._recognize_single_image(image_path)
-                
-                # Create basic ALTO file
-                base_name = Path(image_path).stem
-                output_path = os.path.join(output_dir, f"{base_name}.xml")
-                
-                # Check if there's an existing ALTO with layout/lines
-                existing_alto = os.path.join(source_dir, f"{base_name}.xml")
-                if os.path.exists(existing_alto):
-                    # Copy existing structure AND clean namespaces
-                    copy_and_fix_alto_namespaces(existing_alto, output_path)
-                else:
-                    # Create simple ALTO
-                    self._create_simple_alto_with_text(image_path, text, output_path)
-                
-                # Split VLM output into lines
-                self._split_output_into_lines(output_path, text, image_path)
-                
-                results.append({
-                    'file': image_path,
-                    'text': text
-                })
-                
-                # Copy image if requested
-                if save_image:
-                    image_output = os.path.join(output_dir, os.path.basename(image_path))
-                    if not os.path.exists(image_output):
-                        shutil.copy2(image_path, image_output)
-                
-                # Clean up memory periodically
-                if len(results) % 10 == 0:
-                    gc.collect()
-                    if self.device == 'cuda':
-                        torch.cuda.empty_cache()
-                
-            except Exception as e:
-                print(f"  Error processing {image_path}: {e}")
-                import traceback
-                traceback.print_exc()
-                continue
-        
-        return results
     
 
     def _recognize_single_image(self, image):
@@ -263,10 +64,10 @@ class VLMPageHTRTask(BaseVLMHTR):
                     copy_and_fix_alto_namespaces(existing_alto, output_path)
                 else:
                     # Create simple ALTO
-                    self._create_simple_alto_with_text(image_path, text, output_path)
+                    create_minimal_alto(image_path, text, output_path)
                 
                 # Split VLM output into lines
-                self._split_output_into_lines(output_path, text, image_path)
+                split_text_into_alto_lines(output_path, text, image_path)
                 
                 results.append({
                     'file': image_path,
@@ -473,7 +274,7 @@ class VLMPageHTRTask(BaseVLMHTR):
         
         for xml_path in xml_files:
             # Extract text
-            text = self._extract_text_from_alto(xml_path)
+            text = read_document_text(xml_path)
             if not text or not text.strip():
                 continue
             

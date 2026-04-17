@@ -3,7 +3,6 @@ from abc import abstractmethod
 import os
 import glob
 from tqdm import tqdm
-from PIL import Image
 from pathlib import Path
 from lxml import etree as ET
 from src.tasks.htr.postprocessing import clean_alto_file
@@ -11,7 +10,7 @@ from src.tasks.htr.postprocessing import clean_alto_file
 from jiwer import cer, wer
 
 from src.utils.metrics import calculate_htr_metrics
-from src.alto.alto_text import extract_text_from_alto, extract_lines_text_from_alto
+from src.alto.alto_text import read_document_text, read_lines_text, deduplicate_alto_consecutive_lines
 
 class BaseHTR(BaseTask):
     """
@@ -40,116 +39,7 @@ class BaseHTR(BaseTask):
         """
         print(f"Training for {self.name} is not yet implemented.")
     
-    
-    def _create_simple_alto_with_text(self, image_path, text, output_path):
-        """
-        Create a simple ALTO XML file with recognized text.
-        Creates one TextBlock and one TextLine covering the entire image.
-        
-        Args:
-            image_path: Path to the source image
-            text: Recognized text
-            output_path: Where to save the ALTO XML
-        """
-        ns = "http://www.loc.gov/standards/alto/ns-v4#"
-        NSMAP = {
-            None: ns,
-            "xsi": "http://www.w3.org/2001/XMLSchema-instance"
-        }
-        
-        # Get image dimensions
-        with Image.open(image_path) as img:
-            width, height = img.size
-        
-        # Create ALTO structure
-        alto = ET.Element("alto", nsmap=NSMAP, attrib={
-            "{http://www.w3.org/2001/XMLSchema-instance}schemaLocation":
-                f"{ns} http://www.loc.gov/standards/alto/v4/alto-4-2.xsd"
-        })
-        
-        # Description
-        description = ET.SubElement(alto, "Description")
-        ET.SubElement(description, "MeasurementUnit").text = "pixel"
-        source_info = ET.SubElement(description, "sourceImageInformation")
-        ET.SubElement(source_info, "fileName").text = os.path.basename(image_path)
-        
-        # Processing
-        processing = ET.SubElement(description, "OCRProcessing")
-        processing_step = ET.SubElement(processing, "ocrProcessingStep")
-        software = ET.SubElement(processing_step, "processingSoftware")
-        ET.SubElement(software, "softwareName").text = self.name
-        
-        # Tags
-        tags = ET.SubElement(alto, "Tags")
-        ET.SubElement(tags, "OtherTag", ID="BT1", LABEL="MainZone", 
-                     DESCRIPTION="block type MainZone")
-        ET.SubElement(tags, "OtherTag", ID="LT1", LABEL="DefaultLine",
-                     DESCRIPTION="line type DefaultLine")
-        
-        # Layout
-        layout = ET.SubElement(alto, "Layout")
-        page = ET.SubElement(layout, "Page", ID="page1", PHYSICAL_IMG_NR="1",
-                           HEIGHT=str(height), WIDTH=str(width))
-        print_space = ET.SubElement(page, "PrintSpace", 
-                                   HEIGHT=str(height), WIDTH=str(width),
-                                   VPOS="0", HPOS="0")
-        
-        # Single TextBlock covering the whole image
-        text_block = ET.SubElement(print_space, "TextBlock", ID="block_0",
-                                  HPOS="0", VPOS="0",
-                                  WIDTH=str(width), HEIGHT=str(height),
-                                  TAGREFS="BT1")
-        
-        # Single TextLine with the recognized text
-        margin = 5
-        text_line = ET.SubElement(text_block, "TextLine", ID="line_0",
-                                HPOS=str(margin), VPOS=str(margin),
-                                WIDTH=str(width - 2 * margin), 
-                                HEIGHT=str(height - 2 * margin),
-                                TAGREFS="LT1")
-        
-        # Baseline
-        baseline_y = height // 2
-        text_line.set('BASELINE', f"{margin} {baseline_y} {width - margin} {baseline_y}")
-        
-        # Shape
-        shape = ET.SubElement(text_line, "Shape")
-        points = f"{margin} {margin} {width - margin} {margin} {width - margin} {height - margin} {margin} {height - margin}"
-        ET.SubElement(shape, "Polygon", POINTS=points)
-        
-        # String with recognized text
-        if text:
-            string_elem = ET.SubElement(text_line, "String")
-            string_elem.set('CONTENT', text)
-            string_elem.set('WC', '1.0')
-        
-        # Save
-        tree = ET.ElementTree(alto)
-        tree.write(output_path, pretty_print=True, 
-                  xml_declaration=True, encoding="UTF-8")
-    
 
-    def _deduplicate_alto_consecutive_lines(self, alto_path):
-        """
-        Remove consecutive duplicate TextLines from an ALTO XML file in-place.
-        Targets hallucination artifacts where HTR models repeat the same line.
-        """
-        tree = ET.parse(alto_path)
-        root = tree.getroot()
-        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-
-        for text_block in root.findall('.//alto:TextBlock', ns):
-            lines = text_block.findall('alto:TextLine', ns)
-            prev_text = None
-            for line in lines:
-                strings = line.findall('.//alto:String', ns)
-                text = ' '.join(s.get('CONTENT', '') for s in strings).strip()
-                if text and text == prev_text:
-                    text_block.remove(line)
-                else:
-                    prev_text = text
-
-        tree.write(alto_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
 
     def predict(self, data_path, output_dir, save_image=True, **kwargs):
         """
@@ -160,7 +50,7 @@ class BaseHTR(BaseTask):
         # Deduplicate consecutive lines in all produced ALTO files
         for alto_path in glob.glob(str(Path(output_dir) / '**' / '*.xml'), recursive=True):
             try:
-                self._deduplicate_alto_consecutive_lines(alto_path)
+                deduplicate_alto_consecutive_lines(alto_path)
             except Exception as e:
                 print(f"  Warning: deduplication failed on {alto_path}: {e}")
 
@@ -181,8 +71,8 @@ class BaseHTR(BaseTask):
         
         for pred_file, gt_file in tqdm(zip(pred_files, gt_files), total=len(pred_files), desc="  Scoring", unit="page"):
             try:
-                gt_lines = extract_lines_text_from_alto(gt_file)
-                pred_lines = extract_lines_text_from_alto(pred_file)
+                gt_lines = read_lines_text(gt_file)
+                pred_lines = read_lines_text(pred_file)
                 
                 page_gt_texts = []
                 page_pred_texts = []
@@ -209,8 +99,8 @@ class BaseHTR(BaseTask):
                             page_gt_texts.append(full_gt)
                             page_pred_texts.append(full_pred)
                 else:
-                    gt_text = extract_text_from_alto(gt_file)
-                    pred_text = extract_text_from_alto(pred_file)
+                    gt_text = read_document_text(gt_file)
+                    pred_text = read_document_text(pred_file)
                     page_stem = Path(gt_file).stem
                     for i, l in enumerate(gt_lines):
                         if l['text'].strip():

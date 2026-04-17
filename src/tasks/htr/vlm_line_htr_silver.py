@@ -10,12 +10,6 @@ from PIL import Image
 from lxml import etree as ET
 import yaml
 
-from transformers import TrainerCallback
-
-from src.content.weighted_sampling import special_char_density
-from src.alto.alto_lines import extract_lines_from_alto
-from src.alto.alto_text import copy_alto_without_text
-
 Image.MAX_IMAGE_PIXELS = None
 
 
