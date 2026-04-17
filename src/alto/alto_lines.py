@@ -74,7 +74,10 @@ def extract_lines_from_alto(file_path):
         - lines: List of line dictionaries with boundaries, baselines and region info
         - regions: Dictionary of regions by type
     """
-    parsed = XMLPage(file_path)
+    try:
+    	parsed = XMLPage(file_path)
+    except:
+        return ('',[],{})
     image_path = parsed.imagename
     
     # Extract regions from the ALTO file
