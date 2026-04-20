@@ -277,7 +277,9 @@ class VLMLineHTRTask(BaseVLMHTR):
                 
                 # Extract all line images
                 line_images = []
+                line_ids = []
                 for line in lines:
+                    line_ids.append(line['id'])
                     if line.get('boundary'):
                         line_img = self._extract_line_image(page_image, line['boundary'])
                         line_images.append(line_img)
@@ -291,13 +293,18 @@ class VLMLineHTRTask(BaseVLMHTR):
                     batch_results = self._recognize_batch(batch)
                     recognized_texts.extend(batch_results)
                 
+                recognized_texts_by_id = {
+                    line_id: result
+                    for line_id, result in zip(line_ids, recognized_texts)
+                }
+                
                 # Save to ALTO
                 output_path = os.path.join(output_dir, os.path.basename(alto_path))
                 
                 if not os.path.exists(output_path):
                     copy_alto_without_text(alto_path, output_path)
                 
-                write_text_to_alto(output_path, recognized_texts, output_path)
+                write_text_to_alto(output_path, recognized_texts_by_id, output_path)
                 
                 results.append({'file': alto_path, 'texts': recognized_texts})
                 
@@ -350,8 +357,12 @@ class VLMLineHTRTask(BaseVLMHTR):
                 skipped += 1
                 continue
 
+            skipped_empty_gt = 0
             _, lines, _ = read_lines_geometry(xml_path)
             for line in lines:
+                if not line.get('text', '').strip():
+                    skipped_empty_gt += 1
+                    continue
                 samples.append({
                     "page_image_path": image_path,
                     "text": line['text'],
