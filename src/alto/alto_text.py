@@ -165,14 +165,15 @@ def copy_alto_without_text(src_path, dst_path):
     tree.write(dst_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
 
 
-def write_text_to_alto(alto_path: str, texts: list, output_path: str) -> None:
+def write_text_to_alto(alto_path: str, texts, output_path: str) -> None:
     """
     Write recognized text into an existing ALTO XML file.
 
     Args:
         alto_path: Path to the input ALTO file (with TextLine geometry)
-        texts: List of dicts with 'text' and optional 'confidence' keys,
-               one per TextLine in document order
+        texts: Either:
+               - dict {line_id: {'text': ..., 'confidence': ...}} (recommended, ID-safe)
+               - list of dicts in document order (legacy, positional — unsafe if lines were filtered)
         output_path: Path to save the modified ALTO
     """
     tree = ET.parse(alto_path)
@@ -180,13 +181,24 @@ def write_text_to_alto(alto_path: str, texts: list, output_path: str) -> None:
 
     text_lines = root.findall('.//alto:TextLine', ALTO_NS_PREFIX)
 
-    for line, text_data in zip(text_lines, texts):
-        if text_data and text_data.get('text'):
-            for string_elem in line.findall('alto:String', ALTO_NS_PREFIX):
-                line.remove(string_elem)
-            string_elem = ET.SubElement(line, ET.QName(ALTO_NS, 'String'))
-            string_elem.set('CONTENT', text_data['text'])
-            string_elem.set('WC', str(text_data.get('confidence', 1.0)))
+    if isinstance(texts, dict):
+        for line in text_lines:
+            line_id = line.get('ID', '')
+            text_data = texts.get(line_id)
+            if text_data and text_data.get('text'):
+                for string_elem in line.findall('alto:String', ALTO_NS_PREFIX):
+                    line.remove(string_elem)
+                string_elem = ET.SubElement(line, ET.QName(ALTO_NS, 'String'))
+                string_elem.set('CONTENT', text_data['text'])
+                string_elem.set('WC', str(text_data.get('confidence', 1.0)))
+    else:
+        for line, text_data in zip(text_lines, texts):
+            if text_data and text_data.get('text'):
+                for string_elem in line.findall('alto:String', ALTO_NS_PREFIX):
+                    line.remove(string_elem)
+                string_elem = ET.SubElement(line, ET.QName(ALTO_NS, 'String'))
+                string_elem.set('CONTENT', text_data['text'])
+                string_elem.set('WC', str(text_data.get('confidence', 1.0)))
 
     tree.write(output_path, pretty_print=True, xml_declaration=True, encoding="UTF-8")
 

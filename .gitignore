@@ -1,6 +1,7 @@
 /runs
 /old
 /results
+/jz_results
 
 /wandb/
 wandb_api_key*
