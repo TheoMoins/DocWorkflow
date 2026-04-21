@@ -31,5 +31,5 @@ tasks:
       dataset_num_proc: 4
       prompt: >
         Transcribe the handwritten text in this line image.
-        Do not translate or modernize the text.
-        Output only the transcribed text.
+        {conventions}
+        Output ONLY the transcription.
