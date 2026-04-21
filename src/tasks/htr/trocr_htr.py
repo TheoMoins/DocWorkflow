@@ -168,36 +168,34 @@ class TrOCRHTRTask(BaseHTR):
                 # Load page image
                 page_image = Image.open(image_path).convert("RGB")
                 
-                # Recognize each line
-                recognized_texts = []
+                # Recognize each line, tracking IDs
+                recognized_texts_by_id = {}
                 for line in lines:
+                    line_id = line['id']
                     if not line.get('boundary'):
-                        recognized_texts.append({'text': '', 'confidence': 0.0})
+                        recognized_texts_by_id[line_id] = {'text': '', 'confidence': 0.0}
                         continue
                     
-                    # Extract line image
                     line_image = self._extract_line_image(page_image, line['boundary'])
-                    
+
                     if line_image is None:
-                        recognized_texts.append({'text': '', 'confidence': 0.0})
+                        recognized_texts_by_id[line_id] = {'text': '', 'confidence': 0.0}
                         continue
                     
-                    # Recognize text
                     result = self._recognize_line(line_image)
-                    recognized_texts.append(result)
+                    recognized_texts_by_id[line_id] = result
                 
                 # Create output ALTO
                 output_path = os.path.join(output_dir, os.path.basename(alto_path))
-                
+
                 if not os.path.exists(output_path):
                     shutil.copy2(alto_path, output_path)
-                
-                # Add recognized text to ALTO
-                write_text_to_alto(output_path, recognized_texts, output_path)
+
+                write_text_to_alto(output_path, recognized_texts_by_id, output_path)
                 
                 results.append({
                     'file': alto_path,
-                    'texts': recognized_texts
+                    'texts': recognized_texts_by_id
                 })
                 
                 # Copy image if requested

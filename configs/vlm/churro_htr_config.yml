@@ -6,9 +6,9 @@ wandb_project: "HTR-comparison"
 
 
 data:
-  train: "../data/HTRomance-french/data/train"
-  valid: "../data/HTRomance-french/data/valid"
-  test: "../data/HTRomance-french/data/test"
+  train: "../data/ICDAR_Competition/train"
+  valid: "../data/ICDAR_Competition/valid"
+  test: "../data/ICDAR_Competition/test"
 
 tasks:
   htr:

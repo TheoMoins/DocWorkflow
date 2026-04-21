@@ -68,17 +68,17 @@ class VLMLineHTRTaskSilver(VLMLineHTRTask):
         if not data_path:
             raise ValueError("Training data path is required")
 
-        data_paths = data_path if isinstance(data_path, list) else [data_path]
+        #data_paths = data_path if isinstance(data_path, list) else [data_path]
 
-        global_path = str(data_paths[0].parent)
+        global_path = str(data_path.parent)
 
         print(f"Starting VLM continued pre-training with Unsloth")
         print(f"Model: {self.model_name}")
 
         print("Preparing line-level training data...")
-        train_samples = []
-        for src_path in data_paths:
-            train_samples.extend(self._prepare_training_data_textonly(src_path))
+        #train_samples = []
+        #for src_path in data_paths:
+        train_samples = self._prepare_training_data_textonly(data_path)
         #TODO: We are currently not using the validation samples I think    
         valid_samples = self._prepare_training_data_lines(global_path + "/valid")
 
