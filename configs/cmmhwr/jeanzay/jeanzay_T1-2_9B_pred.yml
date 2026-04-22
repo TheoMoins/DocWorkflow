@@ -1,4 +1,4 @@
-run_name: "Qwen3.5_4B_linelvl_goldtrain_all"
+run_name: "T1-2_9B_pred"
 output_dir: "results"
 device: "cuda"
 use_wandb: true
@@ -8,9 +8,7 @@ save_image: true
 data:
   train:
     - "../data/ICDAR_Competition/platinum_romance"
-    - "../data/ICDAR_Competition/gold_romance"
     - "../data/ICDAR_Competition/platinum_nonromance"
-    - "../data/ICDAR_Competition/gold_nonromance"
   valid: "../data/ICDAR_Competition/valid"
   test: "../data/ICDAR_Competition/test"
 
@@ -19,10 +17,12 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'Qwen/Qwen3.5-4B'
+      model_name: 'outputs_T1-2_9B/Qwen3.5-9B-line-finetuned-line-finetuned'
+      base_model: 'outputs_T1-2_9B/merged_base'
+      model_dir: 'outputs_T1-2_9B/'
       device_map: "auto"
       max_new_tokens: 128
-      line_batch_size: 8
+      line_batch_size: 16
       max_pixels: 401408
       special_char_weighting: 0
 
@@ -33,8 +33,8 @@ tasks:
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 16
-      gradient_accumulation_steps: 2
+      train_batch_size: 32
+      gradient_accumulation_steps: 1
       warmup_ratio: 0.01
       epochs: 3
 

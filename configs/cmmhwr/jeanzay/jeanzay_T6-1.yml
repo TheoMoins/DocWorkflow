@@ -1,4 +1,4 @@
-run_name: "Qwen4B_linelvl_romancesilver"
+run_name: "T6-1"
 output_dir: "results"
 device: "cuda"
 use_wandb: false
@@ -6,36 +6,40 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  train: "./silver_romance"
+  train: "../data/ICDAR_Competition/silver"
+  valid: "../data/ICDAR_Competition/valid"
+  test: "../data/ICDAR_Competition/test"
 
 tasks:
   htr:
     type: VLMSILVERHTR
     config:
       use_metadata: true
-      model_name: "Qwen/Qwen3.5-4B"
+      model_name: '/lustre/fsmisc/dataset/HuggingFace_Models/Qwen/Qwen3.5-4B'
+      model_dir: 'outputs_T6-1/'
       device_map: "auto"
       max_new_tokens: 128
-      line_batch_size: 8
-      max_pixels: 200704
+      line_batch_size: 16
+      max_pixels: 401408
+      special_char_weighting: 0
 
       # LoRA
       use_4bit: false
-      use_8bit: true
+      use_8bit: false
       lora_r: 64
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 8
-      gradient_accumulation_steps: 2
+      train_batch_size: 32
+      gradient_accumulation_steps: 1
       warmup_ratio: 0.01
-      epochs: 1
+      epochs: 2
 
       # lr 
       learning_rate: 5.0e-5
       weight_decay: 0.02
       dataset_num_proc: 4
-      prompt: >
+      prompt_template: >
         Transcribe the handwritten text in this line image.
-        Keep abbreviations, do not translate or modernize the text.
-        Output ONLY the transcription. No explanation, no punctuation added, no modernization.
+        {conventions}
+        Output ONLY the transcription.

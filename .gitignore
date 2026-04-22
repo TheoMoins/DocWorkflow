@@ -2,11 +2,14 @@
 /old
 /results
 /jz_results
+/unsloth_compiled_cache
 
 /wandb/
 wandb_api_key*
 *.pyc
 .ipynb_checkpoints
+
+.idea
 
 configs/pipeline/*
 

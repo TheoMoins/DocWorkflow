@@ -1,40 +1,45 @@
-run_name: "Qwen4B_linelvl_occitansilver"
+run_name: "T2_pred"
 output_dir: "results"
 device: "cuda"
-use_wandb: false
+use_wandb: true
 wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  train: "../data/occitan"
-  test: "../data/ICDAR_Competition/test"
+  train:
+    - "../data/ICDAR_Competition/platinum_romance"
+    - "../data/ICDAR_Competition/platinum_nonromance"
   valid: "../data/ICDAR_Competition/valid"
+  test: "../data/ICDAR_Competition/test"
 
 tasks:
   htr:
-    type: VLMSILVERHTR
+    type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: "qwen_trained_merged"
+      model_name: 'outputs_T2-2/Qwen3.5-4B-line-finetuned-line-finetuned'
+      base_model: 'outputs_T2-2/merged_fixed'
+      model_dir: 'outputs_T2-2/'
       device_map: "auto"
       max_new_tokens: 128
-      line_batch_size: 8
+      line_batch_size: 16
       max_pixels: 401408
+      special_char_weighting: 0
 
       # LoRA
       use_4bit: false
-      use_8bit: true
+      use_8bit: false
       lora_r: 64
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 8
-      gradient_accumulation_steps: 2
+      train_batch_size: 32
+      gradient_accumulation_steps: 1
       warmup_ratio: 0.01
       epochs: 2
 
       # lr 
-      learning_rate: 1.0e-5
+      learning_rate: 5.0e-5
       weight_decay: 0.02
       dataset_num_proc: 4
       prompt_template: >

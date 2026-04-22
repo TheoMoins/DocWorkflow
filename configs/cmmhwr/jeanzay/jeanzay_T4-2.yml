@@ -1,14 +1,14 @@
-run_name: "Qwen3.5_4B_linelvl_retrain"
+run_name: "T4-2"
 output_dir: "results"
 device: "cuda"
-use_wandb: true
+use_wandb: false
 wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
   train:
-    - "../data/ICDAR_Competition/train_romance"
-    - "../data/ICDAR_Competition/train_nonromance"  
+    - "../data/ICDAR_Competition/platinum_romance"
+    - "../data/ICDAR_Competition/platinum_nonromance"
   valid: "../data/ICDAR_Competition/valid"
   test: "../data/ICDAR_Competition/test"
 
@@ -17,12 +17,14 @@ tasks:
     type: VLMLineHTR
     config:
       use_metadata: true
-      model_name: 'Qwen/Qwen3.5-4B'
+      model_name: 'outputs_T4-1/Qwen3.5-4B-line-finetuned'
+      base_model: '/lustre/fsmisc/dataset/HuggingFace_Models/Qwen/Qwen3.5-4B'
+      model_dir: 'outputs_T4-2/'
       device_map: "auto"
       max_new_tokens: 128
-      line_batch_size: 8
+      line_batch_size: 16
       max_pixels: 401408
-      special_char_weighting: 20.0
+      special_char_weighting: 0
 
       # LoRA
       use_4bit: false
@@ -31,10 +33,10 @@ tasks:
       lora_dropout: 0
       use_rlora: false
       max_seq_length: 512
-      train_batch_size: 16
-      gradient_accumulation_steps: 2
+      train_batch_size: 32
+      gradient_accumulation_steps: 1
       warmup_ratio: 0.01
-      epochs: 3
+      epochs: 2
 
       # lr 
       learning_rate: 5.0e-5
