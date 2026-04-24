@@ -11,16 +11,31 @@ from src.alto import ALTO_NS, ALTO_NS_PREFIX
 
 
 def _parse_points(points_str: str) -> list:
-    """Parse an ALTO POINTS string 'x1,y1 x2,y2 ...' into [[x, y], ...] pairs."""
-    result = []
-    for pair in points_str.strip().split():
-        parts = pair.split(',')
-        if len(parts) == 2:
+    """Parse an ALTO POINTS string into [[x, y], ...] pairs.
+
+    Handles both 'x1,y1 x2,y2 ...' (comma-pair) and 'x1 y1 x2 y2 ...' (alternating) formats.
+    """
+    tokens = points_str.strip().split()
+    if not tokens:
+        return []
+    if ',' in tokens[0]:
+        result = []
+        for pair in tokens:
+            parts = pair.split(',')
+            if len(parts) == 2:
+                try:
+                    result.append([int(float(parts[0])), int(float(parts[1]))])
+                except ValueError:
+                    continue
+        return result
+    else:
+        result = []
+        for i in range(0, len(tokens) - 1, 2):
             try:
-                result.append([int(float(parts[0])), int(float(parts[1]))])
+                result.append([int(float(tokens[i])), int(float(tokens[i + 1]))])
             except ValueError:
                 continue
-    return result
+        return result
 
 
 def _parse_baseline(baseline_str: str) -> list:
@@ -291,7 +306,7 @@ def _add_line_to_element(parent_element, line, line_id=None, tag_id="LT1"):
     # Ajouter la baseline si disponible
     if 'baseline' in line and line['baseline']:
         baseline = line['baseline']
-        baseline_str = " ".join([f"{int(p[0])},{int(p[1])}" for p in baseline])
+        baseline_str = " ".join(f"{int(p[0])} {int(p[1])}" for p in baseline)
         line_element.set('BASELINE', baseline_str)
     
     return line_element
