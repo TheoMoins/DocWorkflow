@@ -1,7 +1,13 @@
 [workspace]
 name = "docworkflow"
-channels = ["pytorch", "nvidia", "conda-forge"]
+# conda-forge first so it wins for general packages; pytorch and nvidia are needed
+# for CUDA-enabled torch builds and CUDA runtime libs.
+# channel-priority = "flexible" lets each channel supply what it alone provides
+# (e.g. nvidia for libcublas, conda-forge for libjpeg-turbo) without strict
+# exclusion — avoids the chicken-and-egg conflicts that arise with strict priority.
+channels = ["conda-forge", "pytorch", "nvidia"]
 platforms = ["linux-64"]
+channel-priority = "flexible"
 
 [tasks]
 # Run after `pixi install -e main`: installs yaltai without its conflicting pins
@@ -10,14 +16,13 @@ install-yaltai = { cmd = "pip install --no-deps yaltai==2.0.5 fast-deskew==1.0",
 [dependencies]
 python = "3.10.*"
 pip = "*"
-# Pin packages that pytorch/nvidia channels carry older versions of
-pillow = {version = ">=10.0.0", channel = "conda-forge"}
 
 [pypi-dependencies]
 docworkflow = {path = ".", editable = true}
 
 # XML / data
 lxml = ">=5.0.0"
+Pillow = ">=10.0.0"
 numpy = ">=1.23.0,<3.0.0"
 scipy = ">=1.13.0"
 
