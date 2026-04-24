@@ -22,6 +22,22 @@ def _parse_points(points_str: str) -> list:
                 continue
     return result
 
+
+def _parse_baseline(baseline_str: str) -> list:
+    """Parse an ALTO BASELINE string 'x1 y1 x2 y2 ...' into [[x, y], ...] pairs.
+
+    ALTO BASELINE uses alternating space-separated coordinates (not comma-separated
+    pairs like polygon POINTS), e.g. '20 50 620 50' → [[20, 50], [620, 50]].
+    """
+    parts = baseline_str.strip().split()
+    result = []
+    for i in range(0, len(parts) - 1, 2):
+        try:
+            result.append([int(float(parts[i])), int(float(parts[i + 1]))])
+        except ValueError:
+            continue
+    return result
+
 def normalize_box(box, width, height, scale=100):
     """
     Normalize box coordinates.
@@ -148,7 +164,7 @@ def read_lines_geometry(file_path):
         region = block_region_type[block_id]
 
         for line_elem in block.findall('alto:TextLine', ns):
-            baseline = _parse_points(line_elem.get('BASELINE', ''))
+            baseline = _parse_baseline(line_elem.get('BASELINE', ''))
             if len(baseline) < 2:
                 continue
 
