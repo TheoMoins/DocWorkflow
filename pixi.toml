@@ -40,10 +40,11 @@ transformers = ">=4.46.0"
 qwen-vl-utils = ">=0.0.1"
 
 
-# ─── main environment ────────────────────────────────────────────────────────
+# ─── main environment (CPU) ───────────────────────────────────────────────────
+# Uses conda-forge pytorch (cpu_mkl build) — suitable for layout analysis,
+# text extraction, scoring; any task that does not require a GPU.
 
 [feature.main.dependencies]
-# Resolved jointly by the pytorch conda channel → avoids the PyPI version-coupling bug
 pytorch = "2.4.*"
 torchvision = "0.19.*"
 
@@ -55,15 +56,28 @@ mean-average-precision = ">=2024.1.5.0"
 peft = ">=0.10.0"
 # yaltai is intentionally absent from this block: its declared pins
 # (ultralytics<8.4, mean-average-precision==2021.4.26.0) conflict with the rest
-# of the environment. Run `pixi run install-yaltai` after `pixi install -e main`.
+# of the environment. Run `pixi run install-yaltai -e main` after install.
+
+
+# ─── gpu feature (CUDA override) ─────────────────────────────────────────────
+# Overrides pytorch with a CUDA-enabled build from the pytorch conda channel.
+# Compose with main to get an inference-capable environment on GPU servers.
+# Requires CUDA 12.x driver on the host (driver 12.2 is backward-compatible
+# with CUDA 12.1 compiled binaries).
+
+[feature.gpu.dependencies]
+pytorch = {version = "2.4.*", channel = "pytorch"}
+torchvision = {version = "0.19.*", channel = "pytorch"}
+pytorch-cuda = {version = "12.1", channel = "pytorch"}
 
 
 # ─── train environment ───────────────────────────────────────────────────────
 
 [feature.train.dependencies]
 # unsloth ≥ 2025.x requires torch ≥ 2.5; let pixi pick the compatible version
-pytorch = ">=2.5.0"
-torchvision = "*"
+pytorch = {version = ">=2.5.0", channel = "pytorch"}
+torchvision = {version = "*", channel = "pytorch"}
+pytorch-cuda = {version = "12.1", channel = "pytorch"}
 # fsspec 2026.3+ dropped the `http` extra that datasets still declares as required
 fsspec = "<2026.3"
 
@@ -88,7 +102,11 @@ ruff = ">=0.4.0"
 
 
 # ─── environment definitions ─────────────────────────────────────────────────
+# main      : CPU only — layout, extraction, scoring (no GPU required)
+# inference : CPU deps + CUDA pytorch — VLM HTR inference on GPU servers
+# train     : GPU training with unsloth (always needs CUDA)
 
 [environments]
-main  = ["main", "dev"]
-train = ["train"]
+main      = ["main", "dev"]
+inference = ["main", "gpu", "dev"]
+train     = ["train"]
