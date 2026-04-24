@@ -51,8 +51,8 @@ class CEREvalCallback(TrainerCallback):
                     tokenize=True,
                     add_generation_prompt=True,
                     return_dict=True,
-                    enable_thinking=False,
-                    return_tensors="pt"
+                    return_tensors="pt",
+                    processor_kwargs={"enable_thinking": False}
                 ).to(self.device)
 
                 with torch.no_grad():
@@ -60,6 +60,7 @@ class CEREvalCallback(TrainerCallback):
                         **inputs,
                         max_new_tokens=128,
                         do_sample=False,          # greedy pour le CER
+                        enable_thinking= False
                     )
                 trimmed = out[0][inputs["input_ids"].shape[1]:]
                 pred = self.processor.decode(trimmed, skip_special_tokens=True).strip()
@@ -162,8 +163,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             tokenize=True,
             add_generation_prompt=True,
             return_dict=True,
-            padding=True,
-            enable_thinking=False,
+            processor_kwargs={"enable_thinking": False, "padding": True},
             return_tensors="pt"
         ).to(self.model.device)
         

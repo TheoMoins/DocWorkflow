@@ -327,7 +327,7 @@ class BaseVLMHTR(BaseHTR):
         text = self.processor.apply_chat_template(
             messages,
             tokenize=False,
-            enable_thinking=False,
+            processor_kwargs={"enable_thinking": False},
             add_generation_prompt=True
         )
         
@@ -348,7 +348,9 @@ class BaseVLMHTR(BaseHTR):
         
         # Generate
         gen_kwargs = self._build_base_gen_kwargs()
-        gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
+        gen_kwargs.update({"max_new_tokens": self.max_new_tokens, 
+                           "do_sample": False,
+                           "enable_thinking": False})
         with torch.no_grad():
             generated_ids = self.model.generate(**inputs, **gen_kwargs)
         
