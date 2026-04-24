@@ -2,13 +2,25 @@ import os
 import glob
 import numpy as np
 from pathlib import Path
-from kraken.lib.xml import XMLPage
 
 from lxml import etree as ET
 
 from src.utils.utils import IGNORED_ZONE_TYPES
 from src.utils.sorting import sort_zones_reading_order
 from src.alto import ALTO_NS, ALTO_NS_PREFIX
+
+
+def _parse_points(points_str: str) -> list:
+    """Parse an ALTO POINTS string 'x1,y1 x2,y2 ...' into [[x, y], ...] pairs."""
+    result = []
+    for pair in points_str.strip().split():
+        parts = pair.split(',')
+        if len(parts) == 2:
+            try:
+                result.append([int(float(parts[0])), int(float(parts[1]))])
+            except ValueError:
+                continue
+    return result
 
 def normalize_box(box, width, height, scale=100):
     """
@@ -75,48 +87,89 @@ def read_lines_geometry(file_path):
         - regions: Dictionary of regions by type
     """
     try:
-    	parsed = XMLPage(file_path)
-    except:
-        return ('',[],{})
-    image_path = parsed.imagename
-    
-    # Extract regions from the ALTO file
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+    except Exception:
+        return ('', [], {})
+
+    ns = ALTO_NS_PREFIX
+
+    # Image filename
+    file_elem = root.find('.//alto:sourceImageInformation/alto:fileName', ns)
+    image_path = file_elem.text.strip() if file_elem is not None and file_elem.text else ''
+
+    # Build tag ID → label mapping
+    tag_labels = {}
+    for tag in root.findall('.//alto:Tags/*', ns):
+        tag_id = tag.get('ID')
+        label = tag.get('LABEL')
+        if tag_id and label:
+            tag_labels[tag_id] = label
+
+    def resolve_tagrefs(tagrefs_str):
+        return [tag_labels.get(ref, ref) for ref in tagrefs_str.split() if ref]
+
+    # Extract regions (TextBlocks)
     regions = {}
-    region_polygons = {}  # Store region polygons by ID for spatial containment check
-    
-    for region_type, region_list in parsed.regions.items():
+    block_region_type = {}
+
+    for block in root.findall('.//alto:TextBlock', ns):
+        block_id = block.get('ID', '')
+        labels = resolve_tagrefs(block.get('TAGREFS', ''))
+        region_type = labels[0] if labels else ''
+
         if region_type in IGNORED_ZONE_TYPES:
             continue
 
-        if region_type not in regions:
-            regions[region_type] = []
-        
-        for region_obj in region_list:
-            if region_obj.boundary:
-                regions[region_type].append(region_obj.boundary)
-                region_polygons[region_obj.id] = region_obj.boundary
-    
-    # Extract lines from the ALTO file and associate with regions
-    lines = []
-    for line_id, line_obj in parsed.lines.items():
-        if line_obj.baseline and len(line_obj.baseline) >= 2:
-            # Check which regions this line belongs to
-            line_regions = []
-            if hasattr(line_obj, 'regions') and line_obj.regions:
-                line_regions = line_obj.regions
+        block_region_type[block_id] = region_type
 
-            if not line_regions or any(region in IGNORED_ZONE_TYPES for region in line_regions):
+        polygon = block.find('alto:Shape/alto:Polygon', ns)
+        if polygon is not None:
+            boundary = _parse_points(polygon.get('POINTS', ''))
+        else:
+            hpos = int(float(block.get('HPOS', 0)))
+            vpos = int(float(block.get('VPOS', 0)))
+            w = int(float(block.get('WIDTH', 0)))
+            h = int(float(block.get('HEIGHT', 0)))
+            boundary = [[hpos, vpos], [hpos+w, vpos], [hpos+w, vpos+h], [hpos, vpos+h]] if w and h else []
+
+        if boundary:
+            regions.setdefault(region_type, []).append(boundary)
+
+    # Extract lines from non-ignored TextBlocks
+    lines = []
+    for block in root.findall('.//alto:TextBlock', ns):
+        block_id = block.get('ID', '')
+        if block_id not in block_region_type:
+            continue
+
+        region = block_region_type[block_id]
+
+        for line_elem in block.findall('alto:TextLine', ns):
+            baseline = _parse_points(line_elem.get('BASELINE', ''))
+            if len(baseline) < 2:
                 continue
-            
+
+            polygon = line_elem.find('alto:Shape/alto:Polygon', ns)
+            boundary = _parse_points(polygon.get('POINTS', '')) if polygon is not None else None
+
+            text = ' '.join(
+                s.get('CONTENT', '')
+                for s in line_elem.findall('.//alto:String', ns)
+                if s.get('CONTENT')
+            )
+
+            tags = set(resolve_tagrefs(line_elem.get('TAGREFS', '')))
+
             lines.append({
-                'id': line_id,
-                'baseline': line_obj.baseline,
-                'boundary': line_obj.boundary if line_obj.boundary else None,
-                'tags': line_obj.tags,
-                'regions': line_regions,  # Store region associations
-                'text': line_obj.text
+                'id': line_elem.get('ID', ''),
+                'baseline': baseline,
+                'boundary': boundary,
+                'tags': tags,
+                'regions': [region],
+                'text': text,
             })
-    
+
     return str(image_path), lines, regions
 
 
