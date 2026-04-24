@@ -10,13 +10,14 @@ install-yaltai = { cmd = "pip install --no-deps yaltai==2.0.5 fast-deskew==1.0",
 [dependencies]
 python = "3.10.*"
 pip = "*"
+# Pin packages that pytorch/nvidia channels carry older versions of
+pillow = {version = ">=10.0.0", channel = "conda-forge"}
 
 [pypi-dependencies]
 docworkflow = {path = ".", editable = true}
 
 # XML / data
 lxml = ">=5.0.0"
-Pillow = ">=10.0.0"
 numpy = ">=1.23.0,<3.0.0"
 scipy = ">=1.13.0"
 
