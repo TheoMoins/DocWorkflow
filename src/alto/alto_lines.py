@@ -96,7 +96,9 @@ def read_lines_geometry(file_path):
 
     # Image filename
     file_elem = root.find('.//alto:sourceImageInformation/alto:fileName', ns)
-    image_path = file_elem.text.strip() if file_elem is not None and file_elem.text else ''
+    image_filename = file_elem.text.strip() if file_elem is not None and file_elem.text else ''
+    alto_dir = os.path.dirname(os.path.abspath(file_path))
+    image_path = os.path.join(alto_dir, image_filename) if image_filename else ''
 
     # Build tag ID → label mapping
     tag_labels = {}
