@@ -12,6 +12,8 @@ python = "3.10.*"
 pip = "*"
 
 [pypi-dependencies]
+docworkflow = {path = ".", editable = true}
+
 # XML / data
 lxml = ">=5.0.0"
 Pillow = ">=10.0.0"
