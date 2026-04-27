@@ -5,8 +5,6 @@ import numpy as np
 from PIL import Image, ImageDraw
 import glob
 import os
-import yaml
-from pathlib import Path
 
 from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -62,13 +60,8 @@ class BaseVLMHTR(BaseHTR):
         return gen_kwargs
 
     def load(self):
-        from peft import PeftModel
-        from src.utils.memory_monitor import get_fast_vision_model
-        FastVisionModel = get_fast_vision_model()
-        if FastVisionModel is None:
-            raise RuntimeError("Training requires a GPU with unsloth installed.")
-
         """Load the VLM model (common for both page and line level)."""
+        from peft import PeftModel
         if not self.model_name:
             raise ValueError("model_name must be specified in config")
         
@@ -138,17 +131,6 @@ class BaseVLMHTR(BaseHTR):
                 base_model = Qwen3VLForConditionalGeneration.from_pretrained(
                     base_model_name, **model_kwargs
                 )
-            elif False: #os.path.exists(base_model_name):
-                print("Local checkpoint detected, loading with FastVisionModel (Unsloth)...")
-                self.processor = AutoProcessor.from_pretrained(
-                    base_model_name, trust_remote_code=True, padding_side='left'
-                )
-                self.model, _ = FastVisionModel.from_pretrained(
-                    base_model_name,
-                    load_in_4bit=self.hyperparams.get('use_4bit', False),
-                    load_in_8bit=self.hyperparams.get('use_8bit', False),
-                )
-                FastVisionModel.for_inference(self.model)
             else:
                 self.processor = AutoProcessor.from_pretrained(
                     base_model_name, 
@@ -366,7 +348,9 @@ class BaseVLMHTR(BaseHTR):
         
         # Generate
         gen_kwargs = self._build_base_gen_kwargs()
-        gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
+        gen_kwargs.update({"max_new_tokens": self.max_new_tokens, 
+                           "do_sample": False,
+                           "enable_thinking": False})
         with torch.no_grad():
             generated_ids = self.model.generate(**inputs, **gen_kwargs)
         

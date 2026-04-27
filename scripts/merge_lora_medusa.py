@@ -1,15 +1,9 @@
-"""
-Merge LoRA weights from outputs/T1-2_9B/Qwen3.5-9B-line-finetuned-line-finetuned
-on top of outputs/T1-2_9B/merged_base into a full 16-bit model at outputs/Medusa0.1Line-9B.
-
-Reproduces the merging logic from VLMLineHTRTask.train().
-"""
 import os
 from pathlib import Path
 
-BASE_PATH = "outputs/T1-2_9B/merged_base"
-LORA_PATH = "outputs/T1-2_9B/Qwen3.5-9B-line-finetuned-line-finetuned"
-OUTPUT_PATH = "outputs/Medusa0.1Line-9B"
+BASE_PATH = "outputs/orig_outputs_T1-2/merged_base"
+LORA_PATH = "outputs/orig_outputs_T1-2/Qwen3.5-4B-line-finetuned-line-finetuned"
+OUTPUT_PATH = "outputs/Medusa0.1Line-4B"
 
 def main():
     from unsloth import FastVisionModel
@@ -37,8 +31,12 @@ def main():
     print(f"Applying LoRA adapter from {lora_path} ...")
     model = PeftModel.from_pretrained(model, str(lora_path))
 
+    print("Merging weights ...")
+    model = model.merge_and_unload()
+
     print(f"Saving merged 16-bit model to {output_path} ...")
-    model.save_pretrained_merged(str(output_path), tokenizer, save_method="merged_16bit")
+    model.save_pretrained(str(output_path))
+    tokenizer.save_pretrained(str(output_path))
 
     print(f"Done. Merged model saved to {output_path}")
 

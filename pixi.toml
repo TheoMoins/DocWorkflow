@@ -1,0 +1,113 @@
+[workspace]
+name = "docworkflow"
+channels = ["conda-forge", "pytorch", "nvidia"]
+platforms = ["linux-64"]
+channel-priority = "disabled"
+
+[tasks]
+# Run after `pixi install -e main`: installs yaltai without its conflicting pins
+install-yaltai = { cmd = "pip install --no-deps yaltai==2.0.5 fast-deskew==1.0", description = "Install yaltai without its conflicting dep pins" }
+
+[dependencies]
+python = "3.10.*"
+pip = "*"
+
+[pypi-dependencies]
+docworkflow = {path = ".", editable = true}
+
+# XML / data
+lxml = ">=5.0.0"
+Pillow = ">=10.0.0"
+numpy = ">=1.23.0,<3.0.0"
+scipy = ">=1.13.0"
+
+# CLI & config
+click = ">=8.1.0"
+rich = ">=13.0.0"
+pyyaml = ">=6.0.0"
+
+# Data science
+pandas = ">=2.0.0"
+tabulate = ">=0.8.10,<1.0.0"
+matplotlib = ">=3.7.0"
+scikit-learn = ">=1.0.0"
+
+# Metrics
+jiwer = ">=3.0.0"
+wandb = ">=0.25.0"
+
+# VLM inference (shared — main uses it for inference, train for fine-tuning)
+transformers = "==5.2.0"
+qwen-vl-utils = ">=0.0.1"
+
+
+# ─── main environment (CPU) ───────────────────────────────────────────────────
+# Uses conda-forge pytorch (cpu_mkl build) — suitable for layout analysis,
+# text extraction, scoring; any task that does not require a GPU.
+
+[feature.main.dependencies]
+pytorch = "2.4.*"
+torchvision = "0.19.*"
+
+[feature.main.pypi-dependencies]
+kraken = ">=5.3.0"
+ultralytics = ">=8.4.8"
+opencv-python = ">=4.8.0"
+mean-average-precision = ">=2024.1.5.0"
+peft = ">=0.10.0"
+# yaltai is intentionally absent from this block: its declared pins
+# (ultralytics<8.4, mean-average-precision==2021.4.26.0) conflict with the rest
+# of the environment. Run `pixi run install-yaltai -e main` after install.
+
+
+# ─── gpu feature (CUDA override) ─────────────────────────────────────────────
+# Overrides pytorch with a CUDA-enabled build from the pytorch conda channel.
+# Compose with main to get an inference-capable environment on GPU servers.
+# Requires CUDA 12.x driver on the host (driver 12.2 is backward-compatible
+# with CUDA 12.1 compiled binaries).
+
+[feature.gpu.dependencies]
+pytorch = {version = "2.4.*", channel = "pytorch"}
+torchvision = {version = "0.19.*", channel = "pytorch"}
+pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
+
+
+# ─── train environment ───────────────────────────────────────────────────────
+
+[feature.train.dependencies]
+# unsloth ≥ 2025.x requires torch ≥ 2.5; let pixi pick the compatible version
+pytorch = {version = ">=2.5.0", channel = "pytorch"}
+torchvision = {version = "*", channel = "pytorch"}
+pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
+# fsspec 2026.3+ dropped the `http` extra that datasets still declares as required
+fsspec = "<2026.3"
+
+[feature.train.pypi-dependencies]
+unsloth = ">=2025.1"
+trl = "*"
+peft = ">=0.10.0"
+accelerate = "*"
+bitsandbytes = "*"
+datasets = ">=2.14.0"
+
+
+# ─── dev extras ──────────────────────────────────────────────────────────────
+
+[feature.dev.pypi-dependencies]
+pytest = ">=8.0.0"
+pytest-cov = ">=6.0.0"
+pytest-mock = ">=3.14.0"
+black = ">=24.0.0"
+isort = ">=5.13.0"
+ruff = ">=0.4.0"
+
+
+# ─── environment definitions ─────────────────────────────────────────────────
+# main      : CPU only — layout, extraction, scoring (no GPU required)
+# inference : CPU deps + CUDA pytorch — VLM HTR inference on GPU servers
+# train     : GPU training with unsloth (always needs CUDA)
+
+[environments]
+main      = ["main", "dev"]
+inference = ["main", "gpu", "dev"]
+train     = ["train"]

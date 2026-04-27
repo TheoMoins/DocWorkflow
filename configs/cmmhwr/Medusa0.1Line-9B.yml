@@ -1,0 +1,44 @@
+run_name: "Medusa0.1Line-9B"
+output_dir: "results"
+device: "cuda"
+use_wandb: true
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  test: "/mnt/theo/WPC1/data/ICDAR_Competition/test"
+
+tasks:
+  htr:
+    type: VLMLineHTR
+    config:
+      use_metadata: true
+      model_name: '/mnt/theo/WPC1/DocWorkflow/outputs/Medusa0.1Line-9B'
+      device_map: "auto"
+      max_new_tokens: 128
+      line_batch_size: 8
+      max_pixels: 401408
+
+      # LoRA
+      use_4bit: false
+      use_8bit: true
+      lora_r: 64
+      lora_dropout: 0
+      use_rlora: false
+      max_seq_length: 512
+      train_batch_size: 8
+      gradient_accumulation_steps: 2
+      warmup_ratio: 0.01
+      epochs: 2
+
+      # lr 
+      learning_rate: 1.0e-5
+      weight_decay: 0.02
+      dataset_num_proc: 4
+      prompt: >
+        Transcribe the handwritten text in this line image.
+        Keep abbreviations as written, do not expand them.
+        Preserve the original word segmentation.
+        Use only u and i, never v and j, regardless of the original or modern usage.
+        Do not record allographic variants, use standard letter forms.
+        Output ONLY the transcription.

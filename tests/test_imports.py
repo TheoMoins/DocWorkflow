@@ -44,6 +44,7 @@ def test_yolo_imports():
         pytest.fail(f"YOLO import failed: {e}")
 
 
+@pytest.mark.requires_main
 def test_kraken_imports():
     """Teste les imports Kraken (pour line et HTR)."""
     try:
@@ -56,6 +57,7 @@ def test_kraken_imports():
         pytest.fail(f"Kraken import failed: {e}")
 
 
+@pytest.mark.requires_main
 def test_yaltai_imports():
     """Teste les imports YALTAi."""
     try:
