@@ -1,13 +1,12 @@
 [workspace]
 name = "docworkflow"
-# conda-forge first so it wins for general packages; pytorch and nvidia are needed
-# for CUDA-enabled torch builds and CUDA runtime libs.
-# channel-priority = "flexible" lets each channel supply what it alone provides
-# (e.g. nvidia for libcublas, conda-forge for libjpeg-turbo) without strict
-# exclusion — avoids the chicken-and-egg conflicts that arise with strict priority.
+# channel-priority = "disabled" is required: pytorch and nvidia channels carry
+# packages (libcublas, etc.) that conflict with conda-forge under strict or
+# flexible priority. Disabled lets the solver pick the best version from any
+# channel without exclusion, which is the only mode that resolves cleanly.
 channels = ["conda-forge", "pytorch", "nvidia"]
 platforms = ["linux-64"]
-channel-priority = "flexible"
+channel-priority = "disabled"
 
 [tasks]
 # Run after `pixi install -e main`: installs yaltai without its conflicting pins

@@ -1,11 +1,12 @@
 # DocWorkflow — Installation & Environment Guide
 
-DocWorkflow uses **pixi** to manage two isolated environments with incompatible dependency stacks:
+DocWorkflow uses **pixi** to manage three isolated environments:
 
 | Environment | Purpose | Key packages |
 |---|---|---|
-| `main` | Layout segmentation, line detection, HTR inference | kraken, yaltai, ultralytics, peft |
-| `train` | VLM fine-tuning | unsloth, trl, peft, bitsandbytes |
+| `main` | Layout segmentation, line detection, scoring — CPU only | kraken, yaltai, ultralytics, peft |
+| `inference` | VLM HTR inference — requires a CUDA GPU | same as `main` + CUDA-enabled pytorch |
+| `train` | VLM fine-tuning — requires a CUDA GPU | unsloth, trl, peft, bitsandbytes |
 
 A third sub-project (`churro/`) has its own independent pixi workspace and is not covered here.
 
@@ -21,9 +22,10 @@ curl -fsSL https://pixi.sh/install.sh | bash
 
 Verify: `pixi --version` (tested with 0.56.0+).
 
-### 2. CUDA
+### 2. CUDA (for `inference` and `train` only)
 
-Both environments expect a CUDA-capable GPU. The conda `pytorch` channel resolves the correct CUDA variant automatically. No manual CUDA setup is required.
+The `inference` and `train` environments require a CUDA 12.x driver (12.1+ recommended).
+The CUDA toolkit itself is bundled via the `pytorch` conda channel — no manual CUDA setup needed.
 
 ---
 
@@ -32,27 +34,32 @@ Both environments expect a CUDA-capable GPU. The conda `pytorch` channel resolve
 From the repository root:
 
 ```bash
-# Install both environments (downloads all packages, generates pixi.lock)
+# CPU-only tasks (layout, scoring, text extraction, etc.)
 pixi install -e main
-pixi install -e train
+pixi run install-yaltai   # post-install step: yaltai cannot be resolved by pixi directly
 
-# Post-install step for main: yaltai cannot be resolved by pixi's PyPI solver
-# because its declared pins conflict with the rest of the environment.
-# Install it without its deps after the environment is ready.
-pixi run install-yaltai
+# VLM HTR inference on a GPU server
+pixi install -e inference
+pixi run -e inference install-yaltai
+
+# VLM fine-tuning (always needs a GPU)
+pixi install -e train
 ```
 
-`pixi.lock` is committed to the repository. `pixi install` is therefore deterministic: two machines running the same command produce identical environments.
+`pixi.lock` is committed to the repository — `pixi install` is therefore deterministic across machines.
 
 ---
 
 ## Activating environments
 
 ```bash
-# Drop into an interactive shell with the main env activated
+# Interactive shell with main env
 pixi shell -e main
 
-# Drop into an interactive shell with the train env activated
+# Interactive shell with inference env (GPU server)
+pixi shell -e inference
+
+# Interactive shell with train env
 pixi shell -e train
 
 # Exit back to your normal shell
@@ -65,48 +72,31 @@ exit
 
 ## Running commands
 
-All commands go through `pixi run -e <env>` so that the correct environment is used without manually activating a shell.
-
 ### CLI entry point
 
 ```bash
-# General help
-pixi run -e main docworkflow --help
-
-# Predict on the test split, all tasks
-pixi run -e main docworkflow -c configs/example_config.yml predict -t all -d test -o results/
-
-# Predict a single task
+# Layout / line detection / scoring (CPU)
 pixi run -e main docworkflow -c configs/example_config.yml predict -t layout -d test -o results/
-
-# Score predictions
 pixi run -e main docworkflow -c configs/example_config.yml score -t all -d test -p results/
 
-# Train a task
-pixi run -e main docworkflow -c configs/example_config.yml train -t layout
+# VLM HTR inference (GPU server)
+pixi run -e inference docworkflow -c configs/example_config.yml predict -t htr -d test -o results/
+
+# Training
+pixi run -e train docworkflow -c configs/example_config.yml train -t htr
 ```
 
 ### Tests
 
 ```bash
-# Run all tests in the main environment
+# Run all tests (CPU)
 pixi run -e main pytest tests/ -v
 
-# Run only env-agnostic + main-specific tests (skip training markers)
-pixi run -e main pytest tests/ -v -m "not requires_training"
+# Skip tests that require a GPU
+pixi run -e main pytest tests/ -v -m "not requires_gpu and not requires_training"
 
-# Run the training smoke tests (requires a GPU)
+# Training smoke tests (requires a GPU)
 pixi run -e train pytest tests/test_imports_train.py -v
-
-# Verify torch/torchvision version coupling
-pixi run -e main python scripts/check_versions.py
-```
-
-### Python REPL / scripts
-
-```bash
-pixi run -e main python my_script.py
-pixi run -e train python training/fine_tune.py
 ```
 
 ---
@@ -120,7 +110,7 @@ Key fields:
 ```yaml
 run_name: "experiment_01"
 output_dir: "results"
-device: "cpu"          # or "cuda:0"
+device: "cuda"         # or "cpu" — auto-detected if omitted
 use_wandb: false
 
 data:
@@ -132,7 +122,7 @@ tasks:
     type: YoloLayout
     config:
       model_path: "path/to/weights.pt"
-      pretrained_w: "yolo11s.pt"   # used for training only
+      pretrained_w: "yolo11s.pt"
       batch_size: 16
       img_size: 640
       epochs: 50
@@ -144,30 +134,24 @@ tasks:
       text_direction: "horizontal-lr"
 
   htr:
-    type: KrakenHTR
+    type: VLMLineHTR
     config:
-      model_path: "path/to/htr.mlmodel"
+      model_name: "path/to/model"
+      max_new_tokens: 128
+      line_batch_size: 4
 ```
 
-Tasks are optional: include only the ones you need.  
-Use `input_file` instead of `model_path` to pass pre-computed predictions to a downstream task.
+Tasks are optional: include only the ones you need.
 
 ---
 
 ## Test markers
 
-Tests are tagged so they can be filtered by environment:
-
-| Marker | Meaning | Skip in |
-|---|---|---|
-| `requires_main` | needs kraken, yaltai, ultralytics | `train` env |
-| `requires_training` | needs unsloth, peft, trl, datasets; skips automatically if no GPU | `main` env |
-| `requires_gpu` | needs CUDA | CPU-only machines |
-
-```bash
-# Run only tests that work on any machine
-pixi run -e main pytest tests/ -m "not requires_gpu and not requires_training"
-```
+| Marker | Meaning |
+|---|---|
+| `requires_main` | needs kraken, yaltai, ultralytics |
+| `requires_training` | needs unsloth, peft, trl, datasets; skips if no GPU |
+| `requires_gpu` | needs CUDA |
 
 ---
 
@@ -176,26 +160,30 @@ pixi run -e main pytest tests/ -m "not requires_gpu and not requires_training"
 After adding or changing a dependency in `pixi.toml`:
 
 ```bash
-pixi install -e main   # re-solves and updates pixi.lock
+pixi install -e main
+pixi install -e inference
 pixi install -e train
 git add pixi.lock
 git commit -m "update pixi.lock"
 ```
 
-> Do not edit `pixi.lock` by hand. It is fully generated by `pixi install`.
+> Do not edit `pixi.lock` by hand.
 
 ---
 
 ## Troubleshooting
 
-**`yaltai` or `fast-deskew` not found after `pixi install -e main`**  
-Run `pixi run install-yaltai`. This post-install step is not automatic.
+**`yaltai` or `fast-deskew` not found after install**  
+Run `pixi run install-yaltai` (or `pixi run -e inference install-yaltai`). This post-install step is not automatic.
+
+**`torch.cuda.is_available()` returns `False` on a GPU server**  
+Make sure you are using the `inference` environment, not `main`. The `main` env installs a CPU-only pytorch build from conda-forge by design.
+
+**`pixi install -e inference` fails with channel conflicts**  
+The workspace uses `channel-priority = "disabled"` to allow pytorch, nvidia, and conda-forge to coexist. If you see a conflict after changing `pixi.toml`, verify that this setting is present in `[workspace]`.
 
 **`unsloth` raises `NotImplementedError: Unsloth cannot find any torch accelerator`**  
-This is expected on a machine without a GPU. The train environment is installed correctly; unsloth simply requires a CUDA device at import time. Training tests skip automatically in this case.
+Expected on machines without a GPU. Training tests skip automatically in this case.
 
 **`fsspec` extra `http` warning during `pixi install -e train`**  
-The warning `The package fsspec==X does not have an extra named 'http'` is harmless. It appears because `datasets` still declares `fsspec[http]` as a dependency, but recent fsspec versions integrated HTTP support into the base package. The extra is silently ignored.
-
-**Tests show 16 failures on first run**  
-These failures pre-date the pixi migration and are tracked in `TODO.md` under "Tests pré-existants à corriger séparément". They reflect outdated test assertions against an older API and do not indicate a broken installation.
+Harmless. Recent fsspec versions integrated HTTP support into the base package; the extra is silently ignored.
