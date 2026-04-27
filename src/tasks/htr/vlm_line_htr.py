@@ -163,7 +163,8 @@ class VLMLineHTRTask(BaseVLMHTR):
             tokenize=True,
             add_generation_prompt=True,
             return_dict=True,
-            chat_template_kwargs={"enable_thinking": False, "padding": True},
+            padding=True,
+            chat_template_kwargs={"enable_thinking": False},
             return_tensors="pt"
         ).to(self.model.device)
         
