@@ -57,17 +57,6 @@ pixi shell -e train       # VLM fine-tuning (GPU)
 exit                      # back to your normal shell
 ```
 
-### Troubleshooting
-
-**`yaltai` not found after install** — Run `pixi run install-yaltai` (outside of a `pixi shell`). This post-install step is not automatic.
-
-**`torch.cuda.is_available()` returns `False`** — Make sure you are using the `inference` environment, not `main`. The `main` env installs a CPU-only pytorch build by design.
-
-**`pixi install -e inference` fails with channel conflicts** — The workspace uses `channel-priority = "disabled"`. Verify this setting is present in `[workspace]` of `pixi.toml`.
-
-**`unsloth` raises `NotImplementedError`** — Expected on machines without a GPU. Training tests skip automatically.
-
-
 ## Quick Start
 
 ### 1. Configure Your Workflow
