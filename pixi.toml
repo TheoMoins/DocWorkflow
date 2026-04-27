@@ -1,10 +1,5 @@
 [workspace]
 name = "docworkflow"
-# conda-forge first so it wins for general packages; pytorch and nvidia are needed
-# for CUDA-enabled torch builds and CUDA runtime libs.
-# channel-priority = "disabled" lets each channel supply what it alone provides
-# (e.g. nvidia for libcublas, conda-forge for libjpeg-turbo) without strict
-# exclusion — avoids the chicken-and-egg conflicts that arise with strict priority.
 channels = ["conda-forge", "pytorch", "nvidia"]
 platforms = ["linux-64"]
 channel-priority = "disabled"
