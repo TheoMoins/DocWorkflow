@@ -37,7 +37,7 @@ jiwer = ">=3.0.0"
 wandb = ">=0.25.0"
 
 # VLM inference (shared — main uses it for inference, train for fine-tuning)
-transformers = ">=4.46.0"
+transformers = "==5.2.0"
 qwen-vl-utils = ">=0.0.1"
 
 

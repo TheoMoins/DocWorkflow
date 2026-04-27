@@ -52,7 +52,7 @@ class CEREvalCallback(TrainerCallback):
                     add_generation_prompt=True,
                     return_dict=True,
                     return_tensors="pt",
-                    chat_template_kwargs={"enable_thinking": False}
+                    enable_thinking=False,
                 ).to(self.device)
 
                 with torch.no_grad():
@@ -164,7 +164,7 @@ class VLMLineHTRTask(BaseVLMHTR):
             add_generation_prompt=True,
             return_dict=True,
             padding=True,
-            chat_template_kwargs={"enable_thinking": False},
+            enable_thinking=False,
             return_tensors="pt"
         ).to(self.model.device)
         
