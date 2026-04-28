@@ -11,7 +11,8 @@ wandb_api_key*
 
 .idea
 
-configs/pipeline/*
+/configs/pipeline
+/configs/htromance
 
 src/tasks/layout/models/
 src/tasks/layout/__pycache__/
