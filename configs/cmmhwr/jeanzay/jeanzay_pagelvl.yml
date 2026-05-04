@@ -1,0 +1,49 @@
+run_name: "pagelvl"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  train:
+    - "../data/ICDAR_Competition/platinum_romance"
+    - "../data/ICDAR_Competition/gold_romance"
+    - "../data/ICDAR_Competition/platinum_nonromance"
+    - "../data/ICDAR_Competition/gold_nonromance"
+  valid: "../data/ICDAR_Competition/valid"
+  test: "../data/ICDAR_Competition/test"
+
+tasks:
+  htr:
+    type: VLMPageHTR
+    config:
+      use_metadata: true
+      model_name: '/lustre/fsmisc/dataset/HuggingFace_Models/Qwen/Qwen3.5-4B'
+      model_dir: 'outputs_pagelvl/'
+      device_map: "auto"
+      max_new_tokens: 2048 #changed
+      line_batch_size: 16
+      max_pixels: 401408
+      special_char_weighting: 0
+
+      # LoRA
+      use_4bit: false
+      use_8bit: false
+      lora_r: 64
+      lora_dropout: 0
+      use_rlora: false
+      max_seq_length: 4096 #changed
+      train_batch_size: 32
+      gradient_accumulation_steps: 1
+      warmup_ratio: 0.01
+      epochs: 3
+
+      # lr 
+      learning_rate: 5.0e-5
+      weight_decay: 0.02
+      dataset_num_proc: 4
+      prompt_template: >
+        Transcribe the handwritten text in this manuscript page.
+        {conventions}
+        Output the transcription formatted as an ALTO XML file.
