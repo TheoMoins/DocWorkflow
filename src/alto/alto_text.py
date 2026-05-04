@@ -3,6 +3,7 @@ from lxml import etree as ET
 from PIL import Image
 
 from src.alto import ALTO_NS, ALTO_NS_MAP, ALTO_NS_PREFIX
+from src.utils.sorting import sort_zones_reading_order
 
 def read_document_text(alto_path):
     """
@@ -152,6 +153,80 @@ def read_lines_with_bbox(alto_path):
             'height': height,
         })
     return lines
+
+def produce_minimal_xml(lines):
+    # returns tree
+     # now we convert these lines to a minimal alto file text
+    #TODO: decide whether we need image height width for this
+    ns = "http://www.loc.gov/standards/alto/ns-v4#"
+    NSMAP = {
+        None: ns,
+        "xsi": "http://www.w3.org/2001/XMLSchema-instance"
+    }
+    
+    # Get image dimensions
+    #with Image.open(image_path) as img:
+     #   width, height = img.size
+    
+    # Create ALTO structure
+    alto = ET.Element("alto", nsmap=NSMAP, attrib={
+        "{http://www.w3.org/2001/XMLSchema-instance}schemaLocation":
+            f"{ns} http://www.loc.gov/standards/alto/v4/alto-4-2.xsd"
+    })
+    
+    # Description
+    description = ET.SubElement(alto, "Description")
+    ET.SubElement(description, "MeasurementUnit").text = "pixel"
+    source_info = ET.SubElement(description, "sourceImageInformation")
+    #ET.SubElement(source_info, "fileName").text = os.path.basename(image_path)
+    
+    # Tags
+    tags = ET.SubElement(alto, "Tags")
+    ET.SubElement(tags, "OtherTag", ID="BT1", LABEL="MainZone", 
+                    DESCRIPTION="block type MainZone")
+    ET.SubElement(tags, "OtherTag", ID="LT1", LABEL="DefaultLine",
+                    DESCRIPTION="line type DefaultLine")
+    
+    # Layout
+    layout = ET.SubElement(alto, "Layout")
+    page = ET.SubElement(layout, "Page", ID="page1", PHYSICAL_IMG_NR="1")#,
+                        #HEIGHT=str(height), WIDTH=str(width))
+    print_space = ET.SubElement(page, "PrintSpace")#, 
+                                #HEIGHT=str(height), WIDTH=str(width),
+                                #VPOS="0", HPOS="0")
+    
+    # Single TextBlock covering the whole image
+    text_block = ET.SubElement(print_space, "TextBlock", ID="block_0",
+                                #HPOS="0", VPOS="0",
+                                #WIDTH=str(width), HEIGHT=str(height),
+                                TAGREFS="BT1")
+    
+    # Create TextLine per line in lines
+    margin = 5
+    for idx, line in enumerate(lines):
+        text_line = ET.SubElement(text_block, "TextLine", ID="line_" + str(idx),
+                                HPOS=str(line['hpos']), VPOS=str(line['vpos']),
+                                WIDTH=str(line['width']), 
+                                HEIGHT=str(line['height']),
+                                TAGREFS="LT1")
+        
+        # String with recognized text
+        string_elem = ET.SubElement(text_line, "String")
+        string_elem.set('CONTENT', line['text'])
+        string_elem.set('WC', '1.0')
+    
+    # Save
+    tree = ET.ElementTree(alto)
+    return tree
+
+def read_fullpage_cleaned(alto_path):
+    lines = read_lines_with_bbox(alto_path)
+    for l in lines:
+        l['bbox'] = [l['hpos'], l['vpos'], l['hpos']+l['width'], l['vpos']+l['height']]
+    lines_sorted = sort_zones_reading_order(lines) # uses default sorting order #check if i need to infer page size?
+    xml_tree = produce_minimal_xml(lines_sorted)
+    return ET.tostring(xml_tree, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+   
 
 
 def copy_alto_without_text(src_path, dst_path):

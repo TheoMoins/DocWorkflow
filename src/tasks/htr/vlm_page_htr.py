@@ -9,7 +9,7 @@ from PIL import Image
 from pathlib import Path
 from lxml import etree as ET
 
-from src.alto.alto_text import copy_and_fix_alto_namespaces, read_document_text, create_minimal_alto, split_text_into_alto_lines
+from src.alto.alto_text import copy_and_fix_alto_namespaces, read_fullpage_cleaned, create_minimal_alto, split_text_into_alto_lines
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -57,18 +57,22 @@ class VLMPageHTRTask(BaseVLMHTR):
                 base_name = Path(image_path).stem
                 output_path = os.path.join(output_dir, f"{base_name}.xml")
                 
-                # Check if there's an existing ALTO with layout/lines
-                existing_alto = os.path.join(source_dir, f"{base_name}.xml")
-                if os.path.exists(existing_alto):
-                    # Copy existing structure AND clean namespaces
-                    copy_and_fix_alto_namespaces(existing_alto, output_path)
-                else:
-                    # Create simple ALTO
-                    create_minimal_alto(image_path, text, output_path)
+                ## Check if there's an existing ALTO with layout/lines
+                #existing_alto = os.path.join(source_dir, f"{base_name}.xml")
+                #if os.path.exists(existing_alto):
+                #    # Copy existing structure AND clean namespaces
+                #    copy_and_fix_alto_namespaces(existing_alto, output_path)
+                #else:
+                #    # Create simple ALTO
+                #    create_minimal_alto(image_path, text, output_path)
                 
-                # Split VLM output into lines
-                split_text_into_alto_lines(output_path, text, image_path)
+                ## Split VLM output into lines
+                #split_text_into_alto_lines(output_path, text, image_path)
                 
+                # we are hoping the output text is a valid xml!!
+                with open(output_path, "w") as f:
+                    f.write(text)
+
                 results.append({
                     'file': image_path,
                     'text': text
@@ -274,7 +278,9 @@ class VLMPageHTRTask(BaseVLMHTR):
         
         for xml_path in xml_files:
             # Extract text
-            text = read_document_text(xml_path)
+            # TODO: modify document text function to get
+            # stripped & sorted alto file text
+            text = read_fullpage_cleaned(xml_path)
             if not text or not text.strip():
                 continue
             
