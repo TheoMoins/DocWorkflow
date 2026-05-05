@@ -8,7 +8,8 @@ from pathlib import Path
 import gc
 import warnings
 
-from src.alto.alto_lines import read_lines_geometry, convert_lines_to_boxes
+from src.alto.alto_lines import read_lines_geometry, convert_lines_to_boxes, read_lines_for_zonemap
+from src.utils.zonemap import compute_zonemap_page, accumulate_zonemap_stats, finalize_zonemap_metrics
 
 
 class BaseLine(BaseTask):
@@ -72,7 +73,7 @@ class BaseLine(BaseTask):
                 print(f"  Warning: No lines in {Path(gt_file).name}")
                 continue
             
-            _, pred_lines, _ = read_lines_geometry(pred_file)
+            pred_lines = read_lines_for_zonemap(pred_file)
             if not pred_lines:
                 print(f"  Warning: No predictions in {Path(pred_file).name}")
                 continue
@@ -116,7 +117,23 @@ class BaseLine(BaseTask):
             "dataset_test/precision": metrics[0.75][0]["precision"].mean() if len(metrics[0.75][0]["precision"]) > 0 else 0.0,
             "dataset_test/recall": metrics[0.75][0]["recall"].mean() if len(metrics[0.75][0]["recall"]) > 0 else 0.0
         }
-        
+
+        # ZoneMapAlt — detection metric (page-by-page accumulation avoids false
+        # cross-page polygon intersections since all pages share origin (0,0))
+        zm_accumulated = None
+        for pred_file, gt_file in zip(pred_files, gt_files):
+            gt_lines = read_lines_for_zonemap(gt_file)
+            if not gt_lines:
+                continue
+            dt_lines = read_lines_for_zonemap(pred_file)
+            if not dt_lines:
+                continue
+            page_stats = compute_zonemap_page(gt_lines, dt_lines, with_recognition=False)
+            zm_accumulated = accumulate_zonemap_stats(zm_accumulated, page_stats)
+
+        if zm_accumulated is not None:
+            metrics_dict.update(finalize_zonemap_metrics(zm_accumulated))
+
         return metrics_dict, page_scores
 
     def _get_score_file_extensions(self):

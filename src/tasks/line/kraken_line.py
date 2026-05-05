@@ -10,10 +10,25 @@ import gc
 import shutil
 import threading
 
+import uuid
+
 from kraken.lib.vgsl import TorchVGSLModel
 from kraken.kraken import SEGMENTATION_DEFAULT_MODEL
 from kraken.lib.xml import XMLPage
+from kraken.containers import BaselineLine as KrakenBaselineLine
+from kraken.lib.segmentation import polygonal_reading_order
 from yaltai.models.krakn import segment as line_segment
+
+
+def _compat_reading_order(lines, text_direction='lr', regions=None):
+    """Wrap polygonal_reading_order to handle dict-format lines (kraken >= 7.x API change)."""
+    if lines and isinstance(lines[0], dict):
+        lines = [
+            KrakenBaselineLine(id=str(uuid.uuid4()), baseline=l['baseline'],
+                               boundary=l['boundary'], tags=l['tags'])
+            for l in lines
+        ]
+    return polygonal_reading_order(lines=lines, text_direction=text_direction, regions=regions)
 
 from src.tasks.line.base_line import BaseLine
 from src.utils.utils import IGNORED_ZONE_TYPES
@@ -87,8 +102,9 @@ class KrakenLineTask(BaseLine):
                 segmentation_result = line_segment(
                     image,
                     text_direction=self.config["text_direction"],
+                    reading_order_fn=_compat_reading_order,
                     model=self.model,
-                    device=self.device, 
+                    device=self.device,
                     regions=alto_regions,
                     ignore_lignes=False
                 )
@@ -171,6 +187,7 @@ class KrakenLineTask(BaseLine):
                     segmentation_result = line_segment(
                         image,
                         text_direction=self.config.get("text_direction", "horizontal-lr"),
+                        reading_order_fn=_compat_reading_order,
                         model=self.model,
                         device=self.device,
                         regions={},
