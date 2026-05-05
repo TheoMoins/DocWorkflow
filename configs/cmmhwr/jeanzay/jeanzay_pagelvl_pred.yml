@@ -7,19 +7,19 @@ save_image: true
 
 data:
   train:
-    - "../data/ICDAR_Competition/platinum_romance"
-    - "../data/ICDAR_Competition/gold_romance"
-    - "../data/ICDAR_Competition/platinum_nonromance"
-    - "../data/ICDAR_Competition/gold_nonromance"
-  valid: "../data/ICDAR_Competition/valid"
+    - "/lustre/fsn1/projects/rech/uoe/ugg16ol/data/ICDAR_Competition/platinum_romance"
+    - "/lustre/fsn1/projects/rech/uoe/ugg16ol/data/ICDAR_Competition/gold_romance"
+    - "/lustre/fsn1/projects/rech/uoe/ugg16ol/data/ICDAR_Competition/platinum_nonromance"
+    - "/lustre/fsn1/projects/rech/uoe/ugg16ol/data/ICDAR_Competition/gold_nonromance"
+  valid: "/lustre/fsn1/projects/rech/uoe/ugg16ol/data/ICDAR_Competition/valid"
   test: "../data/ICDAR_Competition/test"
 
 tasks:
   htr:
-    type: VLMLineHTR
+    type: VLMPageHTR
     config:
       use_metadata: true
-      model_name: 'outputs_pagelvl/Qwen3.5-4B-line-finetuned'
+      model_name: 'outputs_pagelvl/Qwen3.5-4B-finetuned'
       base_model: '/lustre/fsmisc/dataset/HuggingFace_Models/Qwen/Qwen3.5-4B'
       model_dir: 'outputs_pagelvl/'
       device_map: "auto"
