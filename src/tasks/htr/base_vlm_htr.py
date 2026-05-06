@@ -14,6 +14,7 @@ from transformers import AutoProcessor, AutoModelForImageTextToText, AutoModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from qwen_vl_utils import process_vision_info
 from src.utils.transformers_models import is_supported_by_auto_image_text
+from src.utils.lazy_dataset import LazyLineDataset
 
 from transformers import TrainerCallback
 
@@ -426,6 +427,9 @@ class BaseVLMHTR(BaseHTR):
             }
         ]
     
+    def _convert_set(self, examples):
+        return LazyLineDataset(examples, self._format_conversation)
+    
     #TODO: is messages supposed to be plural here?
     def _generate_from_messages(self, messages):
         """
@@ -589,6 +593,7 @@ class BaseVLMHTR(BaseHTR):
 
         print("Validating train samples...")
         valid_train = self._validate_samples(train_samples)
+        print("Validated")
         if len(valid_train) < len(train_samples):
             print(f"  Skipped {len(train_samples) - len(valid_train)} samples")
 
@@ -633,7 +638,9 @@ class BaseVLMHTR(BaseHTR):
         converted_train_set = self._convert_set(valid_train_weighted)
 
         if valid_samples:
+            print('Validating validation samples')
             valid_valid = valid_train = self._validate_samples(valid_samples)
+            print('Validated')
             converted_valid_set = self._convert_set(valid_valid)
         else:
             converted_valid_set = None

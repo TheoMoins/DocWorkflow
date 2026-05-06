@@ -125,7 +125,11 @@ def read_lines_with_bbox(alto_path):
     Returns:
         List of dicts with id, text, hpos, vpos, width, height
     """
-    tree = ET.parse(alto_path)
+    try:
+        tree = ET.parse(alto_path)
+    except:
+        return []
+
     root = tree.getroot()
     ns = ALTO_NS_PREFIX
     

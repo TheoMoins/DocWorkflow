@@ -19,7 +19,6 @@ from src.alto import ALTO_NS, ALTO_NS_PREFIX
 from src.alto.alto_lines import read_lines_geometry
 from src.alto.alto_text import copy_alto_without_text, write_text_to_alto
 from src.utils.lazy_dataset import LazyLineDataset
-from src.tasks.htr import CEREvalCallback
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -279,6 +278,4 @@ class VLMLineHTRTask(BaseVLMHTR):
     
     def _validate_samples(self, examples):
         return [s for s in examples if os.path.exists(s["page_image_path"]) and s.get("boundary")]
-        
-    def _convert_set(self, examples):
-        return LazyLineDataset(examples, self._format_conversation)
+    

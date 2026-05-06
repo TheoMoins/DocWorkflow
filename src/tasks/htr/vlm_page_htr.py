@@ -28,7 +28,6 @@ class VLMPageHTRTask(BaseVLMHTR):
         self.name = "HTR_VLM_Page_Level"
     
     
-
     def _recognize_single_image(self, image):
         messages = self._prepare_messages(image)
         return self._generate_from_messages(messages)
@@ -111,6 +110,7 @@ class VLMPageHTRTask(BaseVLMHTR):
         return results
 
     #TODO: remove redundancy between this and line-level
+    '''
     def format_conversation(self, example):
         img = Image.open(example["image_path"]).convert("RGB")
         prompt = example.get("prompt", self.prompt)
@@ -132,7 +132,30 @@ class VLMPageHTRTask(BaseVLMHTR):
             },
         ]
         
-        return {"messages": conversation}    
+        return {"messages": conversation}    '''
+
+    def _format_conversation(self, example, get_page_image):
+        try:
+            img = get_page_image(example["image_path"])
+        except Exception as e:
+            print(f"Warning: skipping sample ({example.get('image_path', '?')}): {e}")
+            return None
+        if img is None:
+            return None
+        prompt = example.get("prompt", self.prompt)
+        return {"messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image", "image": img},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": example["text"]}],
+            },
+        ]}
 
     def _prepare_training_data(self, data_path):
         """
@@ -175,6 +198,6 @@ class VLMPageHTRTask(BaseVLMHTR):
     # should this also check if text is valid?
     def _validate_samples(self, examples):
         return [s for s in examples if os.path.exists(s["image_path"])]
-        
+    '''
     def _convert_set(self, examples):
-        return [self.format_conversation(sample) for sample in examples]
+        return [self.format_conversation(sample) for sample in examples] '''
