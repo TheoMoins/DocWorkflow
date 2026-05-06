@@ -201,3 +201,35 @@ def save_score_csvs(results_dir, page_scores, document_scores=None, structure_ty
         
         print(f"\n✓ Saved: {', '.join(csv_files)}, "
               f"and {len(documents)} per-document CSVs")
+
+def save_zonemap_csv(results_dir: Path, zonemap_metrics: dict):
+    """Save ZoneMap metrics in a structured, readable CSV."""
+    detection_keys = ['score', 'match', 'miss', 'false_alarm', 'split', 'merge', 'multiple']
+    count_keys = ['n_match', 'n_miss', 'n_false_alarm', 'n_split', 'n_merge', 'n_multiple']
+    recognition_keys = ['char_precision', 'char_recall', 'word_precision', 'word_recall']
+
+    rows = []
+
+    rows.append(('--- Detection (area-based) ---', '', ''))
+    rows.append(('zonemap/score', zonemap_metrics.get('zonemap/score', ''), 'Error % (lower=better)'))
+    for k in detection_keys[1:]:
+        val = zonemap_metrics.get(f'zonemap/{k}', '')
+        rows.append((f'zonemap/{k}', val, 'Fraction of GT area'))
+
+    rows.append(('--- Detection (counts per doc) ---', '', ''))
+    for k in count_keys:
+        val = zonemap_metrics.get(f'zonemap/{k}', '')
+        rows.append((f'zonemap/{k}', val, 'Avg group count'))
+
+    has_recognition = any(f'zonemap/{k}' in zonemap_metrics for k in recognition_keys)
+    if has_recognition:
+        rows.append(('--- Recognition (ZoneMapAltCnt) ---', '', ''))
+        for k in recognition_keys:
+            val = zonemap_metrics.get(f'zonemap/{k}', '')
+            label = 'Char-level' if 'char' in k else 'Line-level exact match'
+            rows.append((f'zonemap/{k}', val, label))
+
+    df = pd.DataFrame(rows, columns=['metric', 'value', 'description'])
+    out = results_dir / 'results_zonemap.csv'
+    df.to_csv(out, index=False)
+    print(f"ZoneMap results saved to {out}")
