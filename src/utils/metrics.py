@@ -206,7 +206,10 @@ def save_zonemap_csv(results_dir: Path, zonemap_metrics: dict):
     """Save ZoneMap metrics in a structured, readable CSV."""
     detection_keys = ['score', 'match', 'miss', 'false_alarm', 'split', 'merge', 'multiple']
     count_keys = ['n_match', 'n_miss', 'n_false_alarm', 'n_split', 'n_merge', 'n_multiple']
-    recognition_keys = ['char_precision', 'char_recall', 'word_precision', 'word_recall']
+    recognition_keys = [
+        'char_precision', 'char_recall', 'char_f1',
+        'word_precision', 'word_recall', 'word_f1',
+    ]
 
     rows = []
 
@@ -226,7 +229,12 @@ def save_zonemap_csv(results_dir: Path, zonemap_metrics: dict):
         rows.append(('--- Recognition (ZoneMapAltCnt) ---', '', ''))
         for k in recognition_keys:
             val = zonemap_metrics.get(f'zonemap/{k}', '')
-            label = 'Char-level' if 'char' in k else 'Line-level exact match'
+            if 'char' in k:
+                label = 'Char-level'
+            elif 'f1' in k:
+                label = 'Word-level F1'
+            else:
+                label = 'Word-level'
             rows.append((f'zonemap/{k}', val, label))
 
     df = pd.DataFrame(rows, columns=['metric', 'value', 'description'])

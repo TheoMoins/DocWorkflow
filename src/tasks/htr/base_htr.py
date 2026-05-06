@@ -70,16 +70,16 @@ class BaseHTR(BaseTask):
         all_gt_texts = []
         all_pred_texts = []
         page_scores = []
-        
+        competition_preds = {}
+        competition_gt = {}
+
         for pred_file, gt_file in tqdm(zip(pred_files, gt_files), total=len(pred_files), desc="  Scoring", unit="page"):
             try:
                 gt_lines = read_lines_text(gt_file)
                 pred_lines = read_lines_text(pred_file)
-                
+
                 page_gt_texts = []
-                page_pred_texts = []
-                competition_preds = {}
-                competition_gt = {}   
+                page_pred_texts = []   
                 
                 if len(pred_lines) == 1 and len(gt_lines) > 1:
                     # Fallback: split prediction by line breaks

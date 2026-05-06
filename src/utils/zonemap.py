@@ -162,6 +162,8 @@ def _group_linked(link_table: list, gt_zones: Dict[int, _Zone],
 def _group_non_linked(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
                       dt_zones: Dict[int, _Zone]) -> List[_ZoneGroup]:
     for gz in gt_zones.values():
+        if not gz.text.strip():
+            continue
         try:
             temp = copy.copy(gz.polygon)
             for di in gz.linked_zones:
@@ -172,6 +174,8 @@ def _group_non_linked(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
             continue
 
     for dz in dt_zones.values():
+        if not dz.text.strip():
+            continue
         try:
             temp = copy.copy(dz.polygon)
             for gi in dz.linked_zones:
@@ -194,7 +198,14 @@ def _calc_detection_raw(groups: List[_ZoneGroup]) -> tuple:
     for g in groups:
         c = g.config
         area = g.polygon.area
-        counts[c] += 1
+        # Only count a Miss/FA if the source zone is completely unlinked (no Match/Split/Merge).
+        # Residuals of partially-overlapping linked zones contribute to areas but not to counts.
+        if c == 'Miss' and g.gt_zone and g.gt_zone.linked_zones:
+            pass
+        elif c == 'FA' and g.dt_zone and g.dt_zone.linked_zones:
+            pass
+        else:
+            counts[c] += 1
         if c in ('Match', 'Miss', 'FA'):
             areas[c] += area
         elif c == 'Split':
@@ -232,13 +243,14 @@ def _arrange_by_pos(zone_ids: list, zones: Dict[int, _Zone]) -> List[str]:
     return [z.text for z in sorted_zones]
 
 
-def _word_matches(gt_texts: List[str], dt_texts: List[str]) -> int:
-    dt_copy = list(dt_texts)
+def _word_token_matches(gt_text: str, dt_text: str) -> int:
+    """Count matching word tokens (bag-of-words, case-sensitive)."""
+    dt_tokens = list(dt_text.split())
     count = 0
-    for w in gt_texts:
-        if w in dt_copy:
+    for w in gt_text.split():
+        if w in dt_tokens:
             count += 1
-            dt_copy.remove(w)
+            dt_tokens.remove(w)
     return count
 
 
@@ -263,8 +275,8 @@ def _calc_recognition_raw(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
         dt_str, gt_str = ''.join(dt_texts), ''.join(gt_texts)
         char_edits += _edit_distance(dt_str, gt_str)
         gt_chars += len(gt_str); dt_chars += len(dt_str)
-        gt_words += len(gt_texts); dt_words += len(dt_texts)
-        correct_words += _word_matches(gt_texts, dt_texts)
+        gt_words += len(gt_str.split()); dt_words += len(dt_str.split())
+        correct_words += _word_token_matches(gt_str, dt_str)
 
     for g in by_config['Split']:
         if g.gt_zone.id in used_gt:
@@ -277,8 +289,8 @@ def _calc_recognition_raw(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
         dt_str = ''.join(dt_texts)
         char_edits += _edit_distance(dt_str, gt_text)
         gt_chars += len(gt_text); dt_chars += len(dt_str)
-        gt_words += 1; dt_words += len(dt_texts)
-        correct_words += _word_matches([gt_text], dt_texts)
+        gt_words += len(gt_text.split()); dt_words += len(dt_str.split())
+        correct_words += _word_token_matches(gt_text, dt_str)
 
     for g in by_config['Merge']:
         if g.dt_zone.id in used_dt:
@@ -291,8 +303,8 @@ def _calc_recognition_raw(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
         gt_str = ''.join(gt_texts)
         char_edits += _edit_distance(dt_text, gt_str)
         gt_chars += len(gt_str); dt_chars += len(dt_text)
-        gt_words += len(gt_texts); dt_words += 1
-        correct_words += _word_matches(gt_texts, [dt_text])
+        gt_words += len(gt_str.split()); dt_words += len(dt_text.split())
+        correct_words += _word_token_matches(gt_str, dt_text)
 
     for g in by_config['Match']:
         if g.gt_zone.id in used_gt or g.dt_zone.id in used_dt:
@@ -302,8 +314,8 @@ def _calc_recognition_raw(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
         gt_text, dt_text = g.gt_zone.text, g.dt_zone.text
         char_edits += _edit_distance(dt_text, gt_text)
         gt_chars += len(gt_text); dt_chars += len(dt_text)
-        gt_words += 1; dt_words += 1
-        correct_words += _word_matches([gt_text], [dt_text])
+        gt_words += len(gt_text.split()); dt_words += len(dt_text.split())
+        correct_words += _word_token_matches(gt_text, dt_text)
 
     for g in by_config['Miss']:
         if g.gt_zone.id in used_gt:
@@ -311,7 +323,7 @@ def _calc_recognition_raw(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
         used_gt.add(g.gt_zone.id)
         gt_chars += len(g.gt_zone.text)
         char_edits += len(g.gt_zone.text)
-        gt_words += 1
+        gt_words += len(g.gt_zone.text.split())
 
     for g in by_config['FA']:
         if g.dt_zone.id in used_dt:
@@ -319,7 +331,7 @@ def _calc_recognition_raw(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
         used_dt.add(g.dt_zone.id)
         dt_chars += len(g.dt_zone.text)
         char_edits += len(g.dt_zone.text)
-        dt_words += 1
+        dt_words += len(g.dt_zone.text.split())
 
     return {
         'gt_chars': gt_chars, 'dt_chars': dt_chars, 'char_edits': char_edits,
@@ -450,7 +462,7 @@ def finalize_zonemap_metrics(accumulated: dict) -> dict:
     if 'recognition' in accumulated:
         rec = accumulated['recognition']
         gt_c, dt_c, edits = rec['gt_chars'], rec['dt_chars'], rec['char_edits']
-        correct_c = max(0, max(gt_c, dt_c) - edits)
+        correct_c = max(0, min(gt_c, dt_c) - edits)
         metrics['zonemap/char_precision'] = round(correct_c / dt_c, 4) if dt_c > 0 else 0.0
         metrics['zonemap/char_recall']    = round(correct_c / gt_c, 4) if gt_c > 0 else 0.0
         metrics['zonemap/word_precision'] = (
@@ -458,6 +470,15 @@ def finalize_zonemap_metrics(accumulated: dict) -> dict:
         )
         metrics['zonemap/word_recall'] = (
             round(rec['correct_words'] / rec['gt_words'], 4) if rec['gt_words'] > 0 else 0.0
+        )
+
+        cp, cr = metrics['zonemap/char_precision'], metrics['zonemap/char_recall']
+        metrics['zonemap/char_f1'] = (
+            round(2 * cp * cr / (cp + cr), 4) if (cp + cr) > 0 else 0.0
+        )
+        wp, wr = metrics['zonemap/word_precision'], metrics['zonemap/word_recall']
+        metrics['zonemap/word_f1'] = (
+            round(2 * wp * wr / (wp + wr), 4) if (wp + wr) > 0 else 0.0
         )
 
     return metrics
