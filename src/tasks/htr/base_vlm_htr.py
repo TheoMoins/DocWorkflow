@@ -477,8 +477,8 @@ class BaseVLMHTR(BaseHTR):
         # Generate
         gen_kwargs = self._build_base_gen_kwargs()
         gen_kwargs.update({"max_new_tokens": self.max_new_tokens, 
-                           "do_sample": False,
-                           "enable_thinking": False})
+                           "do_sample": False})#,
+                           #"enable_thinking": False})
         with torch.no_grad():
             generated_ids = self.model.generate(**inputs, **gen_kwargs)
         
