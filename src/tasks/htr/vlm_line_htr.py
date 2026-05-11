@@ -32,6 +32,10 @@ class VLMLineHTRTask(BaseVLMHTR):
     def __init__(self, config):
         super().__init__(config)
         self.name = "HTR_VLM_Line_Level"
+
+    def _get_file_extensions(self):
+        """VLM Line-Level works with ALTO XML files."""
+        return ['*.xml']
     
 
     def _recognize_batch(self, line_images):

@@ -133,10 +133,6 @@ class BaseVLMHTR(BaseHTR):
         self.model = None
         self.is_minicpm = False
         self.tokenizer = None
-
-    def _get_file_extensions(self):
-        """VLM Line-Level works with ALTO XML files."""
-        return ['*.xml']
     
     
     def _build_base_gen_kwargs(self) -> dict:

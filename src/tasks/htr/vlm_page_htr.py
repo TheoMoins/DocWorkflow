@@ -27,9 +27,12 @@ class VLMPageHTRTask(BaseVLMHTR):
         super().__init__(config)
         self.name = "HTR_VLM_Page_Level"
     
-    
+    def _get_file_extensions(self):
+        """VLM Line-Level works with ALTO XML files."""
+        return ['.jpg', '.jpeg', '.png', '.tif', '.tiff']
+
     def _recognize_single_image(self, image):
-        messages = self._prepare_messages(image)
+        messages = self._prepare_messages(Image.open(image).convert("RGB"))
         return self._generate_from_messages(messages)
 
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
