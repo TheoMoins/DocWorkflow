@@ -229,7 +229,7 @@ def read_fullpage_cleaned(alto_path):
         l['bbox'] = [l['hpos'], l['vpos'], l['hpos']+l['width'], l['vpos']+l['height']]
     lines_sorted = sort_zones_reading_order(lines) # uses default sorting order #check if i need to infer page size?
     xml_tree = produce_minimal_xml(lines_sorted)
-    return ET.tostring(xml_tree, pretty_print=True, xml_declaration=True, encoding="UTF-8")
+    return ET.tostring(xml_tree, pretty_print=True, xml_declaration=True, encoding="unicode")
    
 
 

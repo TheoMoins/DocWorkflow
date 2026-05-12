@@ -66,9 +66,6 @@ class VLMPageHTRTask(BaseVLMHTR):
 
                 # Recognize text
                 text = self._recognize_single_image(image_path)
-                if isinstance(text, bytes): # I think I'm returning bytestrings but not sure where problem is occurring 
-                    print('text was a bytestring, decoding')
-                    text = text.decode()
                 
                 # Create basic ALTO file
                 base_name = Path(image_path).stem
