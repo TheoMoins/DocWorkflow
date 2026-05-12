@@ -76,16 +76,21 @@ pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 # ─── train environment ───────────────────────────────────────────────────────
 
 [feature.train.dependencies]
-# unsloth ≥ 2025.x requires torch ≥ 2.5; let pixi pick the compatible version
-pytorch = {version = ">=2.5.0", channel = "pytorch"}
-torchvision = {version = "*", channel = "pytorch"}
-pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
-# fsspec 2026.3+ dropped the `http` extra that datasets still declares as required
-fsspec = "<2026.3"
+# No conda pytorch — using pip torch with bundled CUDA 12.8 libs (see pypi-options)
+# torch 2.10.0 + CUDA 12.8
+
+[feature.train.pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu128"]
+index-strategy = "unsafe-best-match"
 
 [feature.train.pypi-dependencies]
-unsloth = ">=2025.1"
-trl = "*"
+torch = "==2.10.0"
+torchvision = "==0.25.0"
+unsloth = "==2026.3.4"
+unsloth-zoo = "==2026.3.2"
+torchao = "==0.16.0"
+triton = "==3.6.0"
+trl = "==0.24.0"
 peft = ">=0.10.0"
 accelerate = "*"
 bitsandbytes = "*"
