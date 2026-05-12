@@ -206,6 +206,84 @@ def read_lines_geometry(file_path):
     return str(image_path), lines, regions
 
 
+def read_lines_for_zonemap(file_path: str, with_text: bool = False) -> list:
+    """
+    Read TextLines from ALTO for ZoneMap scoring, with full geometry fallback chain:
+      Shape/Polygon  → boundary polygon
+      BASELINE       → 2-point baseline (generates bbox)
+      HPOS/VPOS/WIDTH/HEIGHT → synthetic 2-point baseline
+
+    Unlike read_lines_geometry(), does not require a BASELINE attribute.
+    Skips TextBlocks whose region type is in IGNORED_ZONE_TYPES (same as read_lines_geometry).
+    """
+    try:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+    except Exception:
+        return []
+
+    ns = ALTO_NS_PREFIX
+
+    tag_labels = {}
+    for tag in root.findall('.//alto:Tags/*', ns):
+        tag_id = tag.get('ID')
+        label = tag.get('LABEL')
+        if tag_id and label:
+            tag_labels[tag_id] = label
+
+    ignored_block_ids = set()
+    for block in root.findall('.//alto:TextBlock', ns):
+        refs = block.get('TAGREFS', '')
+        labels = [tag_labels.get(r, r) for r in refs.split() if r]
+        if labels and labels[0] in IGNORED_ZONE_TYPES:
+            ignored_block_ids.add(block.get('ID', ''))
+
+    lines = []
+
+    for block in root.findall('.//alto:TextBlock', ns):
+        if block.get('ID', '') in ignored_block_ids:
+            continue
+        for line_elem in block.findall('alto:TextLine', ns):
+            polygon = line_elem.find('alto:Shape/alto:Polygon', ns)
+            boundary = _parse_points(polygon.get('POINTS', '')) if polygon is not None else None
+
+            baseline_str = line_elem.get('BASELINE', '')
+            baseline = _parse_baseline(baseline_str) if baseline_str else []
+
+            if not boundary and len(baseline) < 2:
+                try:
+                    hpos = int(float(line_elem.get('HPOS', 0)))
+                    vpos = int(float(line_elem.get('VPOS', 0)))
+                    w    = int(float(line_elem.get('WIDTH', 0)))
+                    h    = int(float(line_elem.get('HEIGHT', 0)))
+                except (ValueError, TypeError):
+                    continue
+                if w <= 0 or h <= 0:
+                    continue
+                mid_y = vpos + h // 2
+                baseline = [[hpos, mid_y], [hpos + w, mid_y]]
+
+            if not boundary and len(baseline) < 2:
+                continue
+
+            text = ''
+            if with_text:
+                text = ' '.join(
+                    s.get('CONTENT', '')
+                    for s in line_elem.findall('.//alto:String', ns)
+                    if s.get('CONTENT')
+                )
+
+            lines.append({
+                'id':       line_elem.get('ID', ''),
+                'baseline': baseline,
+                'boundary': boundary,
+                'text':     text,
+            })
+
+    return lines
+
+
 def convert_lines_to_boxes(lines, image_size, is_gt=True):
     """
     Convert lines (baselines with boundaries) to bounding box format

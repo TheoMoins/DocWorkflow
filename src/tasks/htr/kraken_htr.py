@@ -220,28 +220,34 @@ class KrakenHTRTask(BaseHTR):
         Returns:
             List of prediction results
         """
+        gt_test = self.config.get('data', {}).get('test', '')
+        try:
+            Path(source_dir).resolve().relative_to(Path(gt_test).resolve())
+            using_gt_lines = True
+        except ValueError:
+            using_gt_lines = False
+
         print(f"  Processing {len(file_paths)} ALTO files...")
-        
+
         results = []
         for alto_path in tqdm(file_paths, desc="  Recognizing text", unit="page"):
             try:
                 image_path, lines, _ = read_lines_geometry(alto_path)
-                
+
                 if not os.path.exists(image_path):
                     print(f"  Warning: Image {image_path} not found")
                     continue
-                
+
                 tree_check = ET.parse(alto_path)
                 ns_check = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-                
+
                 raw_lines = tree_check.getroot().findall('.//alto:TextLine', ns_check)
                 if not raw_lines:
                     print(f"  Warning: No TextLines found in {alto_path}")
                     continue
-                
-                is_from_gt = Path(alto_path).parent.resolve() == Path(source_dir).resolve()
-                if is_from_gt:
-                    print(f"  [GT] Using ground truth line segmentation ({len(raw_lines)} lines) from {os.path.basename(alto_path)}")
+
+                tag = "[GT]" if using_gt_lines else "[PRED]"
+                print(f"  {tag} {len(raw_lines)} lines from {os.path.basename(alto_path)}")
 
                 recognized_texts = self._recognize_text(image_path, alto_path)
                 

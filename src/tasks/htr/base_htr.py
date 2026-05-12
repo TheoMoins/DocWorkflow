@@ -10,6 +10,8 @@ from src.tasks.htr.postprocessing import clean_alto_file
 from jiwer import cer, wer
 
 from src.utils.metrics import calculate_htr_metrics
+from src.utils.zonemap import compute_zonemap_page, accumulate_zonemap_stats, finalize_zonemap_metrics
+from src.alto.alto_lines import read_lines_for_zonemap
 from src.alto.alto_text import read_document_text, read_lines_text, deduplicate_alto_consecutive_lines
 
 class BaseHTR(BaseTask):
@@ -68,16 +70,16 @@ class BaseHTR(BaseTask):
         all_gt_texts = []
         all_pred_texts = []
         page_scores = []
-        
+        competition_preds = {}
+        competition_gt = {}
+
         for pred_file, gt_file in tqdm(zip(pred_files, gt_files), total=len(pred_files), desc="  Scoring", unit="page"):
             try:
                 gt_lines = read_lines_text(gt_file)
                 pred_lines = read_lines_text(pred_file)
-                
+
                 page_gt_texts = []
-                page_pred_texts = []
-                competition_preds = {}
-                competition_gt = {}   
+                page_pred_texts = []   
                 
                 if len(pred_lines) == 1 and len(gt_lines) > 1:
                     # Fallback: split prediction by line breaks
@@ -133,7 +135,25 @@ class BaseHTR(BaseTask):
             competition_preds=competition_preds,
             competition_gt=competition_gt
         )
-        
+
+        # ZoneMapAltCnt — detection + recognition metric (page-by-page accumulation
+        # avoids false cross-page polygon intersections since all pages share origin (0,0))
+        # read_lines_geometry() already provides 'boundary', 'baseline', and 'text'
+        zm_accumulated = None
+        for pred_file, gt_file in zip(pred_files, gt_files):
+            try:
+                gt_lines = read_lines_for_zonemap(gt_file, with_text=True)
+                if not gt_lines:
+                    continue
+                dt_lines = read_lines_for_zonemap(pred_file, with_text=True)
+                page_stats = compute_zonemap_page(gt_lines, dt_lines, with_recognition=True)
+                zm_accumulated = accumulate_zonemap_stats(zm_accumulated, page_stats)
+            except Exception:
+                continue
+
+        if zm_accumulated is not None:
+            metrics_dict.update(finalize_zonemap_metrics(zm_accumulated))
+
         return metrics_dict, page_scores
     
     def _get_score_file_extensions(self):
