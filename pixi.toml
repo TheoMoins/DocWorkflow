@@ -77,7 +77,7 @@ pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 
 [feature.train.dependencies]
 # No conda pytorch — using pip torch with bundled CUDA 12.8 libs (see pypi-options)
-# Matches the working env (requirements_vlm.txt): torch 2.10.0 + CUDA 12.8
+# torch 2.10.0 + CUDA 12.8
 
 [feature.train.pypi-options]
 extra-index-urls = ["https://download.pytorch.org/whl/cu128"]
