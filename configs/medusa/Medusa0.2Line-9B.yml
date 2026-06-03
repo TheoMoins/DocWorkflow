@@ -1,18 +1,17 @@
-run_name: "Medusa0.1Line-9B"
+run_name: "Medusa0.2Line-9B"
 output_dir: "results"
 device: "cuda"
-use_wandb: true
-wandb_project: "icdar-htr-competition-2026"
+use_wandb: false
 save_image: true
 
 data:
-  test: "/mnt/theo/WPC1/data/ICDAR_Competition/test"
+  test: "/path/to/your/data"  # TO FILL IN
 
 tasks:
   htr:
     type: VLMLineHTR
     config:
-      model_name: 'ENC-PSL/Medusa0.1Line-9B'
+      model_name: 'ENC-PSL/Medusa0.2Line-9B'
       device_map: "auto"
       max_new_tokens: 128
       line_batch_size: 8

@@ -101,8 +101,6 @@ class BaseHTR(BaseTask):
                             page_gt_texts.append(full_gt)
                             page_pred_texts.append(full_pred)
                 else:
-                    gt_text = read_document_text(gt_file)
-                    pred_text = read_document_text(pred_file)
                     page_stem = Path(gt_file).stem
                     for i, l in enumerate(gt_lines):
                         if l['text'].strip():
@@ -111,9 +109,15 @@ class BaseHTR(BaseTask):
                         if i < len(gt_lines) and gt_lines[i]['text'].strip():
                             competition_preds[f"{page_stem}/{i}"] = l['text']
 
-                    if gt_text.strip():
-                        page_gt_texts.append(gt_text)
-                        page_pred_texts.append(pred_text)
+                    # Only score line pairs where GT is non-empty
+                    gt_parts, pred_parts = [], []
+                    for i, gt_l in enumerate(gt_lines):
+                        if gt_l['text'].strip() and i < len(pred_lines):
+                            gt_parts.append(gt_l['text'])
+                            pred_parts.append(pred_lines[i]['text'])
+                    if gt_parts:
+                        page_gt_texts.append(' '.join(gt_parts))
+                        page_pred_texts.append(' '.join(pred_parts))
                 
                 if page_gt_texts and page_pred_texts:
                     all_gt_texts.extend(page_gt_texts)

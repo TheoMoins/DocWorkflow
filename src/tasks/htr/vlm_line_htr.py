@@ -269,9 +269,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                     print(f"  Warning: No TextLines found in {alto_path}")
                     continue
 
-                is_from_gt = Path(alto_path).parent.resolve() == Path(source_dir).resolve()
-                if is_from_gt:
-                    print(f"  [GT] Using ground truth line segmentation ({len(raw_lines)} lines) from {os.path.basename(alto_path)}")
+                print(f"  Using {len(raw_lines)} lines from {os.path.basename(alto_path)}")
                 
                 # Load page image
                 page_image = Image.open(image_path).convert("RGB")

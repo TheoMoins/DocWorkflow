@@ -1,12 +1,11 @@
 run_name: "Medusa0.1Line-9B"
 output_dir: "results"
 device: "cuda"
-use_wandb: true
-wandb_project: "icdar-htr-competition-2026"
+use_wandb: false
 save_image: true
 
 data:
-  test: "/mnt/theo/WPC1/data/ICDAR_Competition/test"
+  test: "/path/to/your/data"  # TO FILL IN
 
 tasks:
   htr:
