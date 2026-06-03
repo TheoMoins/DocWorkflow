@@ -4,7 +4,7 @@ import pandas as pd
 from rich.console import Console
 
 from src.tasks.base_tasks import BaseTask
-from src.utils.metrics import save_score_csvs, save_zonemap_csv
+from src.utils.metrics import save_score_csvs, save_zonemap_csv, save_zonemap_scatter
 
 
 def score(
@@ -48,6 +48,9 @@ def score(
 
     if zonemap_metrics:
         save_zonemap_csv(dir, zonemap_metrics)
+        document_scores = results.get('document_scores')
+        if document_scores:
+            save_zonemap_scatter(dir, document_scores, zonemap_metrics)
 
     # Save detailed CSVs
     save_score_csvs(
