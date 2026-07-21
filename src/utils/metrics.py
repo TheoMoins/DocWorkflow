@@ -32,6 +32,7 @@ def aggregate_metrics(metrics_list):
     for key in all_keys:
         values = [m[key] for m in metrics_list if key in m and isinstance(m[key], (int, float))]
         if values:
+            #TODO this should include detailed/
             if key.startswith('total/'):
                 result[key] = sum(values)  # Sum totals
             else:
@@ -77,6 +78,7 @@ def calculate_htr_metrics(all_gt_texts, all_pred_texts, page_scores,
     dt = DiacriticTransform()
     # use process_words because we force it to treat each combined character (NOT unicode codepoint) as a character
     cer_output = jiwer.process_words(all_gt_texts, all_pred_texts, reference_transform=dt, hypothesis_transform=dt)
+    #TODO: normalize wer inputs as well while keeping them as words
     wer_output = jiwer.process_words(all_gt_texts, all_pred_texts)
 
     #cer_analysis = jiwer.visualize_error_counts(cer_output)

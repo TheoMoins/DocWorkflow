@@ -400,7 +400,9 @@ def add_lines_to_alto(lines, output_path, alto_path, reading_order="dbscan"):
         image_file, _, regions = read_lines_geometry(alto_path)
         
         # Parser le fichier XML
-        tree = ET.parse(alto_path)
+        # modified to fix spacing
+        parser = ET.XMLParser(remove_blank_text=True)
+        tree = ET.parse(alto_path, parser)
         root = tree.getroot()
         ns = ALTO_NS_PREFIX
         

@@ -5,6 +5,7 @@ from datetime import datetime
 import tabulate
 from pathlib import Path
 import os
+import shutil
 
 from src.utils.visualisation import visualize_folder
 from src.utils.dataset_structure import discover_dataset_structure
@@ -442,6 +443,13 @@ class BaseTask(ABC):
             if len(structure_info['images']) - len(file_paths) > 0:
                 print(f"  Skipping {len(structure_info['images']) - len(file_paths)} already processed files")
 
+        
+            # Copy conventions metadata! Required for multi-stage analysis
+            meta_path = Path(data_path) / "metadata.json"
+            meta_output = Path(os.path.join(output_dir, os.path.basename(meta_path)))
+            if meta_path.exists() and not meta_output.exists():
+                shutil.copy2(meta_path, meta_output)
+            
             return self._process_batch(
                 file_paths=file_paths,
                 source_dir=data_path,
@@ -504,6 +512,12 @@ class BaseTask(ABC):
             
             # Process this subdirectory
             try:
+                # Copy conventions metadata! Required for multi-stage analysis
+                meta_path = Path(subdir_path) / "metadata.json"
+                meta_output = Path(os.path.join(subdir_output, os.path.basename(meta_path)))
+                if meta_path.exists() and not meta_output.exists():
+                    shutil.copy2(meta_path, meta_output)
+                    
                 results = self._process_batch(
                     file_paths=files_to_process,
                     source_dir=subdir_path,

@@ -124,7 +124,8 @@ def read_lines_with_bbox(alto_path):
     Returns:
         List of dicts with id, text, hpos, vpos, width, height
     """
-    tree = ET.parse(alto_path)
+    parser = ET.XMLParser(remove_blank_text=True)
+    tree = ET.parse(alto_path, parser)
     root = tree.getroot()
     ns = ALTO_NS_PREFIX
     
@@ -156,7 +157,8 @@ def read_lines_with_bbox(alto_path):
 
 def copy_alto_without_text(src_path, dst_path):
     """Copy ALTO XML but strip all String CONTENT to avoid GT leakage."""
-    tree = ET.parse(src_path)
+    parser = ET.XMLParser(remove_blank_text=True)
+    tree = ET.parse(src_path, parser)
     root = tree.getroot()
     ns = ALTO_NS_PREFIX
     for string_elem in root.findall('.//alto:String', ns):
@@ -176,7 +178,8 @@ def write_text_to_alto(alto_path: str, texts, output_path: str) -> None:
                - list of dicts in document order (legacy, positional — unsafe if lines were filtered)
         output_path: Path to save the modified ALTO
     """
-    tree = ET.parse(alto_path)
+    parser = ET.XMLParser(remove_blank_text=True)
+    tree = ET.parse(alto_path, parser)
     root = tree.getroot()
 
     text_lines = root.findall('.//alto:TextLine', ALTO_NS_PREFIX)
@@ -288,7 +291,8 @@ def deduplicate_alto_consecutive_lines(alto_path):
     Remove consecutive duplicate TextLines from an ALTO XML file in-place.
     Targets hallucination artifacts where HTR models repeat the same line.
     """
-    tree = ET.parse(alto_path)
+    parser = ET.XMLParser(remove_blank_text=True)
+    tree = ET.parse(alto_path, parser)
     root = tree.getroot()
     ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
 
@@ -314,7 +318,8 @@ def split_text_into_alto_lines(alto_path, text, image_path):
     if not lines_text:
         return alto_path
     
-    tree = ET.parse(alto_path)
+    parser = ET.XMLParser(remove_blank_text=True)
+    tree = ET.parse(alto_path, parser)
     root = tree.getroot()
     ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
     
