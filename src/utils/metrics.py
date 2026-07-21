@@ -1,3 +1,8 @@
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
 import pandas as pd
 import jiwer
 from jiwer import cer, wer
@@ -243,3 +248,67 @@ def save_zonemap_csv(results_dir: Path, zonemap_metrics: dict):
     out = results_dir / 'results_zonemap.csv'
     df.to_csv(out, index=False)
     print(f"ZoneMap results saved to {out}")
+
+
+def save_zonemap_scatter(results_dir: Path, document_scores: list, global_zonemap: dict):
+    """Scatter plot: ZoneMap score (x) vs char F1 (y), one point per document + global."""
+    BG      = '#f5f5f5'
+    GRID    = '#36364a'
+    DOC_C   = '#0b38a3'
+    GLOB_C  = '#ff7043'
+    TEXT_C  = '#111829'
+    LABEL_C = '#0b38a3'
+
+    docs = [d for d in document_scores
+            if d.get('zonemap/score') is not None and d.get('zonemap/char_f1') is not None]
+    if not docs:
+        return
+
+    xs = np.array([100-d['zonemap/score']   for d in docs], dtype=float)
+    ys = np.array([d['zonemap/char_f1'] for d in docs], dtype=float)
+    names = [d['document'] for d in docs]
+
+    gx = 100-global_zonemap.get('zonemap/score')
+    gy = global_zonemap.get('zonemap/char_f1')
+
+    fig, ax = plt.subplots(figsize=(13, 6))
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+
+    # Median reference lines
+    # ax.axvline(np.median(xs), linestyle='--', color=GRID, linewidth=1, zorder=1)
+    # ax.axhline(np.median(ys), linestyle='--', color=GRID, linewidth=1, zorder=1)
+
+    ax.grid(True, linestyle='--', color=GRID, alpha=0.5, zorder=0)
+    ax.set_axisbelow(True)
+
+    # Document points
+    ax.scatter(xs, ys, color=DOC_C, s=65, alpha=0.85, zorder=3, linewidths=0)
+    for x, y, name in zip(xs, ys, names):
+        ax.annotate(name, (x, y),
+                    textcoords='offset points', xytext=(6, 3),
+                    fontsize=6.5, color=LABEL_C, zorder=4)
+
+    # Global aggregate point
+    if gx is not None and gy is not None:
+        ax.scatter([gx], [gy], color=GLOB_C, s=130, zorder=5,
+                   marker='D', linewidths=0)
+        ax.annotate('global', (gx, gy),
+                    textcoords='offset points', xytext=(7, 4),
+                    fontsize=8.5, color=GLOB_C, fontweight='bold', zorder=6)
+
+    ax.set_xlabel('ZoneMap score',
+                  color=TEXT_C, fontsize=9, labelpad=8)
+    ax.set_ylabel('Character F1',
+                  color=TEXT_C, fontsize=9, labelpad=8)
+
+    ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1, decimals=0))
+    ax.tick_params(colors=TEXT_C, labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(GRID)
+
+    plt.tight_layout()
+    out = results_dir / 'zonemap_scatter.png'
+    plt.savefig(out, dpi=150, bbox_inches='tight', facecolor=BG)
+    plt.close(fig)
+    print(f"ZoneMap scatter plot saved to {out}")

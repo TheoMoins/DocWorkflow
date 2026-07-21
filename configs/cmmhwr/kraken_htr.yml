@@ -12,4 +12,4 @@ tasks:
     type: KrakenHTR
     config:
       use_metadata: true
-      model_path: "src/tasks/htr/models/catmus-medieval-1.6.0.mlmodel"
+      model_path: "/path/to/catmus-medieval-1.6.0.mlmodel" # available on zenodo

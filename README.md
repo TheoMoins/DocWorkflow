@@ -144,6 +144,38 @@ docworkflow -c config.yml print -t htr -p results/htr/ -o viz/ --json
 ```
 
 
+## Pre-trained Models — MEDUSA
+
+[MEDUSA](https://huggingface.co/collections/ENC-PSL/medusa) is a family of VLMs fine-tuned for multilingual medieval HTR, developed at École nationale des chartes – PSL. Four ready-to-use configs are available in `configs/medusa/`, one per model variant — just fill in the data path.
+
+Associated publication: [hal-05600991](https://enc.hal.science/hal-05600991)
+
+### Available models
+
+| Config | HuggingFace model | Parameters | Notes |
+|--------|-------------------|------------|-------|
+| `configs/medusa/Medusa0.2Line-9B.yml` | [ENC-PSL/Medusa0.2Line-9B](https://huggingface.co/ENC-PSL/Medusa0.2Line-9B) | 9B | Latest, best performance |
+| `configs/medusa/Medusa0.2Line-4B.yml` | [ENC-PSL/Medusa0.2Line-4B](https://huggingface.co/ENC-PSL/Medusa0.2Line-4B) | 4B | Latest, lighter |
+| `configs/medusa/Medusa0.1Line-9B.yml` | [ENC-PSL/Medusa0.1Line-9B](https://huggingface.co/ENC-PSL/Medusa0.1Line-9B) | 9B | |
+| `configs/medusa/Medusa0.1Line-4B.yml` | [ENC-PSL/Medusa0.1Line-4B](https://huggingface.co/ENC-PSL/Medusa0.1Line-4B) | 4B | |
+
+### Usage
+
+Set `data.test` in the chosen config to your ALTO XML data directory, then:
+
+```bash
+pixi shell -e inference
+
+# Run HTR prediction
+docworkflow -c configs/medusa/Medusa0.2Line-9B.yml predict -t htr -d test
+
+# Score against ground truth
+docworkflow -c configs/medusa/Medusa0.2Line-9B.yml score -t htr -d test
+```
+
+The 9B configs use 8-bit quantization (`use_8bit: true`) to fit on a single GPU. The 4B configs run without quantization. Both can be combined with pre-computed line segmentation via `input_file` (see [Advanced Usage](#advanced-usage)).
+
+
 ## CLI Reference
 
 **Global option:**

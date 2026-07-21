@@ -1,0 +1,25 @@
+run_name: "Medusa0.1Line-4B"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+save_image: true
+
+data:
+  test: "/path/to/your/data"  # TO FILL IN
+
+tasks:
+  htr:
+    type: VLMLineHTR
+    config:
+      model_name: 'ENC-PSL/Medusa0.1Line-4B'
+      device_map: "auto"
+      max_new_tokens: 128
+      line_batch_size: 16
+      max_pixels: 401408
+      prompt: >
+        Transcribe the handwritten text in this line image.
+        Keep abbreviations as written, do not expand them.
+        Preserve the original word segmentation.
+        Use only u and i, never v and j, regardless of the original or modern usage.
+        Do not record allographic variants, use standard letter forms.
+        Output ONLY the transcription.
