@@ -87,35 +87,34 @@ def predict_command(config: Config, task: str, dataset: str, output: str, save_i
         
         # Chaîner les prédictions : sortie de chaque étape = entrée de la suivante
         current_input = data_path
-        previous_output = None  # Pour garder trace du dossier précédent
-        
+
         for idx, task_name in enumerate(tasks_list):
             task_obj = getattr(config, f"{task_name}_task")
             task_output = Path(base_output) / task_name
             task_output.mkdir(parents=True, exist_ok=True)
-            
+
             is_final_task = (idx == len(tasks_list) - 1)
             task_save_image = final_save_image if is_final_task else task_obj.config.get('save_image', True)
-            
+
             # Prédire
             predict(
-                task=task_obj, 
-                data_path=current_input, 
+                task=task_obj,
+                data_path=current_input,
                 output=task_output,
                 save_image=task_save_image
             )
-            
+
             click.echo(f"{task_name} completed")
-            
-            # Nettoyer les résultats intermédiaires si demandé
-            if cleanup_intermediate and previous_output is not None and idx < len(tasks_list) - 1:
-                # Ne pas supprimer le dernier output et ne pas supprimer si c'est les données originales
-                if previous_output != data_path:
-                    click.echo(f"Cleaning up intermediate results: {previous_output}")
-                    shutil.rmtree(previous_output)
-            
+
+            # Nettoyer l'entrée intermédiaire qu'on vient de consommer, si demandé
+            # (jamais les données d'origine, jamais la sortie finale : celle-ci n'est
+            # jamais passée à shutil.rmtree puisqu'elle ne devient current_input que
+            # s'il y a une étape suivante qui la consomme à son tour)
+            if cleanup_intermediate and current_input != data_path:
+                click.echo(f"Cleaning up intermediate results: {current_input}")
+                shutil.rmtree(current_input)
+
             # La sortie de cette étape devient l'entrée de la suivante
-            previous_output = current_input
             current_input = task_output
         
         click.echo(f"Full pipeline complete!")
@@ -157,38 +156,53 @@ def predict_command(config: Config, task: str, dataset: str, output: str, save_i
 @click.pass_obj
 def score_command(config: Config, task: str, pred_path: str, dataset: str, output: str):
 
-    gt_path = config.data[dataset]    
+    gt_path = config.data[dataset]
     if output == "":
         if not config.yaml.get("output_dir"):
-            output = "./results/"
-        output = config.yaml.get("output_dir") + "/"
+            base_output = "./results/"
+        else:
+            base_output = config.yaml.get("output_dir") + "/"
         if config.yaml.get("run_name"):
-            output = output + "/" + config.yaml.get("run_name") + "/"
-        output = Path(output + task)
+            base_output = base_output + config.yaml.get("run_name") + "/"
+    else:
+        base_output = output + "/"
+    output = Path(base_output + task)
 
     if task == 'all':
         # Score toutes les tâches configurées et possibles
         scoreable_tasks = config.get_scoreable_tasks(pred_path, gt_path)
-        
+
         if not scoreable_tasks:
             click.echo("No tasks can be scored with the provided files.", err=True)
             return
-                
+
+        output.mkdir(parents=True, exist_ok=True)
+
+        if len(scoreable_tasks) > 1:
+            click.echo(
+                f"Warning: with -t all, every task writes its results to the same "
+                f"output directory ({output}); only {scoreable_tasks[-1]}'s results.csv "
+                f"(the last task scored) will remain on disk.",
+                err=True
+            )
+
         for task_name in scoreable_tasks:
             click.echo(f"\n{'='*50}")
             click.echo(f"Scoring {task_name}...")
             task_obj = getattr(config, f"{task_name}_task")
 
             if pred_path == "":
-                if task_obj.config.yaml.get("input_file"):
-                    pred_path = task_obj.config.yaml.get("input_file")
+                if task_obj.config.get("input_file"):
+                    task_pred_path = task_obj.config.get("input_file")
                 else:
-                    pred_path = output
-        
-            score(task = task_obj, 
-                pred_path=pred_path, 
-                gt_path=gt_path, 
-                results_dir=output)    
+                    task_pred_path = output
+            else:
+                task_pred_path = pred_path
+
+            score(task = task_obj,
+                pred_path=task_pred_path,
+                gt_path=gt_path,
+                results_dir=output)
     else:
         # Score une tâche spécifique
         task_obj = getattr(config, f"{task}_task")
@@ -236,12 +250,15 @@ def train_command(config: Config, task: str, seed: int):
 def print_command(config: Config, task: str, pred_path: str, output: str, json_format: bool):
     if output == "":
         if not config.yaml.get("output_dir"):
-            output = "./results/"
-        output = config.yaml.get("output_dir") + "/"
+            base_output = "./results/"
+        else:
+            base_output = config.yaml.get("output_dir") + "/"
         if config.yaml.get("run_name"):
-            output = output + "/" + config.yaml.get("run_name") + "/"
-        output = Path(output + task)
-    
+            base_output = base_output + config.yaml.get("run_name") + "/"
+    else:
+        base_output = output + "/"
+    output = Path(base_output + task)
+
     task_obj = getattr(config, f"{task}_task")
     if task_obj is None:
         click.echo(f"Error: Task '{task}' not configured", err=True)

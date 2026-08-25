@@ -10,8 +10,6 @@ from lxml import etree as ET
 
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel, GenerationConfig
 
-from IPython.display import display
-
 from src.alto.alto_lines import read_lines_geometry
 from src.alto.alto_text import write_text_to_alto
 

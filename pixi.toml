@@ -25,6 +25,7 @@ scipy = ">=1.13.0"
 click = ">=8.1.0"
 rich = ">=13.0.0"
 pyyaml = ">=6.0.0"
+tqdm = ">=4.65.0"
 
 # Data science
 pandas = ">=2.0.0"
@@ -36,6 +37,11 @@ scikit-learn = ">=1.0.0"
 jiwer = ">=3.0.0"
 wandb = ">=0.25.0"
 shapely = ">=2.0.0"
+torchmetrics = ">=1.0.0"
+regex = ">=2023.0.0"
+
+# System monitoring
+psutil = ">=5.9.0"
 
 # VLM inference (shared — main uses it for inference, train for fine-tuning)
 transformers = "==5.2.0"

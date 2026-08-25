@@ -393,6 +393,8 @@ dataset/
 
 Hierarchical structures (subdirectories per document) are automatically detected and preserved in outputs.
 
+The two layouts are mutually exclusive: a dataset must have **either** all its files at the root (flat) **or** all of them inside subdirectories (hierarchical, one level deep). A directory mixing both raises an explicit error rather than silently ignoring the root files.
+
 ### Pipeline data flow
 
 ```
@@ -419,6 +421,16 @@ images + ALTO XML (layout regions)
 - **Worst pages**: Top 5 pages by CER
 
 Results are saved as CSV files. When `use_wandb: true`, per-page and per-document tables are uploaded as W&B artifacts.
+
+### How scores are aggregated
+
+On a **hierarchical** dataset, the global CER/WER reported in `results.csv` is the **unweighted mean of the per-document scores** (macro-average): every document counts equally, whatever its length, so a 3-line document weighs as much as a 300-line one. This is deliberate — it keeps a handful of very long documents from dominating the reported score — but it differs from the character-weighted micro-average usual in HTR. Figures produced this way are not directly comparable to micro-averaged ones published elsewhere.
+
+Per-page and per-document CSVs carry the raw `char_count` / `word_count` needed to recompute a micro-average if required.
+
+### Pages excluded from the score
+
+Pages that fail to be read or scored, and pages whose ground truth contains no non-empty line, are skipped: they contribute to neither the numerator nor the denominator of the aggregate. The same applies to whole documents with no matching predictions. Each skip is reported on stdout, but `results.csv` records only the metrics themselves, not the number of pages skipped — compare the row count of the per-page CSV against the number of input pages to check coverage.
 
 
 ## Advanced Usage

@@ -476,7 +476,7 @@ class VLMLineHTRTask(BaseVLMHTR):
         else:
             valid_train_weighted = valid_train
 
-        converted_train_set = _LazyLineDataset(valid_train, self._format_conversation)
+        converted_train_set = _LazyLineDataset(valid_train_weighted, self._format_conversation)
 
         if valid_samples:
             valid_valid = [s for s in valid_samples if os.path.exists(s["page_image_path"]) and s.get("boundary")]

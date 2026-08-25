@@ -66,6 +66,17 @@ class BaseHTR(BaseTask):
     def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):
         """
         Score a batch of HTR predictions.
+
+        Caveat — pages silently dropped from the score:
+            Pages that raise while being read or scored are caught, reported on
+            stdout, and skipped: they contribute to neither the numerator nor
+            the denominator of the aggregated CER/WER. The same holds for pages
+            with no non-empty GT line (`page_gt_texts` empty).
+
+            `results.csv` therefore reports metrics over the pages that could
+            actually be scored, without recording how many were skipped. Compare
+            `len(page_scores)` (also written to the per-page CSV) against the
+            number of input pages to detect this.
         """
         all_gt_texts = []
         all_pred_texts = []

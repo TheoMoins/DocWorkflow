@@ -241,7 +241,19 @@ class BaseTask(ABC):
         """
         Score a hierarchical dataset structure.
         Calls _score_batch for each subdirectory.
-        """        
+
+        Caveat — documents silently dropped from the score:
+            Subdirectories with no prediction folder or no matching prediction
+            file are reported on stdout and skipped entirely. Combined with the
+            per-page skipping in `_score_batch`, the aggregated metrics cover
+            only the documents/pages that could actually be scored, and
+            `results.csv` does not record how many were skipped. The per-document
+            CSV lists the documents that were scored, and its `pages` column the
+            pages retained for each.
+
+            Aggregation across documents is an unweighted mean — see
+            `aggregate_metrics`.
+        """
         structure_info = discover_dataset_structure(gt_path, self._get_score_file_extensions())
         
         all_page_scores = []

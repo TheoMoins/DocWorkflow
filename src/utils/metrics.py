@@ -23,6 +23,16 @@ def aggregate_metrics(metrics_list):
     Aggregate metrics from multiple batches.
     Default: average numeric values.
     Override for task-specific aggregation.
+
+    Note on aggregation (hierarchical datasets):
+        Rate metrics (CER, WER, ...) are aggregated as an **unweighted mean of
+        the per-document values** (macro-average): each document counts equally,
+        regardless of its number of characters. This is deliberate — it prevents
+        a few very long documents from dominating the reported score — but it
+        differs from the micro-average (character-weighted) convention usual in
+        HTR, so the two are not directly comparable.
+
+        Only `total/` keys are summed rather than averaged.
     """
     if not metrics_list:
         return {}

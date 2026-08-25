@@ -19,7 +19,7 @@ def score(
     pred_path = Path(pred_path)
 
     dir = Path(results_dir)
-    dir.mkdir(exist_ok=True)
+    dir.mkdir(parents=True, exist_ok=True)
 
     console.rule(task.name)
 

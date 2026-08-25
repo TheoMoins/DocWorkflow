@@ -40,25 +40,52 @@ class Config(object):
             results.append(task_name)
         return results
 
-    def get_scoreable_tasks(self, pred_path: str, gt_path: str) -> list:        
+    @staticmethod
+    def _find_first_xml(directory: Path) -> Path:
+        """
+        Premier fichier XML du dossier, à la racine puis dans les sous-dossiers.
+
+        Un dataset peut être plat (fichiers à la racine) ou hiérarchique
+        (fichiers un niveau plus bas) ; on explore les deux, sur un seul niveau
+        comme le fait `discover_dataset_structure`.
+        """
+        for xml_file in sorted(directory.glob("*.xml")):
+            return xml_file
+
+        for subdir in sorted(p for p in directory.iterdir()
+                             if p.is_dir() and not p.name.startswith('.')):
+            for xml_file in sorted(subdir.glob("*.xml")):
+                return xml_file
+
+        return None
+
+    def get_scoreable_tasks(self, pred_path: str, gt_path: str) -> list:
         scoreable = []
-        pred_files = list(Path(pred_path).glob("*.xml"))
-        gt_files = list(Path(gt_path).glob("*.xml"))
-        
-        if not pred_files or not gt_files:
+
+        if not pred_path or not gt_path:
             return scoreable
-        
+
+        pred_dir, gt_dir = Path(pred_path), Path(gt_path)
+        if not pred_dir.is_dir() or not gt_dir.is_dir():
+            return scoreable
+
+        pred_file = self._find_first_xml(pred_dir)
+        gt_file = self._find_first_xml(gt_dir)
+
+        if pred_file is None or gt_file is None:
+            return scoreable
+
+        tree = ET.parse(str(pred_file))
+        root = tree.getroot()
+        ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
+
         # Vérifier chaque tâche configurée
         for task_name in ['layout', 'line', 'htr']:
             task_obj = getattr(self, f"{task_name}_task")
-            
+
             if task_obj is None:
                 continue
 
-            tree = ET.parse(str(pred_files[0]))
-            root = tree.getroot()
-            ns = {'alto': 'http://www.loc.gov/standards/alto/ns-v4#'}
-            
             if task_name == 'layout':
                 # Vérifier qu'il y a des TextBlocks
                 if len(root.findall('.//alto:TextBlock', ns)) > 0:

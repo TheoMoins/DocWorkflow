@@ -13,10 +13,17 @@ def discover_dataset_structure(data_path: str, image_extensions: List[str] = Non
         
     Returns:
         Dict contenant:
-        - 'type': 'flat' ou 'hierarchical'
+        - 'type': 'flat', 'hierarchical' ou 'empty'
         - 'subdirs': Liste des sous-dossiers (si hiérarchique)
         - 'images': Liste de tous les chemins d'images
         - 'structure': Dict mappant sous-dossier -> liste d'images
+
+    Raises:
+        ValueError: si le dataset mélange fichiers à la racine et sous-dossiers
+            (structure « mixte », non supportée).
+
+    Note:
+        La découverte n'explore qu'un seul niveau de sous-dossiers.
     """
     if image_extensions is None:
         image_extensions = ['*.jpg', '*.jpeg', '*.png']
@@ -66,20 +73,18 @@ def discover_dataset_structure(data_path: str, image_extensions: List[str] = Non
         }
     
     elif subdirs_with_images and root_images:
-        # Structure mixte : images à la racine ET dans des sous-dossiers
-        all_images = sorted(root_images)
-        for images in structure.values():
-            all_images.extend(images)
-        
-        structure[str(data_path)] = sorted(root_images)
-        
-        return {
-            'type': 'mixed',
-            'subdirs': sorted([str(d) for d in subdirs_with_images]),
-            'images': sorted(all_images),
-            'structure': structure
-        }
-    
+        # Structure mixte : non supportée. Les deux chemins de traitement
+        # (plat / hiérarchique) sont exclusifs : le chemin hiérarchique
+        # chercherait les fichiers de la racine sous <pred>/<nom_du_dossier>/
+        # et les exclurait donc silencieusement. On échoue explicitement.
+        raise ValueError(
+            f"Unsupported mixed dataset structure in {data_path}: found "
+            f"{len(root_images)} file(s) at the root and {len(subdirs_with_images)} "
+            f"subdirectory(ies) containing files. Use either a flat structure "
+            f"(all files at the root) or a hierarchical one (all files inside "
+            f"subdirectories)."
+        )
+
     else:
         # Aucune image trouvée
         return {
@@ -242,8 +247,11 @@ def validate_dataset_structure(data_path: str) -> Tuple[bool, str]:
     if not data_path.is_dir():
         return False, f"Not a directory: {data_path}"
     
-    structure_info = discover_dataset_structure(str(data_path))
-    
+    try:
+        structure_info = discover_dataset_structure(str(data_path))
+    except ValueError as e:
+        return False, str(e)
+
     if structure_info['type'] == 'empty':
         return False, "No images found in dataset"
     
