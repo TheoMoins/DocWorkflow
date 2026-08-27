@@ -73,7 +73,10 @@ def _polygon_from_line(line: dict) -> Polygon:
         if not poly.is_valid:
             poly = make_valid(poly)
         return poly
-    pts = line.get('baseline', [])
+    pts = line.get('baseline') or line.get('boundary') or []
+    if not pts:
+        # Degenerate line with no usable geometry: empty polygon, matches nothing.
+        return Polygon()
     xs = [p[0] for p in pts]
     ys = [p[1] for p in pts]
     pad = 10

@@ -28,6 +28,8 @@ tasks:
       # Option 1 : Run a model
       model_path: "src/tasks/line/models/baseline_ms_medieval.mlmodel"
       text_direction: "horizontal-lr"
+      restrict_to_layout: false # remove lines not affected on a Zone or not
+      baseline_ratio: 0.67
       # Option 2 : Use an already existing layout segmentation
       # input_file: "./data/precomputed/{image_name}_layout.xml"
 

@@ -10,7 +10,11 @@ from pathlib import Path
 
 from ultralytics import YOLO, settings
 
-from src.alto.alto_lines import add_lines_to_alto
+from src.alto.alto_lines import (
+    add_lines_to_alto,
+    polygon_to_baseline,
+    bbox_to_baseline,
+)
 
 
 class YoloLineTask(BaseLine):
@@ -93,56 +97,67 @@ class YoloLineTask(BaseLine):
             seed=seed
         )
     
-    def _yolo_box_to_line(self, box, mask_xy=None, image_width=None, image_height=None):
+    def _yolo_box_to_line(self, box, mask_xy=None, image_width=None, image_height=None,
+                          confidence=None):
         """
         Convert YOLO detection to line format (baseline + boundary).
-        
+
+        When a segmentation mask is available the baseline is extracted *from the
+        polygon* — a polyline placed at a calibrated fraction of the local line height —
+        so that it follows the slant and the curvature of the line. Taking the
+        mid-height of the bounding box instead put the baseline roughly half a line
+        height too high and could not represent a tilted line at all.
+
         Args:
             box: YOLO box coordinates [x1, y1, x2, y2]
             mask_xy: Optional segmentation polygon coordinates (already in original image space)
             image_width: Image width (unused, kept for compatibility)
             image_height: Image height (unused, kept for compatibility)
-            
+            confidence: Detector confidence score for this box
+
         Returns:
             Dictionary with baseline and boundary, or None if line too short
         """
         x1, y1, x2, y2 = map(int, box)
-        
+        line_id = f'line_{id(box)}'
+
         # If we have segmentation polygon coordinates
         if mask_xy is not None and len(mask_xy) > 0:
             # mask_xy is already in original image coordinates
             boundary = [[int(pt[0]), int(pt[1])] for pt in mask_xy]
-            
-            # Get bounding box of the polygon
-            boundary_array = np.array(boundary)
-            min_x = int(boundary_array[:, 0].min())
-            max_x = int(boundary_array[:, 0].max())
-            min_y = int(boundary_array[:, 1].min())
-            max_y = int(boundary_array[:, 1].max())      
 
-            baseline_y = (min_y + max_y) // 2
-            baseline = [[min_x, baseline_y], [max_x, baseline_y]]
-            
+            baseline = polygon_to_baseline(boundary, ratio=self.baseline_ratio)
+            if baseline is None:
+                # Degenerate polygon: fall back on its bounding box
+                boundary_array = np.array(boundary)
+                baseline = bbox_to_baseline(
+                    boundary_array[:, 0].min(), boundary_array[:, 1].min(),
+                    boundary_array[:, 0].max(), boundary_array[:, 1].max(),
+                    ratio=self.baseline_ratio,
+                )
+
             return {
                 'baseline': baseline,
                 'boundary': boundary,
-                'id': f'line_{id(box)}'
+                'id': line_id,
+                'confidence': confidence,
             }
-        
-        baseline_y = (y1 + y2) // 2
-        baseline = [[x1, baseline_y], [x2, baseline_y]]
-        
+
+        # Pure detection: a box carries no slant, only the height is calibrated.
+        baseline = bbox_to_baseline(x1, y1, x2, y2, ratio=self.baseline_ratio)
+
         boundary = [
             [x1, y1],
             [x2, y1],
             [x2, y2],
             [x1, y2]
         ]
-        
+
         return {
             'baseline': baseline,
             'boundary': boundary,
-            'id': f'line_{id(box)}'
+            'id': line_id,
+            'confidence': confidence,
         }
     
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True):
@@ -195,11 +210,17 @@ class YoloLineTask(BaseLine):
                         if has_masks and idx < len(result.masks.xy):
                             mask_xy = result.masks.xy[idx]
                         
+                        try:
+                            conf = float(box.conf[0])
+                        except (AttributeError, IndexError, TypeError):
+                            conf = None
+                        
                         line = self._yolo_box_to_line(
                             xyxy,
                             mask_xy=mask_xy,
                             image_width=image_size[0],
-                            image_height=image_size[1]
+                            image_height=image_size[1],
+                            confidence=conf
                         )
                         
                         # Only add valid lines (not None)
@@ -214,7 +235,8 @@ class YoloLineTask(BaseLine):
                     existing_alto = os.path.join(source_dir, f"{base_name}.xml")
                     if os.path.exists(existing_alto):
                         # Use existing structure
-                        add_lines_to_alto(lines, output_path, existing_alto)
+                        add_lines_to_alto(lines, output_path, existing_alto,
+                                          orphan_policy=self.orphan_policy)
                     else:
                         # Create new ALTO
                         from src.alto.yolalto import create_alto_xml, save_alto_xml
@@ -228,7 +250,8 @@ class YoloLineTask(BaseLine):
                         save_alto_xml(alto, output_path)
                         
                         # Add lines
-                        add_lines_to_alto(lines, output_path, output_path)
+                        add_lines_to_alto(lines, output_path, output_path,
+                                          orphan_policy=self.orphan_policy)
                     
                     results.append(lines)
                     

@@ -202,7 +202,8 @@ class KrakenLineTask(BaseLine):
                 if not os.path.exists(output_path) and os.path.exists(alto_path):
                     shutil.copy2(alto_path, output_path) 
 
-                add_lines_to_alto(predicted_lines, output_path, alto_path)
+                add_lines_to_alto(predicted_lines, output_path, alto_path,
+                                  orphan_policy=self.orphan_policy)
                 
                 results.append(predicted_lines)
                 
