@@ -115,12 +115,28 @@ class BaseLine(BaseTask):
             iou_thresholds=[round(x, 2) for x in np.arange(0.5, 1.0, 0.05)]
         )
         
+        # `precision` et `recall` sont les tableaux **cumulés** de la courbe
+        # précision-rappel, un point par détection classée par confiance
+        # décroissante. Leur moyenne n'est pas un taux : sur un détecteur parfait
+        # elle donne un rappel de 0,55, et son plafond tend vers 0,5 quand le
+        # nombre de détections croît. On prend le dernier point, c'est-à-dire le
+        # point d'opération obtenu en gardant toutes les détections émises par le
+        # modèle (YOLO ayant déjà appliqué son propre seuil de confiance).
+        prec_curve = metrics[0.75][0]["precision"]
+        rec_curve = metrics[0.75][0]["recall"]
+        precision = float(prec_curve[-1]) if len(prec_curve) > 0 else 0.0
+        recall = float(rec_curve[-1]) if len(rec_curve) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+        # float() explicite : mean_average_precision renvoie des np.float32, que
+        # l'agrégation inter-documents et les exports traitent moins bien.
         metrics_dict = {
             "dataset_test/map50-95": float(metrics["mAP"]),
             "dataset_test/map50": float(metrics[0.5][0]["ap"]),
             "dataset_test/map75": float(metrics[0.75][0]["ap"]),
-            "dataset_test/precision": metrics[0.75][0]["precision"].mean() if len(metrics[0.75][0]["precision"]) > 0 else 0.0,
-            "dataset_test/recall": metrics[0.75][0]["recall"].mean() if len(metrics[0.75][0]["recall"]) > 0 else 0.0
+            "dataset_test/precision": precision,
+            "dataset_test/recall": recall,
+            "dataset_test/f1": f1,
         }
 
         if zm_accumulated is not None:

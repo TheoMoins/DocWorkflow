@@ -163,9 +163,20 @@ def _group_linked(link_table: list, gt_zones: Dict[int, _Zone],
 
 
 def _group_non_linked(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
-                      dt_zones: Dict[int, _Zone]) -> List[_ZoneGroup]:
+                      dt_zones: Dict[int, _Zone],
+                      require_text: bool = False) -> List[_ZoneGroup]:
+    """Turn the unlinked remainders of each zone into Miss and FA groups.
+
+    Args:
+        require_text: skip zones carrying no text. Meaningful for ZoneMapAlt**Cnt**
+            (recognition), where a zone without text has nothing to compare. It must
+            stay off for plain detection: `read_lines()` is called with
+            `with_text=False` there, so *every* zone is textless and the filter used
+            to discard all of them — no Miss and no FA could ever be produced, and
+            `zonemap/score` silently summed only 4 of its 6 configurations.
+    """
     for gz in gt_zones.values():
-        if not gz.text.strip():
+        if require_text and not gz.text.strip():
             continue
         try:
             temp = copy.copy(gz.polygon)
@@ -177,7 +188,7 @@ def _group_non_linked(groups: List[_ZoneGroup], gt_zones: Dict[int, _Zone],
             continue
 
     for dz in dt_zones.values():
-        if not dz.text.strip():
+        if require_text and not dz.text.strip():
             continue
         try:
             temp = copy.copy(dz.polygon)
@@ -389,7 +400,8 @@ def compute_zonemap_page(gt_lines: list, dt_lines: list,
     dt_zones = _build_zones(dt_lines)
     link_table = _build_link_table(gt_zones, dt_zones)
     groups = _group_linked(link_table, gt_zones, dt_zones)
-    groups = _group_non_linked(groups, gt_zones, dt_zones)
+    groups = _group_non_linked(groups, gt_zones, dt_zones,
+                               require_text=with_recognition)
 
     areas, counts = _calc_detection_raw(groups)
     stats['areas'] = areas

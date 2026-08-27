@@ -15,9 +15,12 @@
 #     voit la page entière. Sans cette option, les lignes YOLO hors zone
 #     survivent en pseudo-zones sans TAGREFS et sont comptées en faux positifs
 #     alors que les lignes de référence correspondantes sont filtrées (§1.4).
-#   - §2.5 « Résolution » : chaque modèle YOLO est rejoué à plusieurs img_size,
-#     ce qui donne directement la courbe d'ablation demandée. Kraken n'a pas de
-#     paramètre équivalent et n'est joué qu'une fois.
+#   - §2.5 « Résolution » : chaque modèle YOLO est rejoué à plusieurs img_size.
+#     Attention à la lecture — mesuré le 27/08, ce balayage donne la sensibilité
+#     à la résolution *d'inférence*, à modèle figé : des modèles entraînés à 640
+#     y perdent jusqu'à 41 % de map50-95 à 1536. Il ne teste PAS l'hypothèse du
+#     §2.5, qui porte sur la résolution d'entraînement — celle-là ne se teste
+#     qu'en réentraînant. Kraken n'a pas de paramètre équivalent, joué une fois.
 #
 # Usage :
 #   ./scripts/benchmark_line_models.sh [options]
@@ -58,7 +61,7 @@ GEN_DIR="configs/line/generated"
 
 DATA="../data/ICDAR_CMMHWR_original_data"
 DEVICE="cpu"
-IMG_SIZES="640 1280 1536"
+IMG_SIZES="640"
 BATCH_SIZE=""
 MODEL_FILTERS=""
 RESTRICT_TO_LAYOUT="true"
