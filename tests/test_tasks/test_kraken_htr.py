@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 from lxml import etree as ET
 from src.tasks.htr.kraken_htr import KrakenHTRTask
+from src.alto.alto_text import read_lines_text
 
 
 @pytest.fixture
@@ -52,7 +53,7 @@ def test_kraken_htr_initialization(kraken_htr_config):
     """Teste l'initialisation de KrakenHTRTask."""
     task = KrakenHTRTask(kraken_htr_config)
     
-    assert task.name == "HTR (Kraken)"
+    assert task.name == "HTR_Kraken"
     assert task.config == kraken_htr_config
 
 
@@ -88,30 +89,27 @@ def test_kraken_htr_train_not_implemented(kraken_htr_config):
     task.train()
 
 
-def test_kraken_htr_extract_text_from_alto(kraken_htr_config, sample_alto_with_text):
+def test_kraken_htr_extract_text_from_alto(sample_alto_with_text):
     """Teste l'extraction de texte depuis ALTO."""
-    task = KrakenHTRTask(kraken_htr_config)
-    
-    lines_text = task._extract_lines_text_from_alto(str(sample_alto_with_text))
+    lines_text = read_lines_text(str(sample_alto_with_text))
     
     assert len(lines_text) == 1
     assert lines_text[0]['id'] == 'line1'
     assert lines_text[0]['text'] == 'Hello World'
 
 
-@patch('src.tasks.htr.kraken_htr.glob.glob')
-def test_kraken_htr_score_no_files(mock_glob, kraken_htr_config, temp_dir):
+def test_kraken_htr_score_no_files(kraken_htr_config, temp_dir):
     """Teste score sans fichiers."""
-    mock_glob.return_value = []
-    
     task = KrakenHTRTask(kraken_htr_config)
-    
-    with pytest.raises(ValueError, match="No ground truth"):
-        task.score(str(temp_dir / "pred"), str(temp_dir / "gt"))
+
+    gt_dir = temp_dir / "gt"
+    gt_dir.mkdir()
+
+    with pytest.raises(ValueError, match="No files found"):
+        task.score(str(temp_dir / "pred"), str(gt_dir))
 
 
-@patch('src.tasks.htr.kraken_htr.glob.glob')
-def test_kraken_htr_score_with_files(mock_glob, kraken_htr_config, 
+def test_kraken_htr_score_with_files(kraken_htr_config, 
                                      temp_dir, sample_alto_with_text):
     """Teste le scoring avec des fichiers."""
     # Créer pred et gt dirs
@@ -125,31 +123,29 @@ def test_kraken_htr_score_with_files(mock_glob, kraken_htr_config,
     shutil.copy(sample_alto_with_text, pred_dir / "test.xml")
     shutil.copy(sample_alto_with_text, gt_dir / "test.xml")
     
-    mock_glob.return_value = [str(gt_dir / "test.xml")]
-    
     task = KrakenHTRTask(kraken_htr_config)
     
-    metrics = task.score(str(pred_dir), str(gt_dir))
+    results = task.score(str(pred_dir), str(gt_dir))
     
     # Devrait retourner des métriques
-    assert isinstance(metrics, dict)
+    assert isinstance(results, dict)
+    assert results["structure_type"] == "flat"
+    metrics = results["metrics"]
     assert "score/cer" in metrics
     assert "score/wer" in metrics
 
 
 @patch('src.tasks.htr.kraken_htr.load_any')
 @patch('src.tasks.htr.kraken_htr.os.path.exists')
-@patch('src.tasks.htr.kraken_htr.glob.glob')
-def test_kraken_htr_predict_no_files(mock_glob, mock_exists, mock_load,
+def test_kraken_htr_predict_no_files(mock_exists, mock_load,
                                      kraken_htr_config, temp_dir):
     """Teste predict sans fichiers ALTO."""
     mock_exists.return_value = True
     mock_load.return_value = MagicMock()
-    mock_glob.return_value = []
     
     task = KrakenHTRTask(kraken_htr_config)
     task.load()
     
-    with pytest.raises(ValueError, match="No ALTO XML files found"):
+    with pytest.raises(ValueError, match="No files found"):
         task.predict(str(temp_dir), str(temp_dir / "output"))
 

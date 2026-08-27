@@ -23,7 +23,7 @@ def test_yolo_layout_initialization(yolo_config):
     """Teste l'initialisation de YoloLayoutTask."""
     task = YoloLayoutTask(yolo_config)
     
-    assert task.name == "Layout_Segmentation_YOLO"
+    assert task.name == "Layout_YOLO"
     assert task.config == yolo_config
     assert task.device == "cpu"
 
@@ -93,9 +93,12 @@ def test_yolo_layout_score_no_files(mock_exists, mock_yolo, yolo_config, temp_di
     mock_yolo.return_value = mock_model
     
     task = YoloLayoutTask(yolo_config)
-    
-    with pytest.raises(ValueError, match="No ground truth"):
-        task.score(str(temp_dir / "pred"), str(temp_dir / "gt"))
+
+    gt_dir = temp_dir / "gt"
+    gt_dir.mkdir()
+
+    with pytest.raises(ValueError, match="No files found"):
+        task.score(str(temp_dir / "pred"), str(gt_dir))
 
 
 @patch('src.tasks.layout.yolo_layout.glob.glob')
@@ -131,5 +134,5 @@ def test_yolo_layout_predict_no_images(mock_exists, mock_yolo, yolo_config, temp
     task = YoloLayoutTask(yolo_config)
     task.load()
     
-    with pytest.raises(ValueError, match="No images found"):
+    with pytest.raises(ValueError, match="No files found"):
         task.predict(str(temp_dir), str(temp_dir / "output"))

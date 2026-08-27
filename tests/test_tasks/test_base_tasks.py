@@ -12,11 +12,11 @@ class DummyTask(BaseTask):
     def train(self, **kwargs):
         pass
     
-    def predict(self, data_path, output_dir, save_image=False):
+    def _process_batch(self, file_paths, source_dir, output_dir, **kwargs):
         return []
-    
-    def score(self, pred_path, gt_path):
-        return {"metric": 0.5}
+
+    def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):
+        return {"metric": 0.5}, []
 
 
 def test_base_task_initialization():
