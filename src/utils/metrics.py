@@ -39,13 +39,14 @@ def aggregate_metrics(metrics_list):
     if len(metrics_list) == 1:
         return metrics_list[0]
     
-    all_keys = set()
-    for m in metrics_list:
-        all_keys.update(m.keys())
-    
+
+    all_keys = dict.fromkeys(k for m in metrics_list for k in m)
+    NUMERIC = (int, float, np.integer, np.floating)
+
     result = {}
     for key in all_keys:
-        values = [m[key] for m in metrics_list if key in m and isinstance(m[key], (int, float))]
+        values = [float(m[key]) for m in metrics_list
+                  if key in m and isinstance(m[key], NUMERIC) and not isinstance(m[key], bool)]
         if values:
             #TODO this should include detailed/
             if key.startswith('total/'):
