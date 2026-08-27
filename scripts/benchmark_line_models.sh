@@ -23,7 +23,10 @@
 #   ./scripts/benchmark_line_models.sh [options]
 #
 #   --data PATH        jeu de test (défaut : ../data/ICDAR_CMMHWR_original_data)
-#   --device DEV       cpu | cuda (défaut : cpu)
+#   --device DEV       cpu | cuda (défaut : cpu). cuda exige l'environnement
+#                      pixi `inference` : `main` embarque un pytorch CPU only.
+#                        pixi run -e inference ./scripts/benchmark_line_models.sh --device cuda
+#   --batch-size N     batch YOLO (défaut : valeur de l'archétype)
 #   --img-sizes "..."  tailles YOLO à balayer (défaut : "640 1280 1536")
 #   --models "..."     motifs à retenir, séparés par des espaces (défaut : tous)
 #   --restrict-to-layout true|false   (défaut : true — voir ci-dessus)
@@ -36,6 +39,16 @@
 #
 set -uo pipefail
 
+# Ctrl+C tue le `docworkflow` en cours mais rend la main à la boucle, qui
+# enchaînerait sur le run suivant : il faut sortir explicitement du script.
+on_interrupt() {
+    echo ""
+    echo "Interrompu — les prédictions déjà écrites sont conservées ;"
+    echo "relancer la même commande reprend là où elle s'est arrêtée."
+    exit 130
+}
+trap on_interrupt INT TERM
+
 cd "$(dirname "$0")/.."
 
 MODELS_DIR="src/tasks/line/models"
@@ -46,6 +59,7 @@ GEN_DIR="configs/line/generated"
 DATA="../data/ICDAR_CMMHWR_original_data"
 DEVICE="cpu"
 IMG_SIZES="640 1280 1536"
+BATCH_SIZE=""
 MODEL_FILTERS=""
 RESTRICT_TO_LAYOUT="true"
 SAVE_IMAGE="false"
@@ -65,6 +79,7 @@ while [[ $# -gt 0 ]]; do
         --data)        DATA="$2"; shift 2 ;;
         --device)      DEVICE="$2"; shift 2 ;;
         --img-sizes)   IMG_SIZES="$2"; shift 2 ;;
+        --batch-size)  BATCH_SIZE="$2"; shift 2 ;;
         --models)      MODEL_FILTERS="$2"; shift 2 ;;
         --restrict-to-layout) RESTRICT_TO_LAYOUT="$2"; shift 2 ;;
         --save-images) SAVE_IMAGE="true"; shift ;;
@@ -103,6 +118,10 @@ render_config() {
         -e "s|^\( *\)restrict_to_layout:.*|\1restrict_to_layout: ${RESTRICT_TO_LAYOUT}|" \
         -e "s|^\( *\)img_size:.*|\1img_size: ${img_size}|" \
         "$template" > "$dest"
+
+    if [[ -n "$BATCH_SIZE" ]]; then
+        sed -i -e "s|^\( *\)batch_size:.*|\1batch_size: ${BATCH_SIZE}|" "$dest"
+    fi
 
     # Garde-fou : si l'archétype perd une clé du protocole, on s'en aperçoit ici
     # plutôt qu'en lisant des chiffres non comparables trois heures plus tard.
@@ -154,6 +173,54 @@ shopt -u nullglob
 
 TOTAL=${#RUN_NAMES[@]}
 [[ $TOTAL -gt 0 ]] || { echo "Aucun modèle à évaluer dans ${MODELS_DIR}." >&2; exit 1; }
+
+# --- Préflight ----------------------------------------------------------------
+# Un balayage complet dure des heures : mieux vaut échouer ici que découvrir au
+# vingtième traceback qu'une dépendance manque. Les vérifications portent sur
+# l'interpréteur de l'environnement pixi courant, celui qui exécutera les runs.
+PIXI_ENV="${PIXI_ENVIRONMENT_NAME:-?}"
+has_module() { python -c "import $1" >/dev/null 2>&1; }
+preflight_errors=0
+
+command -v docworkflow >/dev/null || {
+    echo "✗ docworkflow introuvable — lancer le script via 'pixi run -e main ...'" >&2
+    preflight_errors=$((preflight_errors+1))
+}
+
+n_kraken=0; n_yolo=0
+for name in "${RUN_NAMES[@]}"; do
+    case "$name" in line_kraken_*) n_kraken=$((n_kraken+1)) ;; line_yolo_*) n_yolo=$((n_yolo+1)) ;; esac
+done
+
+if [[ $n_kraken -gt 0 ]] && ! has_module yaltai; then
+    # kraken_line.py importe yaltai.models.krakn au chargement du module : sans
+    # yaltai, tous les runs Kraken échouent à l'import, avant toute inférence.
+    echo "✗ module 'yaltai' absent de l'environnement pixi '${PIXI_ENV}'," >&2
+    echo "  or les ${n_kraken} run(s) Kraken en dépendent. Installer avec :" >&2
+    echo "      pixi run -e ${PIXI_ENV} install-yaltai" >&2
+    echo "  (ou relancer avec --models pour n'évaluer que les modèles YOLO)" >&2
+    preflight_errors=$((preflight_errors+1))
+fi
+
+if [[ $n_yolo -gt 0 ]] && ! has_module ultralytics; then
+    echo "✗ module 'ultralytics' absent de l'environnement pixi '${PIXI_ENV}'." >&2
+    preflight_errors=$((preflight_errors+1))
+fi
+
+if [[ "$DEVICE" == cuda* ]]; then
+    if ! python -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
+        echo "✗ --device ${DEVICE} demandé mais torch.cuda.is_available() est faux" >&2
+        echo "  dans l'environnement pixi '${PIXI_ENV}'. L'environnement 'main'" >&2
+        echo "  embarque un pytorch CPU only ; utiliser 'inference' :" >&2
+        echo "      pixi run -e inference ./scripts/benchmark_line_models.sh --device cuda" >&2
+        preflight_errors=$((preflight_errors+1))
+    else
+        gpu=$(python -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null)
+        echo "  GPU détecté : ${gpu}"
+    fi
+fi
+
+[[ $preflight_errors -eq 0 ]] || { echo "" >&2; echo "Préflight en échec, rien n'a été lancé." >&2; exit 1; }
 
 echo "========================================================"
 echo " Benchmark segmentation de ligne"
