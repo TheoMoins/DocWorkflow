@@ -1,0 +1,57 @@
+# Archétype d'ENTRAÎNEMENT YOLO pour la segmentation de ligne.
+#
+# Sert de gabarit à scripts/train_line_sweep.sh, qui ne réécrit que run_name,
+# data.train, pretrained_w, img_size, batch_size, epochs, device, train_name,
+# fliplr et mosaic. Utilisable tel quel pour un run unique.
+#
+# `docworkflow train -t line` lit data.train (pas data.test) : c'est le chemin
+# du YAML de dataset ultralytics, pas celui d'un dossier d'images.
+#
+# Les poids produits atterrissent dans
+#   runs/{detect,segment}/LS-training/<train_name>/weights/best.pt
+# — ultralytics résout le `project` relatif sous son RUNS_DIR et la tâche, donc
+# pas dans ./LS-training/ comme le nom le suggère. Côté wandb en revanche, le
+# projet est bien LS-training, distinct du LS-comparison utilisé au scoring.
+run_name: "yolo_line_train"
+output_dir: "results"
+device: "0"
+use_wandb: true
+save_image: false
+
+data:
+  train: "../data/data_yolo/medieval-segmentation-yolo_lines/config.yaml"
+
+tasks:
+  line:
+    type: YoloLine
+    config:
+      # Poids de départ. yolo26{n,s}.pt → détection (labels bbox) ;
+      # yolo26{n,s}-seg.pt → segmentation (labels polygone). La formulation est
+      # portée par le couple (poids, dataset) : un backbone -seg sur le dataset
+      # bbox échoue, et inversement.
+      pretrained_w: "src/tasks/line/models/yolo26s.pt"
+      img_size: 640
+      batch_size: 16
+      epochs: 50
+
+      # Nom du dossier de run. Sans lui, le nom est dérivé de
+      # img_size/batch_size/epochs seulement — insuffisant pour un balayage qui
+      # fait aussi varier les augmentations et la formulation.
+      train_name: "line_det_yolo26s_640px_16bs_50e_fl0.0_mo0.0"
+
+      # Augmentations. Les défauts d'ultralytics (fliplr=0.5, mosaic=1.0) sont
+      # inadaptés à la page manuscrite : le texte n'existe pas en miroir, et
+      # mosaic recompose chaque image à partir de quatre pages, coupant les
+      # lignes en deux (§3.1 du plan d'action). D'où 0 en première intention.
+      fliplr: 0.0
+      mosaic: 0.0
+
+      # Tout autre argument ultralytics passe par ce bloc, p. ex.
+      # train_args: {scale: 0.2, degrees: 2.0, patience: 20}
+
+      # Utilisés à la prédiction, pas à l'entraînement ; présents pour que la
+      # config reste valide si on la rejoue en predict/score.
+      model_path: ""
+      baseline_ratio: 0.67
+      text_direction: "horizontal-lr"
+      restrict_to_layout: true

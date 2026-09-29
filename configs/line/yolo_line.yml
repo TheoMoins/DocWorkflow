@@ -1,0 +1,32 @@
+# Archétype YOLO — sert de gabarit à scripts/benchmark_line_models.sh, qui
+# ne réécrit que run_name, model_path, img_size, device, save_image,
+# data.test et restrict_to_layout. Utilisable tel quel pour un run unique.
+run_name: "yolo_line"
+output_dir: "results"
+device: "cpu"
+use_wandb: true
+wandb_project: "LS-comparison"
+save_image: true
+
+data:
+  test: "../data/ICDAR_CMMHWR_original_data"
+
+tasks:
+  line:
+    type: YoloLine
+    config:
+      model_path: "src/tasks/line/models/yolo26n_seg_line_640px_16bs_10e.pt"
+      img_size: 1280
+      batch_size: 4
+      baseline_ratio: 0.67
+      text_direction: "horizontal-lr"
+      # true = les lignes ne tombant dans aucune zone du layout sont supprimées.
+      # C'est la seule valeur qui rende la comparaison avec Kraken honnête :
+      # Kraken reçoit les zones en entrée d'inférence et ne peut donc PAS
+      # prédire hors zone, tandis que YOLO voit la page entière. Avec false,
+      # les lignes orphelines de YOLO deviennent des pseudo-zones sans TAGREFS,
+      # que le filtre IGNORED_ZONE_TYPES du scoring ne retire pas alors qu'il
+      # retire les lignes de référence correspondantes — chaque note marginale
+      # correctement détectée est alors comptée en faux positif (cf. §1.4 du
+      # plan d'action). true correspond en outre à l'usage réel en production.
+      restrict_to_layout: true

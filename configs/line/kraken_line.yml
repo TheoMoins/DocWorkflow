@@ -1,0 +1,23 @@
+# Archétype Kraken — sert de gabarit à scripts/benchmark_line_models.sh, qui
+# ne réécrit que run_name, model_path, device, save_image, data.test et
+# restrict_to_layout. Utilisable tel quel pour un run unique.
+run_name: "kraken_line"
+output_dir: "results"
+device: "cpu"
+use_wandb: true
+wandb_project: "LS-comparison"
+save_image: true
+
+data:
+  test: "../data/ICDAR_CMMHWR_original_data"
+
+tasks:
+  line:
+    type: KrakenLine
+    config:
+      model_path: "src/tasks/line/models/blla.mlmodel"
+      text_direction: "horizontal-lr"
+      # Protocole symétrique Kraken/YOLO : voir le commentaire du fichier YOLO.
+      # Sans effet pratique ici (Kraken reçoit déjà les zones en entrée), mais
+      # il faut que les deux configs portent la même valeur.
+      restrict_to_layout: true

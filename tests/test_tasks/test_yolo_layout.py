@@ -136,3 +136,39 @@ def test_yolo_layout_predict_no_images(mock_exists, mock_yolo, yolo_config, temp
     
     with pytest.raises(ValueError, match="No files found"):
         task.predict(str(temp_dir), str(temp_dir / "output"))
+
+@patch('src.tasks.layout.yolo_layout.YOLO')
+@patch('src.tasks.layout.yolo_layout.os.path.exists')
+def test_yolo_layout_train_forwards_augmentations(mock_exists, mock_yolo, yolo_config):
+    """Layout et ligne lisent les mêmes clés d'augmentation, pour que le balayage
+    mis en place sur la ligne soit transposable sans nouveau code."""
+    mock_exists.return_value = True
+    mock_yolo.return_value = MagicMock()
+
+    task = YoloLayoutTask({**yolo_config, "fliplr": 0.0, "mosaic": 0.0,
+                           "train_name": "layout_det_640px"})
+    task.load("pretrained")
+    task.train(data_path="dataset.yaml")
+
+    _, kwargs = task.model.train.call_args
+    assert kwargs["fliplr"] == 0.0
+    assert kwargs["mosaic"] == 0.0
+    assert kwargs["name"] == "layout_det_640px"
+    assert kwargs["project"] == "LA-training"
+
+
+@patch('src.tasks.layout.yolo_layout.YOLO')
+@patch('src.tasks.layout.yolo_layout.os.path.exists')
+def test_yolo_layout_train_defaults_unchanged(mock_exists, mock_yolo, yolo_config):
+    """Non-régression : sans clé d'augmentation, le comportement est celui d'avant."""
+    mock_exists.return_value = True
+    mock_yolo.return_value = MagicMock()
+
+    task = YoloLayoutTask(yolo_config)
+    task.load("pretrained")
+    task.train(data_path="dataset.yaml")
+
+    _, kwargs = task.model.train.call_args
+    assert kwargs["fliplr"] == 0.5
+    assert kwargs["mosaic"] == 1.0
+    assert kwargs["name"] == "Layout_YOLO_640px_4bs_1e"

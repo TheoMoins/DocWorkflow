@@ -86,8 +86,15 @@ class YoloLayoutTask(BaseTask):
             else:
                 training_data = self.config["data_path"]
 
-        save_name = self.name + "_" + str(self.config["img_size"]) + "px_" + \
-                    str(self.config["batch_size"]) + "bs_" + str(self.config["epochs"]) + "e"
+        save_name = self.config.get("train_name") or (
+            self.name + "_" + str(self.config["img_size"]) + "px_" +
+            str(self.config["batch_size"]) + "bs_" + str(self.config["epochs"]) + "e")
+
+        train_kwargs = {"fliplr": 0.5, "mosaic": 1.0}
+        train_kwargs.update(self.config.get("train_args") or {})
+        for key in ("fliplr", "mosaic"):
+            if self.config.get(key) is not None:
+                train_kwargs[key] = self.config[key]
 
         self.model.train(
             data=training_data, 
@@ -97,7 +104,8 @@ class YoloLayoutTask(BaseTask):
             epochs=self.config["epochs"], 
             name=save_name,
             device=self.config["device"],
-            seed=seed
+            seed=seed,
+            **train_kwargs
         )
 
     def _score_batch(self, pred_files, gt_files, pred_dir, gt_dir):

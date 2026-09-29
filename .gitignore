@@ -34,4 +34,5 @@ src/__pycache__/
 /silver_romance/
 
 outputs/
-/configs/line
+/configs/line/generated
+

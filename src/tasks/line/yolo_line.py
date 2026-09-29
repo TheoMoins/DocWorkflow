@@ -82,10 +82,17 @@ class YoloLineTask(BaseLine):
                 "No training data provided in config or as argument"
             )
         
-        save_name = (f"{self.name}_{self.config['img_size']}px_"
-                    f"{self.config['batch_size']}bs_"
-                    f"{self.config['epochs']}e")
-        
+        save_name = self.config.get("train_name") or (
+            f"{self.name}_{self.config['img_size']}px_"
+            f"{self.config['batch_size']}bs_"
+            f"{self.config['epochs']}e")
+
+        train_kwargs = {"fliplr": 0.5, "mosaic": 1.0}
+        train_kwargs.update(self.config.get("train_args") or {})
+        for key in ("fliplr", "mosaic"):
+            if self.config.get(key) is not None:
+                train_kwargs[key] = self.config[key]
+
         self.model.train(
             data=training_data,
             project='LS-training',
@@ -94,7 +101,8 @@ class YoloLineTask(BaseLine):
             epochs=self.config["epochs"],
             name=save_name,
             device=self.config["device"],
-            seed=seed
+            seed=seed,
+            **train_kwargs
         )
     
     def _yolo_box_to_line(self, box, mask_xy=None, image_width=None, image_height=None,
