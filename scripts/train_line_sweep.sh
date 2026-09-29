@@ -24,15 +24,19 @@
 #
 #   --stages "0 1 2"     étages à exécuter (défaut : "0 1 2 3 4 5"). Chaque étage
 #                        repart du gagnant du précédent, mesuré sur le corpus gelé.
-#   --device DEV         device d'entraînement : 0, 0,1, cpu… (défaut : 0)
-#   --eval-device DEV    device de predict+score : cpu, cuda, cuda:0 (défaut :
+#   --device DEV          device d'entraînement : cpu, cuda, cuda:0 (défaut : cuda:0).
+#   --eval-device DEV     device de predict+score : cpu, cuda, cuda:0 (défaut :
 #                        cpu — ce sont les chiffres de la phase A, directement
 #                        comparables ; `--eval-device cuda` va beaucoup plus vite).
-#                        Attention, les deux devices ne prennent PAS la même
-#                        notation : l'entraînement passe par select_device
-#                        d'ultralytics, qui comprend `0`, alors que predict fait
-#                        un torch `model.to()`, qui rejette `0` et veut `cuda`.
-#                        Un `--eval-device 0` est donc réécrit en `cuda:0`.
+#                        Un index nu (`0`) est accepté pour les deux options et
+#                        réécrit en `cuda:0` — YoloLineTask.load("pretrained")
+#                        fait un torch `model.to()` **avant** d'appeler
+#                        `model.train()`, et torch.device("0") lève « Invalid
+#                        device string » là où ultralytics l'aurait accepté.
+#                        Limite connue : le multi-GPU (`0,1`) casse au même
+#                        endroit, pour la même raison, et n'est pas réécrit ici —
+#                        ce n'est pas ce script mais YoloLineTask.to_device() qui
+#                        en aurait besoin.
 #   --data PATH          corpus de test gelé (défaut : ../data/ICDAR_CMMHWR_original_data)
 #   --dataset-root PATH  dossier contenant les datasets YOLO
 #                        (défaut : ../data/data_yolo — à changer sur un serveur
@@ -137,20 +141,23 @@ done
 
 [[ -n "$CUR_EPOCHS" ]] || CUR_EPOCHS="$BASE_EPOCHS"
 
-# `device` d'entraînement et `device` d'évaluation ne suivent pas la même
-# convention : le premier est lu par select_device d'ultralytics, qui accepte
-# l'index nu (`0`, `0,1`) ; le second finit dans un torch `model.to()` via
-# BaseTask.to_device(), et torch.device("0") lève « Invalid device string ». On
-# réécrit donc l'index nu plutôt que de laisser le balayage casser au premier
-# predict, après des heures d'entraînement réussi.
-case "$EVAL_DEVICE" in
-    [0-9]|[0-9],*|[0-9][0-9])
-        echo "  note : --eval-device ${EVAL_DEVICE} réécrit en cuda:${EVAL_DEVICE%%,*}"
-        echo "         (torch.device n'accepte pas un index nu, contrairement à"
-        echo "         ultralytics ; l'inférence n'utilise de toute façon qu'un GPU)"
-        EVAL_DEVICE="cuda:${EVAL_DEVICE%%,*}"
-        ;;
-esac
+# `--device` ET `--eval-device` passent tous les deux, à un moment ou un autre,
+# par un torch `model.to()` brut (YoloLineTask.load() le fait dès le chargement
+# des poids pré-entraînés, avant même model.train()) — et torch.device("0")
+# lève « Invalid device string » là où ultralytics select_device l'accepte. On
+# réécrit donc l'index nu en notation torch plutôt que de laisser le balayage
+# casser au premier run, après un préflight qui aura semblé tout valider.
+normalize_device() {  # normalize_device VALEUR NOM_OPTION
+    case "$1" in
+        [0-9]|[0-9][0-9])
+            echo "  note : --${2} ${1} réécrit en cuda:${1}" >&2
+            echo "cuda:${1}"
+            ;;
+        *) echo "$1" ;;
+    esac
+}
+DEVICE=$(normalize_device "$DEVICE" "device")
+EVAL_DEVICE=$(normalize_device "$EVAL_DEVICE" "eval-device")
 
 OUTPUT_DIR=$(grep -m1 '^output_dir:' "$TEMPLATE_EVAL" | sed 's/output_dir: *"\?\([^"]*\)"\?.*/\1/')
 OUTPUT_DIR="${OUTPUT_DIR:-results}"
