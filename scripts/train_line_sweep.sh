@@ -237,13 +237,39 @@ dataset_yaml_for() {  # dataset_yaml_for FORM
     esac
     [[ -d "$src" ]] || { echo "Dataset introuvable : $src" >&2; return 1; }
     local abs; abs=$(cd "$src" && pwd)
+
+    # Les noms de sous-dossiers (train/val ou train/valid…) sont détectés SUR LE
+    # DISQUE plutôt que recopiés du config.yaml existant. Ce fichier vit hors du
+    # dépôt (../data/data_yolo/…), une machine peut en avoir une copie différente
+    # de celle vue en développement — c'est précisément ce qui a cassé un premier
+    # balayage sur serveur : `val: valid` en local, mais le YAML généré cherchait
+    # un dossier `val` introuvable sur le serveur. Détecter sur disque rend la
+    # génération indépendante de ce que ce fichier contient par ailleurs.
+    local train_dir="" val_dir="" test_dir=""
+    [[ -d "$abs/train/images" ]] && train_dir="train"
+    for cand in valid val validation; do
+        [[ -d "$abs/$cand/images" ]] && { val_dir="$cand"; break; }
+    done
+    [[ -d "$abs/test/images" ]] && test_dir="test"
+
+    if [[ -z "$train_dir" || -z "$val_dir" ]]; then
+        echo "✗ ${abs} : sous-dossiers train/(valid|val) introuvables." >&2
+        echo "  Contenu vu : $(ls "$abs" 2>/dev/null | tr '\n' ' ')" >&2
+        return 1
+    fi
+
     dest="${GEN_DIR}/dataset_line_${form}.yaml"
     {
         echo "# Généré par scripts/train_line_sweep.sh — ne pas éditer."
-        echo "# Chemin absolu résolu sur cette machine, pour ne pas dépendre du"
-        echo "# dossier de travail ni du DATASETS_DIR d'ultralytics."
+        echo "# Chemin absolu et sous-dossiers résolus sur cette machine, détectés"
+        echo "# sur le disque (voir commentaire dans dataset_yaml_for())."
         echo "path: ${abs}"
-        grep -v '^path:' "${src}/config.yaml" | grep -v '^#'
+        echo "train: ${train_dir}"
+        echo "val: ${val_dir}"
+        [[ -n "$test_dir" ]] && echo "test: ${test_dir}"
+        # Seules les classes viennent du config.yaml existant : ces identifiants
+        # sont propres au dataset, pas à la machine, rien à détecter sur disque.
+        grep -E '^(names:|  [0-9]+:)' "${src}/config.yaml"
     } > "$dest"
     echo "$dest"
 }
