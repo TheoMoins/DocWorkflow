@@ -339,8 +339,29 @@ render_eval_config() {  # ... DEST NAME MODEL_PATH IMGSZ
 find_best_pt() {  # find_best_pt NAME
     local name="$1"
     find . -path "*/${TRAIN_PROJECT}/${name}/weights/best.pt" \
+           -o -path "*/${TRAIN_PROJECT}/${name}-[0-9]*/weights/best.pt" \
            -o -path "*/${TRAIN_PROJECT}/${name}[0-9]*/weights/best.pt" 2>/dev/null \
         | xargs -r ls -1t 2>/dev/null | head -1
+}
+
+# find_best_pt_from_log LOG — lit le save_dir qu'ultralytics vient d'imprimer
+# lui-même dans SON PROPRE log, plutôt que de le redeviner par une recherche sur
+# disque. `project='LS-training'` étant relatif, ultralytics le résout contre
+# SETTINGS['runs_dir'] (~/.config/Ultralytics/settings.json), un réglage
+# PERSISTANT indépendant du dossier de travail — sur un serveur où ce réglage a
+# été fixé un jour à un chemin absolu qui ne correspond plus à l'endroit d'où le
+# dépôt est cloné (vécu : /data/theo/... vs /mnt/theo/..., deux chemins réels et
+# distincts), `find .` ne voit jamais ce qu'ultralytics vient d'écrire — neuf
+# répétitions du même entraînement de référence en ont payé le prix avant qu'on
+# s'en aperçoive. Lire le chemin dans le log rend la localisation indépendante
+# de ce réglage, quel qu'il soit sur la machine qui exécute le balayage.
+find_best_pt_from_log() {  # find_best_pt_from_log LOG
+    local log="$1" save_dir best
+    [[ -f "$log" ]] || return 1
+    save_dir=$(grep -oE 'save_dir=[^,]+' "$log" 2>/dev/null | tail -1 | cut -d= -f2-)
+    [[ -n "$save_dir" ]] || return 1
+    best="${save_dir}/weights/best.pt"
+    [[ -f "$best" ]] && echo "$best"
 }
 
 # ── Exécution d'un run ───────────────────────────────────────────────────────
@@ -385,7 +406,14 @@ do_run() {
     fi
 
     # ── entraînement ──
-    local best; best=$(find_best_pt "$name")
+    # Trois façons de retrouver un best.pt, de la plus fiable à la plus large :
+    # le registre persistant (couvre les invocations précédentes), le log frais
+    # de CETTE invocation si on vient d'entraîner (ultralytics y imprime lui-même
+    # son save_dir résolu — fiable même si SETTINGS['runs_dir'] ne correspond pas
+    # au dossier de travail), et en dernier recours une recherche sur disque
+    # relative à `.` (ne voit que ce qui vit sous le dossier de travail).
+    local best; best=$(registry_lookup "$name")
+    [[ -z "$best" ]] && best=$(find_best_pt "$name")
     if [[ -n "$best" && "$RETRAIN" != "true" ]]; then
         echo "    [train] déjà entraîné → ${best} (réutilisé ; --retrain pour forcer)"
     else
@@ -398,14 +426,15 @@ do_run() {
             return 1
         fi
         local elapsed=$(( $(date +%s) - t0 ))
+        best=$(find_best_pt_from_log "$log")
+        [[ -z "$best" ]] && best=$(find_best_pt "$name")
         # §4 du cahier des charges : le temps par époque dimensionne un futur
         # balayage plus large. C'est aussi la seule façon de voir qu'un run à
         # 1536 px coûte quatre fois un run à 640 px.
         printf "    ✓ entraîné en %dh%02dm (%.1f min/époque, device %s)\n" \
             $((elapsed/3600)) $(((elapsed%3600)/60)) \
             "$(awk -v e="$elapsed" -v n="$ep" 'BEGIN{print e/60/n}')" "$DEVICE"
-        echo "${name},${form},${imgsz},${bs},${ep},${elapsed},${DEVICE}" >> "$TIMINGS"
-        best=$(find_best_pt "$name")
+        echo "${name},${form},${imgsz},${bs},${ep},${elapsed},${DEVICE},${best}" >> "$TIMINGS"
     fi
 
     if [[ -z "$best" ]]; then
@@ -541,7 +570,23 @@ echo "   départage sur     : ${SELECT_METRIC} (corpus gelé, pas le valid CATMu
 echo "   sorties           : ${SWEEP_DIR}"
 echo "========================================================"
 
-[[ -f "$TIMINGS" ]] || echo "name,formulation,imgsz,batch,epochs,seconds,device" > "$TIMINGS"
+[[ -f "$TIMINGS" ]] || echo "name,formulation,imgsz,batch,epochs,seconds,device,best_pt" > "$TIMINGS"
+
+# registry_lookup NAME — retrouve le best.pt d'un entraînement TERMINÉ LORS
+# D'UNE INVOCATION PRÉCÉDENTE du script. find_best_pt_from_log() ne peut pas
+# aider ici : son log vit dans le dossier horodaté de CETTE invocation
+# (results/line_sweep_<stamp>/logs/), qui n'existe pas encore pour un run rejoué
+# d'une exécution antérieure. TIMINGS, lui, est un registre PERSISTANT (même
+# chemin d'une invocation à l'autre) : la 8e colonne y enregistre le best.pt
+# résolu au moment de chaque entraînement réussi. Les lignes écrites avant
+# l'ajout de cette colonne n'ont pas ce champ — awk le lit alors vide, et
+# l'appelant retombe sur find_best_pt(), sans que ça casse rien.
+registry_lookup() {  # registry_lookup NAME
+    local name="$1" path
+    [[ -f "$TIMINGS" ]] || return 1
+    path=$(awk -F',' -v n="$name" '$1==n && $8!="" {p=$8} END{if(p)print p}' "$TIMINGS")
+    [[ -n "$path" && -f "$path" ]] && echo "$path"
+}
 
 CUR_FORM="det"
 
@@ -694,7 +739,11 @@ done
         # réutilisé d'un balayage antérieur n'a pas forcément d'entrée de durée.
         read -r tform timgsz tbatch tep < <(sed -E \
             's|^line_([a-z]+)_[^_]+_([0-9]+)px_([0-9]+)bs_([0-9]+)e_.*|\1 \2 \3 \4|' <<<"$n")
-        tsec=$(awk -F',' -v n="$n" '$1==n{print $6; exit}' "$TIMINGS")
+        # Dernière ligne correspondante, pas la première : un run rejoué
+        # plusieurs fois (cf. le bug de localisation de best.pt corrigé ci-dessus)
+        # laisse plusieurs entrées dans TIMINGS, et seule la dernière correspond
+        # au best.pt effectivement retenu.
+        tsec=$(awk -F',' -v n="$n" '$1==n{s=$6} END{print s}' "$TIMINGS")
         mpe="-"
         [[ -n "${tsec:-}" && -n "${tep:-}" ]] \
             && mpe=$(awk -v s="$tsec" -v e="$tep" 'BEGIN{printf "%.2f", s/60/e}')
