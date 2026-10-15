@@ -211,7 +211,9 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             k = blocks[i][1]
             texts, n_mismatch, n_deduped = parse_multiline_output(raw, k, self.dedup_threshold)
             if n_mismatch:
-                print(f"  [mismatch] block of {k} lines: output length differs after dedup")
+                n_got = len(raw.split('\n'))
+                print(f"  [mismatch] block of {k} lines: got {n_got} raw lines "
+                      f"({n_deduped} deduped); raw={raw[:300]!r}")
             results[i] = {
                 'texts': [{'text': t, 'confidence': 1.0} for t in texts],
                 'n_mismatch': n_mismatch,
