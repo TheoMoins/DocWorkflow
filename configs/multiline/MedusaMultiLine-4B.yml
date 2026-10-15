@@ -1,0 +1,28 @@
+run_name: "MedusaMultiLine-4B"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+save_image: true
+
+data:
+  test: "../data/ICDAR_Competition/test"
+
+tasks:
+  htr:
+    type: VLMMultiLineHTR
+    config:
+      model_name: 'ENC-PSL/Medusa0.2Line-4B'
+      device_map: "auto"
+      lines_per_crop: 4           
+      rolling_window: false       # (non implémentée)
+      dedup_threshold: 0.1        # distance d'édition normalisée sous laquelle deux lignes consécutives sont collapsées
+      max_new_tokens: 512         
+      line_batch_size: 4          
+      prompt: >
+        Transcribe the handwritten text in this image, line by line.
+        Output one line of transcription for each line of text in the image, in reading order.
+        Keep abbreviations as written, do not expand them.
+        Preserve the original word segmentation.
+        Use only u and i, never v and j, regardless of the original or modern usage.
+        Do not record allographic variants, use standard letter forms.
+        Output ONLY the transcription.

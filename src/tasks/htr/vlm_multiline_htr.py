@@ -1,4 +1,4 @@
-from src.tasks.htr.base_vlm_htr import BaseVLMHTR
+from src.tasks.htr.base_vlm_htr import BaseVLMHTR, bounding_box, pad_to_max_ratio
 import os
 import shutil
 import gc
@@ -10,9 +10,75 @@ from PIL import Image
 from lxml import etree as ET
 import yaml
 
+from src.tasks.htr.prompt_convention import build_conventions_block, load_conventions
 from src.alto.alto_lines import read_lines_geometry
 from src.alto.alto_text import copy_alto_without_text, write_text_to_alto
 from src.utils.lazy_dataset import LazyLineDataset as _LazyLineDataset
+
+
+def group_lines_into_blocks(lines, k):
+    """
+    Groupe les lignes consécutives (ordre de lecture) par blocs d'au plus k lignes,
+    sans jamais faire chevaucher deux TextBlocks : un changement de zone clôt le bloc
+    courant, même s'il contient moins de k lignes.
+    """
+    if k < 1:
+        raise ValueError(f"k must be >= 1, got {k}")
+
+    blocks = []
+    current = []
+    for line in lines:
+        if current and (len(current) == k or line.get('block_id') != current[-1].get('block_id')):
+            blocks.append(current)
+            current = []
+        current.append(line)
+    if current:
+        blocks.append(current)
+    return blocks
+
+def _normalized_edit_distance(a, b):
+    """Distance de Levenshtein normalisée par la longueur de la plus longue chaîne."""
+    if a == b:
+        return 0.0
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1] / max(len(a), len(b))
+
+
+def parse_multiline_output(raw_text, k, dedup_threshold=0.1):
+    """
+    Découpe la sortie brute du modèle pour un bloc de k lignes.
+
+    Étapes : split sur '\n', dédoublonnage des lignes consécutives quasi identiques
+    (distance d'édition normalisée < dedup_threshold, on garde la première), puis
+    alignement sur k lignes (complété par des chaînes vides ou tronqué).
+    Les lignes vides ne sont jamais considérées comme des doublons.
+    # Pour un jeton séparateur dédié, remplacer le split('\n') ci-dessous.
+
+    Returns:
+        (texts, n_mismatch, n_deduped) — texts est toujours de longueur k ;
+        n_mismatch vaut 1 si le compte de lignes différait de k après dédoublonnage, sinon 0.
+    """
+    texts = []
+    n_deduped = 0
+    for line in raw_text.split('\n'):
+        line = line.strip()
+        if texts and line and texts[-1] and _normalized_edit_distance(texts[-1], line) < dedup_threshold:
+            n_deduped += 1
+            print(f"  [dedup] collapsed {line!r} into previous line {texts[-1]!r}")
+            continue
+        texts.append(line)
+
+    n_mismatch = 0
+    if len(texts) != k:
+        n_mismatch = 1
+        texts = texts[:k] + [''] * (k - len(texts))
+    return texts, n_mismatch, n_deduped
+
 
 class VLMMultiLineHTRTask(BaseVLMHTR):
     """
@@ -25,6 +91,10 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         super().__init__(config)
         self.name = "HTR_VLM_Line_Level"
         self.batch_size = config.get('line_batch_size', 1)
+        self.prompt_template = config.get('prompt_template', self.prompt)
+        self.lines_per_crop = config.get('lines_per_crop', 4)
+        self.rolling_window = config.get('rolling_window', False)
+        self.dedup_threshold = config.get('dedup_threshold', 0.1)
 
         self.hyperparams.update({
             'lora_r': config.get('lora_r', 16),
@@ -44,6 +114,22 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
     def _get_file_extensions(self):
         """VLM Line-Level works with ALTO XML files."""
         return ['*.xml']
+
+    def _extract_multiline_image(self, image, boundaries):
+        """
+        Crop le rectangle englobant l'union des polygones de plusieurs lignes.
+        Contrairement à _extract_line_image, aucun masque polygonal n'est appliqué.
+        """
+        points = [pt for boundary in boundaries if boundary for pt in boundary]
+        if not points:
+            return None
+
+        min_x, min_y, max_x, max_y = bounding_box(points)
+        if max_x - min_x <= 0 or max_y - min_y <= 0:
+            return None
+
+        result = image.crop((min_x, min_y, max_x, max_y))
+        return pad_to_max_ratio(result)
     
     # modified for multiple images
     #TODO: modify args
@@ -68,93 +154,71 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
                 
             }
         ]
-    #TODO: modify for multiple images
-    # treat line_images as list of list of images
-    def _recognize_batch(self, line_images):
+    def _recognize_batch(self, blocks):
         """
-        Recognize multiple lines at once.
-        
+        Recognize several blocks of lines, one crop per block.
+
         Args:
-            line_images: List of PIL Images (or None)
-            
+            blocks: List of (crop, k) — crop is the PIL Image of the block (or None),
+                    k the actual number of lines in the block (may be < lines_per_crop)
+
         Returns:
-            List of recognition results
+            One dict per block: {'texts': [{'text', 'confidence'}] * k, 'n_mismatch', 'n_deduped'}
         """
-        if self.is_minicpm:
-            results = [{'text': '', 'confidence': 0.0} for _ in line_images]
-            for i, imgs in enumerate(line_images):
-                if imgs is None:
-                    continue
-                messages = self._prepare_messages(imgs) # need to define custom prepare_messages
-                text = self._generate_from_messages(messages) # possibly fine as is?
-                results[i] = {'text': text, 'confidence': 1.0}
+        results = [
+            {'texts': [{'text': '', 'confidence': 0.0} for _ in range(k)],
+             'n_mismatch': 0, 'n_deduped': 0}
+            for _, k in blocks
+        ]
+        valid = [(i, crop) for i, (crop, _) in enumerate(blocks) if crop is not None]
+        if not valid:
             return results
 
-        # Filter valid images
-        #TODO: come back to some of this logic so we can do it on an image basis instead of set of 20 images
-        # i might also need to associate indices with individual images
-        # valid image checking should probably happen inside message preparation...? since we're batching
-        valid_images = [(i, imgs) for i, imgs in enumerate(line_images) if imgs is not None]
-        
-        if not valid_images:
-            results = [{'text': '', 'confidence': 0.0} for x in line_images for _ in x ]
-        
-        indices, images = zip(*valid_images)
-        # going to ignore indices probably. will come back to do this more neatly
-        
-        # Prepare batch messages
-        batch_messages = []
-        for imgs in images:
-            batch_messages.append(self._prepare_messages(imgs))
-        #for m in batch_messages:
-           # print(m)
-        
-        # Process batch using Qwen format
-        inputs = self.processor.apply_chat_template(
-            batch_messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_dict=True,
-            padding=True,
-            enable_thinking=False,
-            return_tensors="pt"
-        ).to(self.model.device)
-        
-        # Generate
-        with torch.no_grad():
-            gen_kwargs = self._build_base_gen_kwargs()
-            gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
-            generated_ids = self.model.generate(**inputs, **gen_kwargs)        
-        
-        # Decode
-        generated_ids_trimmed = [
-            out_ids[len(in_ids):]
-            for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        
-        output_texts = self.processor.batch_decode(
-            generated_ids_trimmed,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False
-        )
+        if self.is_minicpm:
+            raw_outputs = [
+                self._generate_from_messages(self._prepare_messages([crop]))
+                for _, crop in valid
+            ]
+        else:
+            batch_messages = [self._prepare_messages([crop]) for _, crop in valid]
+            inputs = self.processor.apply_chat_template(
+                batch_messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
+                padding=True,
+                enable_thinking=False,
+                return_tensors="pt"
+            ).to(self.model.device)
 
-        
-        # Cleanup
-        del inputs, generated_ids, generated_ids_trimmed
-        
-        # we're going to assume each line image output is separated by a newline
-        texts_split=[x for y in output_texts for x in y.splitlines()]
-        # Reconstruct results
-        #TODO: I will need to be able to parse this as multiple lines....
-        results = [{'text': '', 'confidence': 0.0} for _ in texts_split]
-        #print(len(texts_split))
-        #for idx, text in zip(indices, output_texts):
-        for idx, text in enumerate(texts_split):
-            results[idx] = {'text': text.strip(), 'confidence': 1.0}
-        
+            with torch.no_grad():
+                gen_kwargs = self._build_base_gen_kwargs()
+                gen_kwargs.update({"max_new_tokens": self.max_new_tokens, "do_sample": False})
+                generated_ids = self.model.generate(**inputs, **gen_kwargs)
+
+            generated_ids_trimmed = [
+                out_ids[len(in_ids):]
+                for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+            ]
+            raw_outputs = self.processor.batch_decode(
+                generated_ids_trimmed,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False
+            )
+            del inputs, generated_ids, generated_ids_trimmed
+
+        for (i, _), raw in zip(valid, raw_outputs):
+            k = blocks[i][1]
+            texts, n_mismatch, n_deduped = parse_multiline_output(raw, k, self.dedup_threshold)
+            if n_mismatch:
+                print(f"  [mismatch] block of {k} lines: output length differs after dedup")
+            results[i] = {
+                'texts': [{'text': t, 'confidence': 1.0} for t in texts],
+                'n_mismatch': n_mismatch,
+                'n_deduped': n_deduped,
+            }
         return results
-        
-    #TODO: modify for multiple images
+
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
         Process ALTO files with line-level VLM.
@@ -174,6 +238,14 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
 
         for alto_path in tqdm(file_paths, desc="  Recognizing lines", unit="page"):
             try:
+                doc_dir = Path(alto_path).parent
+                conventions = load_conventions(doc_dir)
+                prompt_tpl = self.prompt_template
+                if conventions and '{conventions}' in prompt_tpl:
+                    self.prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
+                else:
+                    self.prompt = prompt_tpl.replace('{conventions}', '').strip()
+
                 image_path, lines, _ = read_lines_geometry(alto_path)
                 
                 if not os.path.exists(image_path):
@@ -194,40 +266,44 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
                 # Load page image
                 page_image = Image.open(image_path).convert("RGB")
                 
-                # Extract all line images
-                # Modify to do batches of batches
-                # we want groups of up to max 20 lines maybe?
-                maxlines = 40 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
-                nlines = len(lines)
+                # One bounding-box crop per block of k lines within a zone
+                lineblocks = group_lines_into_blocks(lines, self.lines_per_crop)
+                blocks = [
+                    (self._extract_multiline_image(page_image, [line.get('boundary') for line in block]),
+                     len(block))
+                    for block in lineblocks
+                ]
 
-                line_images = []
-                lineblocks = [lines[i:i+maxlines] for i in range(0,nlines, maxlines)]
-                for block in lineblocks:
-                    block_images = []
-                    for line in block:
-                        if line.get('boundary'):
-                            line_img = self._extract_line_image(page_image, line['boundary'])
-                            block_images.append(line_img)
-                        else:
-                            block_images.append(None)
-                    line_images.append(block_images)
-                
                 # Process in batches
-                recognized_texts = []
-                for i in range(0, len(line_images), self.batch_size):
-                    batch = line_images[i:i+self.batch_size]
-                    batch_results = self._recognize_batch(batch)
-                    recognized_texts.extend(batch_results)
-                
+                block_results = []
+                for i in range(0, len(blocks), self.batch_size):
+                    block_results.extend(self._recognize_batch(blocks[i:i+self.batch_size]))
+
+                recognized_texts = [t for r in block_results for t in r['texts']]
+                # Each block result holds exactly len(block) texts, so the flattened list
+                # stays aligned with the flattened blocks, i.e. with `lines`.
+                recognized_texts_by_id = {
+                    line['id']: result
+                    for line, result in zip((ln for block in lineblocks for ln in block), recognized_texts)
+                }
+                n_mismatch = sum(r['n_mismatch'] for r in block_results)
+                n_deduped = sum(r['n_deduped'] for r in block_results)
+
                 # Save to ALTO
                 output_path = os.path.join(output_dir, os.path.basename(alto_path))
                 
                 if not os.path.exists(output_path):
                     copy_alto_without_text(alto_path, output_path)
                 
-                write_text_to_alto(output_path, recognized_texts, output_path)
+                write_text_to_alto(output_path, recognized_texts_by_id, output_path)
                 
-                results.append({'file': alto_path, 'texts': recognized_texts})
+                results.append({
+                    'file': alto_path,
+                    'texts': recognized_texts,
+                    'n_blocks': len(blocks),
+                    'n_mismatch': n_mismatch,
+                    'n_deduped': n_deduped,
+                })
                 
                 # Copy image
                 if save_image:
@@ -279,10 +355,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
                 continue
     
             _, lines, _ = read_lines_geometry(xml_path)
-            # we want groups of up to max 20 lines maybe?
-            maxlines = 40 #TODO: make this a hyperparameter we can tune. setting to 1 should function as regular vlm line
-            nlines = len(lines)
-            lineblocks = [lines[i:i+maxlines] for i in range(0,nlines, maxlines)]
+            lineblocks = group_lines_into_blocks(lines, self.lines_per_crop)
             for block in lineblocks:
                 samples.append({ 
                     "page_image_path": image_path,

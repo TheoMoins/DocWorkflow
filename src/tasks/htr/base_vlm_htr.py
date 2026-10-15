@@ -12,6 +12,39 @@ from qwen_vl_utils import process_vision_info
 from src.utils.transformers_models import is_supported_by_auto_image_text
 
 
+MAX_ASPECT_RATIO = 190  # unsloth limit: 200
+
+
+def bounding_box(points):
+    """Rectangle englobant (min_x, min_y, max_x, max_y) d'un ensemble de points [x, y]."""
+    points_array = np.array(points)
+    min_x = int(points_array[:, 0].min())
+    max_x = int(points_array[:, 0].max())
+    min_y = int(points_array[:, 1].min())
+    max_y = int(points_array[:, 1].max())
+    return min_x, min_y, max_x, max_y
+
+
+def pad_to_max_ratio(image, max_ratio=MAX_ASPECT_RATIO):
+    """Pad en noir (centré) pour que le ratio d'aspect ne dépasse pas max_ratio."""
+    rw, rh = image.size
+    if rw > 0 and rh > 0:
+        ratio = max(rw / rh, rh / rw)
+        if ratio > max_ratio:
+            if rw > rh:
+                new_h = max(1, rw // max_ratio)
+                padded = Image.new('RGB', (rw, new_h), (0, 0, 0))
+                padded.paste(image, (0, (new_h - rh) // 2))
+                image = padded
+            else:
+                new_w = max(1, rh // max_ratio)
+                padded = Image.new('RGB', (new_w, rh), (0, 0, 0))
+                padded.paste(image, ((new_w - rw) // 2, 0))
+                image = padded
+    return image
+
+
+
 class BaseVLMHTR(BaseHTR):
     """
     Base class for VLM-based HTR tasks.
@@ -233,11 +266,7 @@ class BaseVLMHTR(BaseHTR):
         if not boundary:
             return None
 
-        boundary_array = np.array(boundary)
-        min_x = int(boundary_array[:, 0].min())
-        max_x = int(boundary_array[:, 0].max())
-        min_y = int(boundary_array[:, 1].min())
-        max_y = int(boundary_array[:, 1].max())
+        min_x, min_y, max_x, max_y = bounding_box(boundary)
 
         w, h = max_x - min_x, max_y - min_y
         if w <= 0 or h <= 0:
@@ -254,23 +283,7 @@ class BaseVLMHTR(BaseHTR):
         # Appliquer le masque
         result = Image.composite(cropped, Image.new('RGB', (w, h), (0, 0, 0)), mask)
 
-        max_ratio = 190 # unsloth limit: 200
-        rw, rh = result.size
-        if rw > 0 and rh > 0:
-            ratio = max(rw / rh, rh / rw)
-            if ratio > max_ratio:
-                if rw > rh:
-                    new_h = max(1, rw // max_ratio)
-                    padded = Image.new('RGB', (rw, new_h), (0, 0, 0))
-                    padded.paste(result, (0, (new_h - rh) // 2))
-                    result = padded
-                else:
-                    new_w = max(1, rh // max_ratio)
-                    padded = Image.new('RGB', (new_w, rh), (0, 0, 0))
-                    padded.paste(result, ((new_w - rw) // 2, 0))
-                    result = padded
-
-        return result
+        return pad_to_max_ratio(result)
 
 
     def _prepare_messages(self, image, prompt=None):

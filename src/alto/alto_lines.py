@@ -349,6 +349,7 @@ def read_lines_geometry(file_path):
                 'boundary': boundary,
                 'tags': tags,
                 'regions': [region],
+                'block_id': block_id,
                 'text': text,
                 'confidence': _parse_confidence(line_elem),
             })
