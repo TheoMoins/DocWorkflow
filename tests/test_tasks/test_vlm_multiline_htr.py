@@ -1,5 +1,6 @@
 """Tests pour l'extraction d'images de la tâche HTR VLM multi-lignes."""
 import pytest
+from pathlib import Path
 from PIL import Image
 from lxml import etree as ET
 from src.alto.alto_lines import read_lines_geometry
@@ -329,3 +330,102 @@ def test_multiline_config_params(vlm_multiline_config):
     vlm_multiline_config.update({"rolling_window": True, "dedup_threshold": 0.3})
     task = VLMMultiLineHTRTask(vlm_multiline_config)
     assert (task.rolling_window, task.dedup_threshold) == (True, 0.3)
+
+
+def _write_training_page(directory, texts, name="page"):
+    """Écrit un ALTO à un TextBlock (une ligne par texte, avec polygone) et son image."""
+    directory.mkdir(parents=True, exist_ok=True)
+    Image.new('RGB', (640, 480), color='white').save(directory / f"{name}.jpg")
+
+    ns = "http://www.loc.gov/standards/alto/ns-v4#"
+    alto = ET.Element("alto", nsmap={None: ns})
+    desc = ET.SubElement(alto, "Description")
+    ET.SubElement(desc, "MeasurementUnit").text = "pixel"
+    source = ET.SubElement(desc, "sourceImageInformation")
+    ET.SubElement(source, "fileName").text = f"{name}.jpg"
+    tags = ET.SubElement(alto, "Tags")
+    ET.SubElement(tags, "OtherTag", ID="BT1", LABEL="MainZone")
+    layout = ET.SubElement(alto, "Layout")
+    page = ET.SubElement(layout, "Page", ID="p1", HEIGHT="480", WIDTH="640")
+    print_space = ET.SubElement(page, "PrintSpace", HEIGHT="480", WIDTH="640")
+    text_block = ET.SubElement(print_space, "TextBlock", ID="b1", TAGREFS="BT1")
+    for i, text in enumerate(texts):
+        y = 40 + 60 * i
+        line = ET.SubElement(text_block, "TextLine", ID=f"l{i}", BASELINE=f"10 {y} 290 {y}")
+        shape = ET.SubElement(line, "Shape")
+        ET.SubElement(shape, "Polygon", POINTS=f"10 {y - 20} 290 {y - 20} 290 {y + 5} 10 {y + 5}")
+        ET.SubElement(line, "String", CONTENT=text, WC="1.0")
+
+    ET.ElementTree(alto).write(directory / f"{name}.xml", pretty_print=True,
+                               xml_declaration=True, encoding="UTF-8")
+
+
+def test_prepare_training_data_blocks_of_k(vlm_multiline_config, temp_dir):
+    """6 lignes, k=4 : un bloc de 4 puis un bloc de 2, textes dans l'ordre de lecture."""
+    _write_training_page(temp_dir / "train", [f"ligne {i}" for i in range(6)])
+    task = VLMMultiLineHTRTask(vlm_multiline_config)
+
+    samples = task._prepare_training_data_lines(temp_dir / "train")
+
+    assert [s["text"] for s in samples] == [
+        ["ligne 0", "ligne 1", "ligne 2", "ligne 3"],
+        ["ligne 4", "ligne 5"],
+    ]
+    assert [len(s["boundary"]) for s in samples] == [4, 2]
+
+
+def test_prepare_training_data_empty_gt_closes_block(vlm_multiline_config, temp_dir):
+    """Une ligne sans GT est exclue et clôt le bloc courant (pas de ligne visible absente de la cible)."""
+    _write_training_page(temp_dir / "train", ["a", "b", "", "c", "d", "e"])
+    task = VLMMultiLineHTRTask(vlm_multiline_config)
+
+    samples = task._prepare_training_data_lines(temp_dir / "train")
+
+    assert [s["text"] for s in samples] == [["a", "b"], ["c", "d", "e"]]
+
+
+def test_format_conversation_single_crop(vlm_multiline_config, temp_dir):
+    """Un seul crop rectangle englobant en entrée, les k textes joints par '\\n' en sortie."""
+    _write_training_page(temp_dir / "train", ["alpha", "beta", "gamma"])
+    vlm_multiline_config["lines_per_crop"] = 3
+    task = VLMMultiLineHTRTask(vlm_multiline_config)
+    sample = task._prepare_training_data_lines(temp_dir / "train")[0]
+
+    conv = task._format_conversation(sample, lambda path: Image.open(path).convert("RGB"))
+
+    user, assistant = conv["messages"]
+    images = [c["image"] for c in user["content"] if c["type"] == "image"]
+    assert len(images) == 1
+    # Union des polygones : x 10..290, y 20..165
+    assert images[0].size == (280, 145)
+    assert assistant["content"] == [{"type": "text", "text": "alpha\nbeta\ngamma"}]
+
+
+def test_prepare_samples_with_conventions_multiline(vlm_multiline_config, temp_dir):
+    """Le prompt d'entraînement résout {conventions} par document, comme VLMLineHTR."""
+    import json
+    _write_training_page(temp_dir / "train" / "doc_a", ["a", "b"])
+    _write_training_page(temp_dir / "train" / "doc_b", ["c", "d"])
+    (temp_dir / "train" / "doc_a" / "metadata.json").write_text(
+        json.dumps({"conventions": {"abbreviations": "keep"}})
+    )
+    vlm_multiline_config["lines_per_crop"] = 2
+    task = VLMMultiLineHTRTask(vlm_multiline_config)
+
+    samples = task._prepare_samples_with_conventions(temp_dir / "train", "Transcribe.\n{conventions}")
+
+    prompts = {tuple(s["text"]): s["prompt"] for s in samples}
+    assert prompts[("a", "b")] == "Transcribe.\nKeep abbreviations as written, do not expand them."
+    assert prompts[("c", "d")] == "Transcribe."
+
+
+def test_prepare_training_data_skips_pages_shorter_than_k(vlm_multiline_config, temp_dir):
+    """Une page avec moins de k lignes utilisables (ex. une ligne par ALTO) est ignorée."""
+    _write_training_page(temp_dir / "train", ["seule ligne"], name="single")
+    _write_training_page(temp_dir / "train", ["a", "", "b", "c"], name="sparse")
+    _write_training_page(temp_dir / "train", ["a", "b", "c", "d", "e"], name="full")
+    task = VLMMultiLineHTRTask(vlm_multiline_config)
+
+    samples = task._prepare_training_data_lines(temp_dir / "train")
+
+    assert {Path(s["page_image_path"]).stem for s in samples} == {"full"}

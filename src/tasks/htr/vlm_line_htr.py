@@ -196,39 +196,6 @@ class VLMLineHTRTask(BaseVLMHTR):
         
         return results
 
-    def _prepare_samples_with_conventions(self, data_path: Path, prompt_tpl: str) -> list:
-        data_path = Path(data_path)
-        subdirs = sorted([p for p in data_path.iterdir() if p.is_dir()]) if data_path.exists() else []
-        samples = []
-
-        if subdirs:
-            docs_with_conv = 0
-            for doc_path in subdirs:
-                conventions = load_conventions(doc_path)
-                if conventions and '{conventions}' in prompt_tpl:
-                    resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
-                    docs_with_conv += 1
-                else:
-                    resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
-                doc_samples = self._prepare_training_data_lines(doc_path)
-                for s in doc_samples:
-                    s['prompt'] = resolved_prompt
-                samples.extend(doc_samples)
-            print(f"  {data_path}: {len(subdirs)} documents, {len(samples)} samples, {docs_with_conv}/{len(subdirs)} with conventions")
-        else:
-            conventions = load_conventions(data_path)
-            if conventions and '{conventions}' in prompt_tpl:
-                resolved_prompt = prompt_tpl.replace('{conventions}', build_conventions_block(conventions))
-            else:
-                resolved_prompt = prompt_tpl.replace('{conventions}', '').strip()
-            samples = self._prepare_training_data_lines(data_path)
-            for s in samples:
-                s['prompt'] = resolved_prompt
-            conv_info = f"conventions: {list(conventions.keys())}" if conventions else "no conventions"
-            print(f"  {data_path}: {len(samples)} samples ({conv_info})")
-
-        return samples
-
     def _process_batch(self, file_paths, source_dir, output_dir, save_image=True, **kwargs):
         """
         Process ALTO files with line-level VLM.

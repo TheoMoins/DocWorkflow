@@ -8,7 +8,6 @@ import os
 import glob
 from tqdm import tqdm
 from PIL import Image
-from pathlib import Path
 import shutil
 from lxml import etree as ET
 import numpy as np
@@ -220,13 +219,6 @@ class KrakenHTRTask(BaseHTR):
         Returns:
             List of prediction results
         """
-        gt_test = self.config.get('data', {}).get('test', '')
-        try:
-            Path(source_dir).resolve().relative_to(Path(gt_test).resolve())
-            using_gt_lines = True
-        except ValueError:
-            using_gt_lines = False
-
         print(f"  Processing {len(file_paths)} ALTO files...")
 
         results = []
@@ -245,9 +237,6 @@ class KrakenHTRTask(BaseHTR):
                 if not raw_lines:
                     print(f"  Warning: No TextLines found in {alto_path}")
                     continue
-
-                tag = "[GT]" if using_gt_lines else "[PRED]"
-                print(f"  {tag} {len(raw_lines)} lines from {os.path.basename(alto_path)}")
 
                 recognized_texts = self._recognize_text(image_path, alto_path)
                 

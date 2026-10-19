@@ -1,17 +1,18 @@
 import os
+import sys
 from pathlib import Path
 
 BASE_PATH = "outputs/orig_outputs_T1-2/merged_base"
 LORA_PATH = "outputs/orig_outputs_T1-2/Qwen3.5-4B-line-finetuned-line-finetuned"
 OUTPUT_PATH = "outputs/Medusa0.1Line-4B"
 
-def main():
+def main(base=BASE_PATH, lora=LORA_PATH, output=OUTPUT_PATH):
     from unsloth import FastVisionModel
     from peft import PeftModel
 
-    base_path = Path(BASE_PATH)
-    lora_path = Path(LORA_PATH)
-    output_path = Path(OUTPUT_PATH)
+    base_path = Path(base)
+    lora_path = Path(lora)
+    output_path = Path(output)
 
     if not base_path.exists():
         raise FileNotFoundError(f"Base model not found: {base_path}")
@@ -43,6 +44,8 @@ def main():
 
 if __name__ == "__main__":
     # Run from the project root:
-    #   python scripts/merge_lora_medusa.py
+    #   python scripts/merge_lora_medusa.py [BASE_PATH LORA_PATH OUTPUT_PATH]
     os.chdir(Path(__file__).resolve().parents[1])
-    main()
+    if len(sys.argv) not in (1, 4):
+        sys.exit("usage: python scripts/merge_lora_medusa.py [BASE_PATH LORA_PATH OUTPUT_PATH]")
+    main(*sys.argv[1:])

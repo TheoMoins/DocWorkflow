@@ -14,6 +14,7 @@ from src.tasks.htr.prompt_convention import build_conventions_block, load_conven
 from src.alto.alto_lines import read_lines_geometry
 from src.alto.alto_text import copy_alto_without_text, write_text_to_alto
 from src.utils.lazy_dataset import LazyLineDataset as _LazyLineDataset
+from src.content.weighted_sampling import special_char_density
 
 
 def group_lines_into_blocks(lines, k):
@@ -101,7 +102,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             'lora_dropout': config.get('lora_dropout', 0),
             'use_rslora': config.get('use_rslora', False),
             'max_seq_length': config.get('max_seq_length', 1024),
-            'output_dir': config.get('model_dir', 'src/tasks/htr/models'),
+            'model_dir': config.get('model_dir', 'src/tasks/htr/models'),
             'train_batch_size': config.get('train_batch_size', 4),
             'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 4),
             'warmup_ratio': config.get('warmup_ratio', 0.1),
@@ -109,6 +110,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             'learning_rate': config.get('learning_rate', 2e-4),
             'weight_decay': config.get('weight_decay', 0.01),
             'dataset_num_proc': config.get('dataset_num_proc', 1),
+            'special_char_weighting': config.get('special_char_weighting', None),
         })
     
     def _get_file_extensions(self):
@@ -331,17 +333,26 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
 
     def _prepare_training_data_lines(self, data_path):
         """
-        Prepare line-level training samples from ALTO XML + page images.
-        Extracts each TextLine bbox and its ground truth text.
-        Crops are performed lazily in format_conversation.
-        
+        Prepare multi-line training samples from ALTO XML + page images.
+        One sample per block of at most k consecutive lines of a TextBlock
+        (group_lines_into_blocks). Crops are performed lazily in _format_conversation.
+
+        A line with empty GT text or without polygon also closes the current block:
+        it would be visible in the bounding-box crop (or missing from it) while absent
+        from the target, which would teach the model to skip or invent lines.
+
+        Pages with fewer than k usable lines (e.g. line-level datasets with one line per
+        ALTO file) are skipped for now.
+
         Returns:
-            List of dicts with page_image_path, text, bbox (left, top, right, bottom)
+            List of dicts with page_image_path, text (list of k strings), boundary (list of k polygons)
         """
 
         samples = []
         xml_files = glob.glob(os.path.join(str(data_path), "**", "*.xml"), recursive=True)
         skipped = 0
+        skipped_lines = 0
+        skipped_short = 0
 
         for xml_path in xml_files:
             base_name = Path(xml_path).stem
@@ -355,76 +366,119 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             if not image_path:
                 skipped += 1
                 continue
-    
+
             _, lines, _ = read_lines_geometry(xml_path)
-            lineblocks = group_lines_into_blocks(lines, self.lines_per_crop)
-            for block in lineblocks:
-                samples.append({ 
+
+            # Split each TextBlock into runs of usable lines; the run index acts as a zone
+            # boundary for group_lines_into_blocks.
+            usable = []
+            run = 0
+            for line in lines:
+                if not line.get('text', '').strip() or not line.get('boundary'):
+                    skipped_lines += 1
+                    run += 1
+                    continue
+                usable.append({**line, 'block_id': (line.get('block_id'), run)})
+
+            if len(usable) < self.lines_per_crop:
+                skipped_short += 1
+                continue
+
+            for block in group_lines_into_blocks(usable, self.lines_per_crop):
+                samples.append({
                     "page_image_path": image_path,
                     "text": [line['text'] for line in block],
-                    "boundary": [line['boundary'] for line in block]
+                    "boundary": [line['boundary'] for line in block],
                 })
 
         if skipped:
             print(f"  Warning: {skipped} XML files had no matching image")
-        print(f"  Extracted {len(samples)} line samples from {len(xml_files) - skipped} pages")
+        if skipped_short:
+            print(f"  Skipped {skipped_short} pages with fewer than {self.lines_per_crop} usable lines")
+        if skipped_lines:
+            print(f"  Skipped {skipped_lines} lines with empty GT or no polygon (block boundaries)")
+        print(f"  Extracted {len(samples)} blocks of <= {self.lines_per_crop} lines "
+              f"from {len(xml_files) - skipped - skipped_short} pages")
         return samples
 
     def _format_conversation(self, example, get_page_image):
         try:
             page_img = get_page_image(example["page_image_path"])
-            imgs = [self._extract_line_image(page_img, b) for b in example["boundary"]]
+            img = self._extract_multiline_image(page_img, example["boundary"])
         except Exception as e:
             print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
             return None
-        if imgs is None:
+        if img is None:
             return None
+        prompt = example.get("prompt", self.prompt)
         return {"messages": [
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": self.prompt},
-                ] + [{"type": "image", "image": img} for img in imgs],
+                    {"type": "text", "text": prompt},
+                    {"type": "image", "image": img},
+                ],
             },
             {
                 "role": "assistant",
-                "content": [{"type": "text", "text": t} for t in example["text"]],
+                # Same separator as parse_multiline_output
+                "content": [{"type": "text", "text": "\n".join(example["text"])}],
             },
         ]}
 
     def train(self, data_path=None, seed=42):
         from unsloth import FastVisionModel
         from unsloth.trainer import UnslothVisionDataCollator
-        from transformers import AutoProcessor
+        from transformers import AutoProcessor, EarlyStoppingCallback
         from trl import SFTTrainer, SFTConfig
         """
-        Fine-tune the VLM model at line level using Unsloth.
-        Each training sample is a cropped TextLine image + its ground truth text.
+        Fine-tune the VLM model on blocks of k lines using Unsloth.
+        Each training sample is one bounding-box crop of k lines + their GT texts joined by '\n'.
+        Same mechanics as VLMLineHTRTask.train(); with base_model set, the LoRA adapter in
+        model_name is merged first and a new LoRA is trained on top of it.
         """
-        print("To train this model, you must change the environment to vlm-training:")
-        print("\n  source envs/vlm-training/bin/activate")
-
         if not data_path:
             raise ValueError("Training data path is required")
 
-        global_path = str(data_path.parent)
+        data_paths = data_path if isinstance(data_path, list) else [data_path]
+        global_path = str(data_paths[0].parent)
 
-        print(f"Starting VLM line-level fine-tuning with Unsloth")
+        print(f"Starting VLM multi-line fine-tuning with Unsloth (k={self.lines_per_crop})")
         print(f"Model: {self.model_name}")
 
-        print("Preparing line-level training data...")
-        train_samples = self._prepare_training_data_lines(data_path)
-        valid_samples = self._prepare_training_data_lines(global_path + "/valid")
+        print("Preparing multi-line training data...")
+        prompt_tpl = self.prompt_template
+
+        train_samples = []
+        for src_path in data_paths:
+            train_samples.extend(self._prepare_samples_with_conventions(src_path, prompt_tpl))
+
+        valid_samples = self._prepare_samples_with_conventions(Path(global_path) / "valid", prompt_tpl)
 
         if not train_samples:
-            raise ValueError("No valid line-level training samples found")
+            raise ValueError("No valid multi-line training samples found")
 
-        print(f"Found {len(train_samples)} line samples (train) and {len(valid_samples)} (valid)")
+        print(f"Found {len(train_samples)} blocks (train) and {len(valid_samples)} (valid)")
 
-        print("Validating train samples...")
         valid_train = [s for s in train_samples if os.path.exists(s["page_image_path"]) and s.get("boundary")]
         if len(valid_train) < len(train_samples):
             print(f"  Skipped {len(train_samples) - len(valid_train)} samples")
+
+        alpha = self.hyperparams.get('special_char_weighting') or 0
+        if alpha != 0:
+            densities = [special_char_density("\n".join(s["text"])) for s in valid_train]
+            sample_weights = [1.0 + alpha * d for d in densities]
+            rng = torch.Generator()
+            rng.manual_seed(seed)
+            weighted_indices = torch.multinomial(
+                torch.tensor(sample_weights, dtype=torch.float32),
+                num_samples=len(valid_train),
+                replacement=True,
+                generator=rng,
+            ).tolist()
+            valid_train = [valid_train[i] for i in weighted_indices]
+            print(f"✓ Density-weighted resampling: {len(valid_train)} samples")
+
         converted_train_set = _LazyLineDataset(valid_train, self._format_conversation)
 
         if valid_samples:
@@ -437,8 +491,18 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         model, tokenizer = FastVisionModel.from_pretrained(
             self.model_name,
             load_in_4bit=self.hyperparams['use_4bit'],
+            load_in_8bit=self.hyperparams['use_8bit'],
             use_gradient_checkpointing="unsloth",
         )
+        if self.hyperparams.get('base_model'):
+            # Same continuation mechanism as VLMLineHTRTask.train(): model_name is a LoRA
+            # adapter whose adapter_config points to its base; merge it before the new LoRA.
+            merged_dir = self.hyperparams['model_dir'] + '/merged_base'
+            print(f"Merging LoRA from {self.model_name}...")
+            model.save_pretrained_merged(merged_dir, tokenizer, save_method="merged_16bit")
+            print(f"Merged model saved to {merged_dir}")
+            model = model.merge_and_unload()
+            print("Merge done.")
 
         model = FastVisionModel.get_peft_model(
             model,
@@ -447,7 +511,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             finetune_attention_modules=True,
             finetune_mlp_modules=True,
             r=self.hyperparams['lora_r'],
-            lora_alpha=self.hyperparams['lora_r'],
+            lora_alpha=self.hyperparams['lora_r']/2,
             lora_dropout=self.hyperparams['lora_dropout'],
             use_rslora=self.hyperparams['use_rslora'],
             loftq_config=None,
@@ -464,10 +528,10 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             seed=seed,
             optim="adamw_8bit",
             save_strategy="steps",
-            save_steps=500,
-            logging_steps=10,
+            save_steps=5000,
+            logging_steps=100,
             eval_strategy="steps" if valid_samples else "no",
-            eval_steps=100, 
+            eval_steps=5000,
             load_best_model_at_end=True if valid_samples else False,
             metric_for_best_model="eval_loss",
             greater_is_better=False,
@@ -477,6 +541,8 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             dataset_num_proc=self.hyperparams['dataset_num_proc'],
             max_seq_length=self.hyperparams['max_seq_length'],
             dataset_text_field="",
+            dataloader_num_workers=4,
+            dataloader_pin_memory=True,
         )
 
         if self.processor is None:
@@ -495,20 +561,26 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             eval_dataset=converted_valid_set,
             data_collator=UnslothVisionDataCollator(model, self.processor),
         )
+        trainer.add_callback(EarlyStoppingCallback(
+            early_stopping_patience=200,
+            early_stopping_threshold=0.01,
+        ))
 
         print("Starting training...")
-        trainer.train()
+        checkpoint_dir = self.hyperparams['model_dir']
+        has_checkpoint = any(
+            Path(checkpoint_dir, d).is_dir()
+            for d in os.listdir(checkpoint_dir)
+            if d.startswith("checkpoint-")
+        ) if os.path.exists(checkpoint_dir) else False
 
-        model_save_path = f"{training_args.output_dir}/{self.model_name.split('/')[-1]}-line-finetuned"
+        trainer.train(resume_from_checkpoint=has_checkpoint if has_checkpoint else None)
+
+        model_save_path = f"{training_args.output_dir}/{self.model_name.rstrip('/').split('/')[-1]}-multiline-k{self.lines_per_crop}"
         print(f"Saving fine-tuned model to {model_save_path}")
         model.save_pretrained(model_save_path)
         tokenizer.save_pretrained(model_save_path)
         print(f"Training complete! Model saved to {model_save_path}")
-
-        config_path = self._create_finetuned_config(model_save_path, global_path, 'VLMMultiLineHTR')
-        
-        print(f"\nTo run prediction with fine-tuned model:")
-        print(f"   docworkflow -c {config_path} predict -t htr -d test")
 
         del model, tokenizer, trainer
         gc.collect()
