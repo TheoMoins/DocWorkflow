@@ -37,12 +37,13 @@ class DocumentVisualizer:
     
     def _load_data(self):
         """Charge l'image et le fichier ALTO XML"""
-        try:
-            self.image = Image.open(self.image_path)
-        except Exception as e:
-            print(f"Error loading image {self.image_path}: {e}")
-            return False
-            
+        if self.image_path is not None:
+            try:
+                self.image = Image.open(self.image_path)
+            except Exception as e:
+                print(f"Error loading image {self.image_path}: {e}")
+                return False
+
         try:
             tree = ET.parse(self.alto_path)
             self.root = tree.getroot()
@@ -337,16 +338,18 @@ class DocumentVisualizer:
         Returns:
             True si la visualisation a réussi, False sinon
         """
-        if self.image is None or self.root is None:
+        needs_image = self.visualization_type != 'htr'
+        if self.root is None or (needs_image and self.image is None):
             print(f"Error: Could not load data for {self.image_path}")
             return False
-        
+
         try:
             if output_dir:
                 os.makedirs(output_dir, exist_ok=True)
-                
-                # Créer le nom du fichier de sortie
-                base_name = os.path.splitext(os.path.basename(self.image_path))[0]
+
+                # Créer le nom du fichier de sortie — se rabat sur l'ALTO quand
+                # il n'y a pas d'image (HTR, save_image: false).
+                base_name = os.path.splitext(os.path.basename(self.image_path or self.alto_path))[0]
                 vis_type = self.visualization_type
                 
                 # Effectuer la visualisation
