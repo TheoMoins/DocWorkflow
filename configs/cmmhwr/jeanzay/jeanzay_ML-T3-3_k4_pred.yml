@@ -1,0 +1,28 @@
+run_name: "ML-T3-3_k4_pred"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+wandb_project: "icdar-htr-competition-2026"
+save_image: true
+
+data:
+  # Dev set (le test set reste gelé pour le chiffre final, cf. 03_plan_htr_multiligne.md phase 1)
+  test: "../data/ICDAR_Competition/valid"
+
+tasks:
+  htr:
+    type: VLMMultiLineHTR
+    config:
+      use_metadata: true
+      model_name: 'outputs_ML-T3-3_k4/merged_full-multiline-k4'
+      base_model: 'outputs_T3-2/merged_full'
+      model_dir: 'outputs_ML-T3-3_k4/'
+      device_map: "auto"
+      lines_per_crop: 4
+      max_new_tokens: 512
+      line_batch_size: 4
+      max_pixels: 401408
+      prompt_template: >
+        Transcribe the handwritten text in this image, one output line per line of text.
+        {conventions}
+        Output ONLY the transcription.
