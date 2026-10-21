@@ -429,3 +429,13 @@ def test_prepare_training_data_skips_pages_shorter_than_k(vlm_multiline_config, 
     samples = task._prepare_training_data_lines(temp_dir / "train")
 
     assert {Path(s["page_image_path"]).stem for s in samples} == {"full"}
+
+
+def test_multiline_step_params(vlm_multiline_config):
+    """Teste les pas de sauvegarde/évaluation configurables et leurs défauts."""
+    hp = VLMMultiLineHTRTask(vlm_multiline_config).hyperparams
+    assert (hp["save_steps"], hp["eval_steps"], hp["logging_steps"]) == (5000, 5000, 100)
+
+    vlm_multiline_config.update({"save_steps": 1000, "eval_steps": 500})
+    hp = VLMMultiLineHTRTask(vlm_multiline_config).hyperparams
+    assert (hp["save_steps"], hp["eval_steps"]) == (1000, 500)

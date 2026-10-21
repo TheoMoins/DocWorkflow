@@ -1,5 +1,6 @@
-# Variante A : T3-2 en version multiligne, depuis la sortie de T3-1 (pretrain sur gen_lines).
-run_name: "ML-T3-2_k4"
+# Continue MEDUSA 0.2 9B (modèle déjà fusionné, publié) sur du multiligne k=4, 1 époque.
+# Pas de base_model : model_name est un modèle complet, le nouveau LoRA est ajouté directement.
+run_name: "ML-Medusa0.2-9B_k4"
 output_dir: "results"
 device: "cuda"
 use_wandb: false
@@ -13,21 +14,19 @@ data:
     - "../data/ICDAR_Competition/gold_romance"
     - "../data/ICDAR_Competition/gold_nonromance"
   valid: "../data/ICDAR_Competition/valid"
-  test: "../data/ICDAR_Competition/test"
 
 tasks:
   htr:
     type: VLMMultiLineHTR
     config:
       use_metadata: true
-      model_name: 'outputs_T3-1/Qwen3.5-4B-line-finetuned'
-      base_model: '/lustre/fsmisc/dataset/HuggingFace_Models/Qwen/Qwen3.5-4B'
-      model_dir: 'outputs_ML-T3-2_k4/'
+      model_name: '/lustre/fswork/projects/rech/uoe/ugg16ol/models/Medusa0.2Line-9B'
+      model_dir: 'outputs_ML-Medusa0.2-9B_k4/'
       device_map: "auto"
       lines_per_crop: 4
       max_new_tokens: 512
       line_batch_size: 4
-      # Même valeur que T3 ; la règle d'échelle en fonction de k sera mesurée en phase 3.3
+      # Même valeur que MEDUSA ; la règle d'échelle en fonction de k sera mesurée en phase 3.3
       # (03_plan_htr_multiligne.md). Un crop de 4 lignes est donc sous-échantillonné.
       max_pixels: 401408
       special_char_weighting: 0
@@ -38,14 +37,17 @@ tasks:
       lora_r: 64
       lora_dropout: 0
       use_rlora: false
-      # 512 en ligne-à-ligne : le crop multiligne atteint ~512 jetons image (max_pixels / 28²)
-      # plus ~4x plus de texte, 512 tronquerait la cible
+      # 512 en ligne-à-ligne : un crop de 4 lignes = ~512 jetons image + ~4x plus de texte
       max_seq_length: 1024
-      # Séquences ~2x plus longues qu'en T3 : 16 x 2 garde le batch effectif de 32
+      # Séquences ~2x plus longues qu'en ligne-à-ligne : 16 x 2 garde le batch effectif de 32
       train_batch_size: 16
       gradient_accumulation_steps: 2
       warmup_ratio: 0.01
-      epochs: 3
+      epochs: 1
+      # ~4 700 pas par époque : sauvegarder/évaluer avant la fin pour pouvoir reprendre
+      save_steps: 1000
+      eval_steps: 1000
+      logging_steps: 50
 
       # lr
       learning_rate: 5.0e-5

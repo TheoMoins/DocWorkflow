@@ -1,4 +1,4 @@
-run_name: "ML-T3-2_k4_pred"
+run_name: "ML-Medusa0.2-9B_k4_pred"
 output_dir: "results"
 device: "cuda"
 use_wandb: false
@@ -14,9 +14,9 @@ tasks:
     type: VLMMultiLineHTR
     config:
       use_metadata: true
-      model_name: 'outputs_ML-T3-2_k4/Qwen3.5-4B-line-finetuned-multiline-k4'
-      base_model: 'outputs_ML-T3-2_k4/merged_base'
-      model_dir: 'outputs_ML-T3-2_k4/'
+      model_name: 'outputs_ML-Medusa0.2-9B_k4/Medusa0.2Line-9B-multiline-k4'
+      base_model: '/lustre/fswork/projects/rech/uoe/ugg16ol/models/Medusa0.2Line-9B'
+      model_dir: 'outputs_ML-Medusa0.2-9B_k4/'
       device_map: "auto"
       lines_per_crop: 4
       max_new_tokens: 512

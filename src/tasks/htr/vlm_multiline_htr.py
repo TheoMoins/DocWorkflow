@@ -111,6 +111,11 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             'weight_decay': config.get('weight_decay', 0.01),
             'dataset_num_proc': config.get('dataset_num_proc', 1),
             'special_char_weighting': config.get('special_char_weighting', None),
+            # An epoch is only ~150k blocks / batch (vs ~600k lines at k=1): keep the
+            # steps configurable so short runs still evaluate and checkpoint.
+            'save_steps': config.get('save_steps', 5000),
+            'eval_steps': config.get('eval_steps', 5000),
+            'logging_steps': config.get('logging_steps', 100),
         })
     
     def _get_file_extensions(self):
@@ -528,10 +533,10 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             seed=seed,
             optim="adamw_8bit",
             save_strategy="steps",
-            save_steps=5000,
-            logging_steps=100,
+            save_steps=self.hyperparams['save_steps'],
+            logging_steps=self.hyperparams['logging_steps'],
             eval_strategy="steps" if valid_samples else "no",
-            eval_steps=5000,
+            eval_steps=self.hyperparams['eval_steps'],
             load_best_model_at_end=True if valid_samples else False,
             metric_for_best_model="eval_loss",
             greater_is_better=False,
