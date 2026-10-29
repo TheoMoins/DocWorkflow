@@ -6,7 +6,6 @@ wandb_project: "icdar-htr-competition-2026"
 save_image: true
 
 data:
-  # Dev set (le test set reste gelé pour le chiffre final, cf. 03_plan_htr_multiligne.md phase 1)
   test: "../data/ICDAR_Competition/valid"
 
 tasks:
@@ -15,7 +14,7 @@ tasks:
     config:
       use_metadata: true
       model_name: 'outputs_ML-Medusa0.2-4B_k4/Medusa0.2Line-4B-multiline-k4'
-      base_model: '/lustre/fswork/projects/rech/uoe/ugg16ol/models/Medusa0.2Line-4B'
+      base_model: '/lustre/fsn1/projects/rech/uoe/ugg16ol/models/Medusa0.2Line-4B'
       model_dir: 'outputs_ML-Medusa0.2-4B_k4/'
       device_map: "auto"
       lines_per_crop: 4
