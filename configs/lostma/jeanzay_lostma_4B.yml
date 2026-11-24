@@ -1,0 +1,37 @@
+run_name: "lostma_occ_jz"
+output_dir: "results"
+device: "cuda"
+use_wandb: false
+save_image: false
+
+data:
+  test: "../data/LOSTMA/occ"
+
+tasks:
+  layout: 
+    type: YoloLayout
+    config:
+      model_path: "/lustre/fswork/projects/rech/uoe/ugg16ol/DocWorkflow_ml/src/tasks/layout/models/yolo26s_layout_640px_16bs_50e.pt"
+      img_size: 640
+  line:
+    type: YoloLine
+    config:
+      model_path: "/lustre/fswork/projects/rech/uoe/ugg16ol/DocWorkflow_ml/src/tasks/line/models/line_det_yolo26s_1280px_8bs_100e_fl0.5_mo0.2.pt"
+      img_size: 1280
+      batch_size: 16
+      text_direction: "horizontal-lr"
+  htr:
+    type: VLMLineHTR
+    config:
+      model_name: '/lustre/fsn1/projects/rech/uoe/ugg16ol/models/Medusa0.2Line-4B'
+      device_map: "auto"
+      max_new_tokens: 128
+      line_batch_size: 64
+      max_pixels: 401408
+      prompt: >
+        Transcribe the handwritten text in this line image.
+        Keep abbreviations as written, do not expand them.
+        Preserve the original word segmentation.
+        Use only u and i, never v and j, regardless of the original or modern usage.
+        Do not record allographic variants, use standard letter forms.
+        Output ONLY the transcription.

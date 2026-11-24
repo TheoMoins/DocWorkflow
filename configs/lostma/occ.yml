@@ -1,6 +1,6 @@
 run_name: "lostma_occ"
 output_dir: "results"
-device: "cpu"
+device: "cuda"
 use_wandb: false
 save_image: false
 
