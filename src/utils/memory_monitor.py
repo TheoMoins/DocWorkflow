@@ -10,6 +10,10 @@ def get_fast_vision_model():
     except (ImportError, NotImplementedError):
         return None
 
+class MemoryLimitExceeded(RuntimeError):
+    """Raised to stop processing before system memory runs out."""
+
+
 def get_memory_usage_percent():
     """Get current system memory usage as percentage."""
     return psutil.virtual_memory().percent
@@ -54,3 +58,20 @@ def force_garbage_collection():
             torch.cuda.empty_cache()
     except ImportError:
         pass
+
+
+def ensure_memory_safe(min_available_gb=2.0, max_usage_percent=90):
+    """
+    Check memory, collect garbage once if needed, and abort if still unsafe.
+
+    Raises:
+        MemoryLimitExceeded: if memory stays above limits after garbage collection
+    """
+    is_safe, message = check_memory_safe(min_available_gb, max_usage_percent)
+    if is_safe:
+        return
+
+    force_garbage_collection()
+    is_safe, message = check_memory_safe(min_available_gb, max_usage_percent)
+    if not is_safe:
+        raise MemoryLimitExceeded(message)

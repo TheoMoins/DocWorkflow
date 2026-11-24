@@ -12,6 +12,7 @@ from src.utils.dataset_structure import discover_dataset_structure
 from src.utils.metadata import load_metadata, display_metadata_metrics
 from src.utils.metrics import aggregate_metrics
 from src.utils.wandb import prepare_wandb_data
+from src.utils.memory_monitor import ensure_memory_safe, get_available_memory_gb
 
 class BaseTask(ABC):
     """
@@ -32,7 +33,16 @@ class BaseTask(ABC):
         self.use_wandb = config.get('use_wandb', True)
         self.reading_order = config.get('reading_order', "dbscan")
         self.wandb_project = config.get('wandb_project', None)
-               
+        self.min_available_memory_gb = config.get('min_available_memory_gb', 2.0)
+        self.max_memory_percent = config.get('max_memory_percent', 90)
+
+    def _check_memory(self):
+        """
+        Stop processing if system memory is too low (raises MemoryLimitExceeded).
+        Called between folders so a slow leak aborts the run instead of the server.
+        """
+        ensure_memory_safe(self.min_available_memory_gb, self.max_memory_percent)
+
     def to_device(self, device=None):
         """
         Move the model to the specified device.
@@ -461,7 +471,9 @@ class BaseTask(ABC):
             meta_output = Path(os.path.join(output_dir, os.path.basename(meta_path)))
             if meta_path.exists() and not meta_output.exists():
                 shutil.copy2(meta_path, meta_output)
-            
+
+            self._check_memory()
+
             return self._process_batch(
                 file_paths=file_paths,
                 source_dir=data_path,
@@ -516,11 +528,15 @@ class BaseTask(ABC):
                 print(f"[{idx:02d}/{total_subdirs:02d}] ✓ {subdir_name}: All files already processed")
                 continue
             
+            # Outside the try below: a memory abort must stop the whole run
+            self._check_memory()
+
             skipped = len(files) - len(files_to_process)
+            ram = f"{get_available_memory_gb():.1f} GB RAM available"
             if skipped > 0:
-                print(f"[{idx:02d}/{total_subdirs:02d}] 📁 {subdir_name}: Processing {len(files_to_process)}/{len(files)} files (skipping {skipped})")
+                print(f"[{idx:02d}/{total_subdirs:02d}] 📁 {subdir_name}: Processing {len(files_to_process)}/{len(files)} files (skipping {skipped}) — {ram}")
             else:
-                print(f"[{idx:02d}/{total_subdirs:02d}] 📁 {subdir_name}: Processing {len(files_to_process)} files")
+                print(f"[{idx:02d}/{total_subdirs:02d}] 📁 {subdir_name}: Processing {len(files_to_process)} files — {ram}")
             
             # Process this subdirectory
             try:

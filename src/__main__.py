@@ -51,7 +51,7 @@ def test_installation():
 @click.option("-o", "--output", required=False, default="", type=click.Path(), help="Save results")
 @click.option("--save_image", is_flag=True, default=None, help="Save the image with the prediction.")  # Changé
 @click.option("--no_save_image", is_flag=True, help="Do not save images with prediction.")  # Nouveau
-@click.option("--cleanup_intermediate", is_flag=True, help="Delete intermediate results in full pipeline to save space.")
+@click.option("--cleanup_intermediate/--keep_intermediate", default=True, help="Delete intermediate results in full pipeline to save space (default: cleanup).")
 @click.pass_obj
 def predict_command(config: Config, task: str, dataset: str, output: str, save_image: bool, no_save_image: bool, cleanup_intermediate: bool):
     

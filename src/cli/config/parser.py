@@ -27,6 +27,8 @@ class Config(object):
         config["run_name"] = self.yaml.get("run_name", "unknown")
         config["data"] = self.yaml.get("data", {})
         config["reading_order"] = self.yaml.get("reading_order", "dbscan")
+        config["min_available_memory_gb"] = self.yaml.get("min_available_memory_gb", 2.0)
+        config["max_memory_percent"] = self.yaml.get("max_memory_percent", 90)
         return config
 
     def get_tasks(self) -> list:
