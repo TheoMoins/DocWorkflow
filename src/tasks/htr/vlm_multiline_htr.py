@@ -16,6 +16,9 @@ from src.alto.alto_text import copy_alto_without_text, write_text_to_alto
 from src.utils.lazy_dataset import LazyLineDataset as _LazyLineDataset
 from src.content.weighted_sampling import special_char_density
 
+# Large page scans (> 179 Mpx) would otherwise be rejected as "decompression bombs".
+Image.MAX_IMAGE_PIXELS = None
+
 
 def group_lines_into_blocks(lines, k):
     """
