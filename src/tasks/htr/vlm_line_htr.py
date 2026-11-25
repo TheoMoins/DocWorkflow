@@ -236,7 +236,7 @@ class VLMLineHTRTask(BaseVLMHTR):
                     print(f"  Warning: No TextLines found in {alto_path}")
                     continue
 
-                print(f"  Using {len(raw_lines)} lines from {os.path.basename(alto_path)}")
+                # print(f"  Using {len(raw_lines)} lines from {os.path.basename(alto_path)}")
                 
                 # Load page image
                 page_image = Image.open(image_path).convert("RGB")
