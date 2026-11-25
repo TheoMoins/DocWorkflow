@@ -332,7 +332,7 @@ def test_multiline_config_params(vlm_multiline_config):
     assert (task.rolling_window, task.dedup_threshold) == (True, 0.3)
 
 
-def _write_training_page(directory, texts, name="page"):
+def _write_training_page(directory, texts, name="page", null_polygons=()):
     """Écrit un ALTO à un TextBlock (une ligne par texte, avec polygone) et son image."""
     directory.mkdir(parents=True, exist_ok=True)
     Image.new('RGB', (640, 480), color='white').save(directory / f"{name}.jpg")
@@ -353,7 +353,8 @@ def _write_training_page(directory, texts, name="page"):
         y = 40 + 60 * i
         line = ET.SubElement(text_block, "TextLine", ID=f"l{i}", BASELINE=f"10 {y} 290 {y}")
         shape = ET.SubElement(line, "Shape")
-        ET.SubElement(shape, "Polygon", POINTS=f"10 {y - 20} 290 {y - 20} 290 {y + 5} 10 {y + 5}")
+        points = "0,0 0,0 0,0 0,0" if i in null_polygons else f"10 {y - 20} 290 {y - 20} 290 {y + 5} 10 {y + 5}"
+        ET.SubElement(shape, "Polygon", POINTS=points)
         ET.SubElement(line, "String", CONTENT=text, WC="1.0")
 
     ET.ElementTree(alto).write(directory / f"{name}.xml", pretty_print=True,
@@ -382,6 +383,24 @@ def test_prepare_training_data_empty_gt_closes_block(vlm_multiline_config, temp_
     samples = task._prepare_training_data_lines(temp_dir / "train")
 
     assert [s["text"] for s in samples] == [["a", "b"], ["c", "d", "e"]]
+
+
+def test_prepare_training_data_zero_area_polygon_closes_block(vlm_multiline_config, temp_dir):
+    """Un polygone "0,0 0,0 0,0 0,0" (géométrie absente) est exclu et clôt le bloc, comme une ligne sans polygone."""
+    _write_training_page(temp_dir / "train", ["a", "b", "x", "c", "d", "e"], null_polygons={2})
+    task = VLMMultiLineHTRTask(vlm_multiline_config)
+
+    samples = task._prepare_training_data_lines(temp_dir / "train")
+
+    assert [s["text"] for s in samples] == [["a", "b"], ["c", "d", "e"]]
+
+
+def test_prepare_training_data_only_zero_area_polygons(vlm_multiline_config, temp_dir):
+    """Une page dont toutes les lignes ont un polygone nul ne produit aucun échantillon (cas SBB_PK_Mgf19_216v)."""
+    _write_training_page(temp_dir / "train", ["a", "b"], null_polygons={0, 1})
+    task = VLMMultiLineHTRTask(vlm_multiline_config)
+
+    assert task._prepare_training_data_lines(temp_dir / "train") == []
 
 
 def test_format_conversation_single_crop(vlm_multiline_config, temp_dir):

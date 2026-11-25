@@ -339,13 +339,21 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
         return results
 
 
+    @staticmethod
+    def _boundary_has_area(boundary):
+        """False for a missing polygon or a degenerate one (e.g. "0,0 0,0 0,0 0,0" in some ALTO files)."""
+        if not boundary:
+            return False
+        min_x, min_y, max_x, max_y = bounding_box(boundary)
+        return max_x - min_x > 0 and max_y - min_y > 0
+
     def _prepare_training_data_lines(self, data_path):
         """
         Prepare multi-line training samples from ALTO XML + page images.
         One sample per block of at most k consecutive lines of a TextBlock
         (group_lines_into_blocks). Crops are performed lazily in _format_conversation.
 
-        A line with empty GT text or without polygon also closes the current block:
+        A line with empty GT text or without a usable polygon (missing or zero-area) also closes the current block:
         it would be visible in the bounding-box crop (or missing from it) while absent
         from the target, which would teach the model to skip or invent lines.
 
@@ -382,7 +390,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             usable = []
             run = 0
             for line in lines:
-                if not line.get('text', '').strip() or not line.get('boundary'):
+                if not line.get('text', '').strip() or not self._boundary_has_area(line.get('boundary')):
                     skipped_lines += 1
                     run += 1
                     continue
@@ -417,6 +425,7 @@ class VLMMultiLineHTRTask(BaseVLMHTR):
             print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): {e}")
             return None
         if img is None:
+            print(f"Warning: skipping sample ({example.get('page_image_path', '?')}): empty or degenerate crop")
             return None
         prompt = example.get("prompt", self.prompt)
         return {"messages": [
